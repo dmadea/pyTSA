@@ -163,3 +163,6 @@ cython_debug/
 node_modules/
 dist/
 .parcel-cache/
+
+.DS_Store/
+.DS_Store
