@@ -1,27 +1,77 @@
 
 
+class F64Array extends Float64Array {
+
+    mul(scalar, copy=false) {
+        let arr = copy ? new F64Array(this) : this;
+        for (let i = 0; i < arr.length; i++) {
+            arr[i] *= scalar;
+        }
+        return arr;
+    }
+
+    add(scalar, copy=false) {
+        let arr = copy ? new F64Array(this) : this;
+        for (let i = 0; i < arr.length; i++) {
+            arr[i] += scalar;
+        }
+        return arr;
+    }
+
+    abs(copy=false){
+        let arr = copy ? new F64Array(this) : this;
+        for (let i = 0; i < arr.length; i++) {
+            arr[i] = Math.abs(arr[i]);
+        }
+        return arr;
+    }
+    argmin(){
+        var minIndex = 0;
+        var minval = this[0];
+        for (let i = 1; i < this.length; i++) {
+            if (this[i] < minval){
+                minval = this[i];
+                minIndex = i;
+            }
+        }
+        return minIndex;
+    }
+}
 
 const canvas = document.getElementById("main-canvas");
 const ctx = canvas.getContext("2d");
 
 const margin = {left: 0.1, right: 0.1, top: 0.1, bottom: 0.1};  // in range of [0, 1]
-const steps = [1, 2, 2.5, 5, 10];
-const initRange = {
-    x0: -1.3, x1: 1.3, y0: -1, y1: 1
-};
 
-let dragging = false;
+// const initRange = {
+//     x0: -1, x1: 1, y0: -1, y1: 1
+// };
+
+let panning = false;
 let scaling = false;
-let range = {...initRange};
-let lastRange = {...initRange};
+var range = new Float64Array([-1, 100, -8, 9]);  // x0 x1, y0, y1
+let lastRange = new Float64Array(4);
 // let mousePos = {x: 0, y: 0};
-let lastMousePos = {x: 0, y: 0};
+let mouseDownPos = {x: 0, y: 0};
 
 
 const testData = {
     x: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
     y: [9, 1, 5, 3, 8, -7, 4, 8,-2, 8, 0]
  }
+
+function genTestData(n=100){
+    let x = new Float64Array(n);
+    let y = new Float64Array(n);
+
+    for (let i = 0; i < n; i++) {
+        x[i] = i;
+        y[i] = Math.random() * 10;
+    }
+
+    return [x, y];
+
+}
 
 
 function drawtext(x, y){
@@ -45,59 +95,65 @@ canvas.addEventListener('contextmenu', (e) => {
 canvas.addEventListener('mousedown', (e) => {
     // console.log(`mousedown, button${e.button}`);
     // console.log(`x:${e.offsetX}, y:${e.offsetY}`)
-    if (e.button == 0){
-        dragging = true;
+    if (e.button == 0 || e.button == 1){
+        panning = true;
     }
 
     if (e.button == 2){
         scaling = true;
     }
 
-    lastMousePos.x = e.offsetX;
-    lastMousePos.y = e.offsetY;
-    lastRange = {...range};
+    mouseDownPos.x = e.offsetX;
+    mouseDownPos.y = e.offsetY;
+    // lastRange = {...range};
+    for (let i = 0; i < 4; i++) {
+        lastRange[i] = range[i];
+    }
 
-    // button0 left mouse, button2 right mouse
+    // button0 left mouse, button2 right mouse, button1 middle mouse
 });
 
 canvas.addEventListener('mousemove', (e) => {
-    drawtext(e.offsetX, e.offsetY);
+    // drawtext(e.offsetX, e.offsetY);
 
-    // if (dragging | scaling){    
-    //     console.log(`mousemove, button${e.button}`);
-    //     console.log(`x:${e.offsetX}, y:${e.offsetY}`)
-
-    //     mousePos.x = e.offsetX;
-    //     mousePos.y = e.offsetY;
-    // }
-    let sc = 2;
-    let scalex = sc * (lastRange.x1 - lastRange.x0) / canvas.width * (1 - margin.left - margin.right);
-    let scaley = sc * (lastRange.y1 - lastRange.y0) / canvas.height * (1 - margin.top - margin.bottom);
+    let xRatio = (lastRange[1] - lastRange[0]) / (canvas.width * (1 - margin.left - margin.right));
+    let yRatio = (lastRange[3] - lastRange[2]) / (canvas.height * (1 - margin.top - margin.bottom));
     
-    let xdist = e.offsetX - lastMousePos.x;
-    let ydist = e.offsetY - lastMousePos.y;
+    let xDist = e.offsetX - mouseDownPos.x;
+    let yDist = e.offsetY - mouseDownPos.y;
 
-    if (dragging){
-        range = {
-            x0: lastRange.x0 - xdist * scalex,
-            x1: lastRange.x1 - xdist * scalex,
-            y0: lastRange.y0 - ydist * scaley,
-            y1: lastRange.y1 - ydist * scaley
-        }
+    if (panning){
+        let xPan = xDist * xRatio;
+        let yPan = yDist * yRatio;
 
+        range[0] = lastRange[0] - xPan;  // x0
+        range[1] = lastRange[1] - xPan;  // x1
+        range[2] = lastRange[2] + yPan;  // y0
+        range[3] = lastRange[3] + yPan;  // y1
         initFigure();
+
     }
-
+    // analogous as in pyqtgraph
+    // https://github.com/pyqtgraph/pyqtgraph/blob/7ab6fa3d2fb6832b624541b58eefc52c0dfb4b08/pyqtgraph/widgets/GraphicsView.py
     if (scaling){
+        // let xZoom = mouseDownPos.x / e.offsetX;
+        // let yZoom = mouseDownPos.y / e.offsetY;
+        // xZoom *= xZoom;
+        // yZoom *= yZoom;
 
+        let xZoom = Math.pow(1.01, xDist);
+        let yZoom = Math.pow(1.01, yDist);
 
+        let centerX = mapCanvas2SceneX(mouseDownPos.x);
+        let centerY = mapCanvas2SceneY(mouseDownPos.y);
 
-        range = {
-            x0: lastRange.x0 * xdist * scalex,
-            x1: lastRange.x1 * xdist * scalex,
-            y0: lastRange.y0 * ydist * scaley,
-            y1: lastRange.y1 * ydist * scaley
-        }
+        // console.log(xZoom, yZoom);
+        console.log(xZoom);
+
+        range[0] = centerX - (centerX - lastRange[0]) / xZoom;  // x0
+        range[1] = centerX + (lastRange[1] - centerX) / xZoom;  // x1
+        range[2] = centerY - (centerY - lastRange[2]) * yZoom;  // y0
+        range[3] = centerY + (lastRange[3] - centerY) * yZoom;  // y1
 
         initFigure();
     }
@@ -110,7 +166,7 @@ canvas.addEventListener('mouseup', (e) => {
     // console.log(`mouseup, button${e.button}`);
 
     if (e.button == 0)
-        dragging = false;
+        panning = false;
 
     if (e.button == 2)
         scaling = false;
@@ -124,47 +180,61 @@ function draw() {
     ctx.fillRect(10, 10, 70, 40);
 }
 
+function plot(x, y, color='red'){
 
 
-function plot(x, y){
+    ctx.strokeStyle = color;
+    ctx.beginPath()
+    ctx.moveTo(mapSceneX2Canvas(x[0]), mapSceneY2Canvas(y[0]));
+
+    for (let i = 1; i < x.length; i++) {
+        ctx.lineTo(mapSceneX2Canvas(x[i]), mapSceneY2Canvas(y[i]));
+    }
+    ctx.stroke();
 
 }
 
-function mapx2canvas(x){
-    const cw = canvas.width;
-
-    let xscaled = (x - range.x0) / (range.x1 - range.x0);
-    let figureWidth = cw * (1.0 - margin.left - margin.right)
-    let x_t = xscaled * figureWidth;
-    return cw * margin.left + x_t;
+function mapCanvas2SceneY(y){
+    return range[3] - (y - margin.top * canvas.height) * (range[3] - range[2]) / (canvas.height * (1 - margin.top - margin.bottom));
 }
 
-function mapy2canvas(y){
-    const ch = canvas.height;
-
-    let yscaled = (y - range.y0) / (range.y1 - range.y0);
-    let figureHeight = ch * (1.0 - margin.top - margin.bottom)
-    let y_t = yscaled * figureHeight;
-    return ch * margin.top + y_t;
+function mapCanvas2SceneX(x){
+    return range[0] + (x - margin.left * canvas.width) * (range[1] - range[0]) / (canvas.width * (1 - margin.left - margin.right));
 }
 
+function mapSceneX2Canvas(x){
+    // const cw = canvas.width;
 
-function t(x, y){
-    return [x * canvas.width, y * canvas.height];
+    // let xscaled = (x - range.x0) / (range.x1 - range.x0);
+    // let figureWidth = cw * (1.0 - margin.left - margin.right)
+    // let x_t = xscaled * figureWidth;
+    // return cw * margin.left + x_t;
+    return canvas.width * (margin.left + (x - range[0])* (1.0 - margin.left - margin.right) / (range[1] - range[0]))
 }
 
-function r_t(x, y){
-    return [x / canvas.width, y / canvas.height]
+function mapSceneY2Canvas(y){
+    // the y axis is opposite compared to x, because it canvas 0,0 starts at top left corner
+    return canvas.height * (margin.top + (range[3] - y) * (1.0 - margin.top - margin.bottom) / (range[3] - range[2]))
+}
+
+function init(){
+    // scaling also makes text reverse to it is not a a good option
+    // ctx.translate(0, canvas.height);
+    // ctx.scale(1, -1);
+
+    ctx.strokeStyle = 'black';
+    ctx.save();
 }
 
 function initFigure(){
     const w = canvas.width;
     const h = canvas.height;
-    // ctx.save();
 
     // ctx.scale(w, h);
     // Scaling will not work for stroked shapes including lines as the line thickness gets
     // scaled as well...
+
+    ctx.restore()
 
     ctx.clearRect(0, 0, w, h);
 
@@ -178,6 +248,11 @@ function initFigure(){
 
     drawTicks();
 
+    ctx.save()
+
+    let [ x, y ] = genTestData(100);
+
+    plot(x, y);
 
 
 
@@ -187,38 +262,32 @@ function initFigure(){
 
 // inspiration from matplotlib 
 // https://github.com/matplotlib/matplotlib/blob/fcd5bb1a2b065e30acc530cb3e4a77fb99aea447/lib/matplotlib/ticker.py#L1962
-function genMajorTicks(range, maxnbins=5){
+function genMajorTicks(range, prefferedNBins=5){
+    var steps = new F64Array([1, 2, 2.5, 5]);
     diff = range[1] - range[0];
 
     // calculate scale
     scale = Math.pow(10, Math.trunc(Math.log10(Math.abs(diff))));
-    let scaledSteps = [...steps.slice(0, -1), ...steps];
-    // console.log(scaledSteps);
-    
-    for (let i = 0; i < scaledSteps.length; i++) {
-        scaledSteps[i] *= scale;
-        if (i < steps.length - 1){
-            scaledSteps[i] *= 0.1;
-        }
-    }
 
-    // raw_step = diff / maxnbins;
+    var extStepsScaled = new F64Array([...steps.mul(0.01, true), ...steps.mul(0.1, true), ...steps]);
+    extStepsScaled.mul(scale);
 
-    let ticks = [];
+    var raw_step = diff / prefferedNBins;
 
-    for (let i = 0; i < scaledSteps.length; i++) {
-        step = scaledSteps[scaledSteps.length - i];
-        let best_min = (range[0] / step >> 0) * step;
+    //find the nearest value in the array
+    var diff = extStepsScaled.add(-raw_step, true);
+    diff.abs(); // absolute value
+    let minIndex = diff.argmin();
 
-        let nsteps = (range[1] - best_min) / step >> 0; // integer division
-        if (nsteps > maxnbins + 1){
-            break;
-        }
+    let step = extStepsScaled[minIndex];
+    let best_min = Math.ceil(range[0] / step) * step;
 
-        // generate tics
-        for (let i = 0; i < nsteps + 1; i++) {
-            ticks[i] = best_min + step * i;
-        }
+    let nticks = 1 + (range[1] - best_min) / step >> 0; // integer division
+    var ticks = new F64Array(nticks);
+
+    // generate tics
+    for (let i = 0; i < nticks; i++) {
+        ticks[i] = best_min + step * i;
     }
     return ticks;
 }
@@ -227,8 +296,8 @@ function drawTicks(nx = 5, ny = 5){
     // xdiff = range.x1 - range.x0;
     // ydiff = range.y1 - range.y0;
 
-    let xticks = genMajorTicks([range.x0, range.x1]);
-    let yticks = genMajorTicks([range.y0, range.y1]);
+    let xticks = genMajorTicks([range[0], range[1]]);
+    let yticks = genMajorTicks([range[2], range[3]]);
 
     // console.log(xticks);
 
@@ -240,7 +309,7 @@ function drawTicks(nx = 5, ny = 5){
     ctx.textAlign = 'center';
     ctx.beginPath();
     for (let i = 0; i < xticks.length; i++) {
-        let x = mapx2canvas(xticks[i]);
+        let x = mapSceneX2Canvas(xticks[i]);
         let y = (1 - margin.bottom) * canvas.height;
 
         ctx.moveTo(x, y);
@@ -255,7 +324,7 @@ function drawTicks(nx = 5, ny = 5){
 
     ctx.beginPath();
     for (let i = 0; i < yticks.length; i++) {
-        let y = mapy2canvas(yticks[i]);
+        let y = mapSceneY2Canvas(yticks[i]);
         let x = (margin.left) * canvas.width;
 
         ctx.moveTo(x, y);
@@ -265,16 +334,13 @@ function drawTicks(nx = 5, ny = 5){
     }
     ctx.stroke();
 
-
-    
-
 }
 
 
 window.addEventListener("load", () => {
 
     // draw();
+    init();
     initFigure();
-    drawTicks();
 
 });
