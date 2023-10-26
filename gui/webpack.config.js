@@ -1,9 +1,10 @@
 const path = require('path');
+const HtmlWebpackPlugin = require("html-webpack-plugin");
 
 module.exports = {
-  entry: './src/index.ts',
+  entry: path.resolve(__dirname, 'scr', 'index.ts'),  // this took me along time to solve, the path needs to be specific
   context: __dirname,
-//   devtool: 'inline-source-map',
+  devtool: 'inline-source-map',
   module: {
     rules: [
       {
@@ -20,6 +21,11 @@ module.exports = {
     filename: 'bundle.js',
     path: path.resolve(__dirname, 'dist'),
   },
+  plugins: [
+    new HtmlWebpackPlugin({
+        title: 'pyTSA', 
+        template: path.resolve(__dirname, 'scr', 'index.html') }) 
+   ],
   devServer: {
     static: path.join(__dirname, "dist"),
     compress: true,

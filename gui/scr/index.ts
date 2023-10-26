@@ -1,13 +1,17 @@
-// import { Scene } from "./scene";
-// import { Figure } from "./figure";
+import { Scene } from "./scene";
+import { Figure } from "./figure";
 
 function abc(): void {
 
-    console.log("hello");
-    // const scene = new Scene(document.getElementById("canvas") as HTMLCanvasElement);
+    // window.addEventListener("load", () => {
+        
+    // });
+    var scene = new Scene(document.getElementById("canvas") as HTMLCanvasElement);
+    scene.init();
+    scene.plotRect();
 
-    // scene.init();
+
 
 }
 
-abc();
+abc()

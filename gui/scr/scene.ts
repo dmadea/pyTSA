@@ -13,13 +13,19 @@ export class Scene {
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
-        this.ctx = canvas.getContext('2D') as CanvasRenderingContext2D;
+        this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
+        // console.log(this.ctx, this.canvas);
     }
 
     init(){
-        this.ctx.restore()
+        this.ctx.restore();
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.save();
+    }
+
+    plotRect(){
+        this.ctx.strokeRect(50, 50, 100, 50);
+
     }
 
 
