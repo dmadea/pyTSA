@@ -9,7 +9,7 @@ module.exports = {
     rules: [
       {
         test: /\.ts?$/,
-        use: 'ts-loader',
+        use: 'ts-loader',  //babel-loader for babel
         exclude: /node_modules/,
       },
     ],

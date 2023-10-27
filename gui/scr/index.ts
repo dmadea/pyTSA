@@ -1,5 +1,5 @@
-import { Scene } from "./scene";
-import { Figure } from "./figure";
+import { Scene } from "./plotter/scene";
+// import { Figure } from "./plotter/figure";
 
 function abc(): void {
 
@@ -7,8 +7,11 @@ function abc(): void {
         
     // });
     var scene = new Scene(document.getElementById("canvas") as HTMLCanvasElement);
-    scene.init();
-    scene.plotRect();
+    var fig = scene.addFigure();
+    // fig.paint();
+
+
+    // scene.plotRect();
 
 
 
