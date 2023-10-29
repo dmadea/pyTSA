@@ -1,6 +1,7 @@
 
 import { GraphicObject } from "./object";
-import { Rect, NumberArray, Point } from "./types";
+import { Rect, NumberArray, Point, Margin } from "./types";
+import { backgroundColor, fontSize, frameColor, textColor } from "./settings";
 
 export class Figure extends GraphicObject {
 
@@ -15,16 +16,18 @@ export class Figure extends GraphicObject {
     private scaling: boolean = false;
     private figureRect: Rect;
 
-    constructor(parent: GraphicObject, canvasRect: Rect) {
-        super(parent);
+    private plotCanvasRect = true;
+
+
+    constructor(parent: GraphicObject, canvasRect?: Rect, margin?: Margin) {
+        super(parent, canvasRect, margin) ;
 
         this.margin = {
-            left: 50,
-            right: 50,
-            top: 50,
-            bottom: 50
+            left: 40,
+            right: 10,
+            top: 10,
+            bottom: 20
         };
-        this.canvasRect = canvasRect;
         this.range = {x: -1, y: -1, w: 2, h: 2};
         this.steps = new NumberArray(1, 2, 2.5, 5);
         this.lastMouseDownPos = {x: 0, y: 0};
@@ -61,18 +64,26 @@ export class Figure extends GraphicObject {
         return {
             x: x,
             y: y,
-            w: this.canvasRect.w - this.margin.right - x,
-            h: this.canvasRect.h - this.margin.bottom - y
+            w: this.canvasRect.w - this.margin.right - this.margin.left,
+            h: this.canvasRect.h - this.margin.bottom - this.margin.top
         }
     }
 
     mouseDown(e: MouseEvent): void {
+        let [x, y] = [e.offsetX, e.offsetY];
+        this.figureRect = this.getFigureRect();
+
+        // we are outside of figure frame
+        if (x < this.figureRect.x || x > this.figureRect.x + this.figureRect.w || 
+            y < this.figureRect.y || y > this.figureRect.y + this.figureRect.h) {
+            return;
+        }
+
         this.scaling = e.button == 2;
         this.panning = e.button == 0 || e.button == 1;
     
-        this.lastMouseDownPos = {x: e.offsetX, y: e.offsetY};
+        this.lastMouseDownPos = {x: x, y: y};
         this.lastRange = {...this.range};
-        this.figureRect = this.getFigureRect();
     }
 
     mouseMove(e: MouseEvent): void {
@@ -87,7 +98,7 @@ export class Figure extends GraphicObject {
 
             this.range.x = this.lastRange.x - dist.x * xRatio;
             this.range.y = this.lastRange.y + dist.y * yRatio;
-            this.parent?.paint();
+            this.paint();
         }
         // analogous as in pyqtgraph
         // https://github.com/pyqtgraph/pyqtgraph/blob/7ab6fa3d2fb6832b624541b58eefc52c0dfb4b08/pyqtgraph/widgets/GraphicsView.py
@@ -108,7 +119,7 @@ export class Figure extends GraphicObject {
 
             // console.log(this.range);
 
-            this.parent?.paint();
+            this.paint();
         }
     }
 
@@ -132,16 +143,30 @@ export class Figure extends GraphicObject {
             return;
         }
 
-        let r = this.getFigureRect();
+        this.ctx.fillStyle = backgroundColor;
+        this.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
 
-        this.ctx.strokeRect(r.x, r.y, r.w, r.h);
-        this.drawTicks(r);
+        this.ctx.strokeStyle = frameColor;
+
+        if (this.plotCanvasRect){
+            this.ctx.setLineDash([4, 2]);
+            this.ctx.strokeRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+            this.ctx.setLineDash([]);
+        }
+
+        this.figureRect = this.getFigureRect();
+
+        this.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
+        this.drawTicks(this.figureRect);
+
     }
 
     public drawTicks(r: Rect){  // r is Figure Rectangle, the frame
         if (!this.ctx){
             return;
         }
+
+        this.ctx.fillStyle = textColor;
 
         let xticks = this.genMajorTicks(this.range.x, this.range.w);
         let yticks = this.genMajorTicks(this.range.y, this.range.h);

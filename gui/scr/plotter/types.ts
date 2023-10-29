@@ -106,6 +106,14 @@ export class NumberArray extends Array<number> {
         }
         return minIndex;
     }
+
+    public sum() {
+        let sum = 0;
+        for (let i = 0; i < this.length; i++) {
+            sum += this[i];
+        }
+        return sum;
+    }
 }
 
 // https://stackoverflow.com/questions/26933365/how-to-write-an-interface-represents-a-tuple-type-in-typescript

@@ -7,7 +7,8 @@ function abc(): void {
         
     // });
     var scene = new Scene(document.getElementById("canvas") as HTMLCanvasElement);
-    var fig = scene.addFigure();
+    // var fig = scene.addFigure();
+    scene.testAddGrid();
     // fig.paint();
 
 
