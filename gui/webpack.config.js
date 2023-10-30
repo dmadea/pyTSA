@@ -1,8 +1,9 @@
 const path = require('path');
 const HtmlWebpackPlugin = require("html-webpack-plugin");
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 
 module.exports = {
-  entry: path.resolve(__dirname, 'scr', 'index.ts'),  // this took me along time to solve, the path needs to be specific
+  entry: path.resolve(__dirname, 'src', 'index.ts'),  // this took me along time to solve, the path needs to be specific
   context: __dirname,
   devtool: 'inline-source-map',
   module: {
@@ -11,6 +12,10 @@ module.exports = {
         test: /\.ts?$/,
         use: 'ts-loader',  //babel-loader for babel
         exclude: /node_modules/,
+      },
+      {
+        test: /\.css?$/,
+        use: [MiniCssExtractPlugin.loader, 'css-loader'],
       },
     ],
   },
@@ -24,7 +29,9 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
         title: 'pyTSA', 
-        template: path.resolve(__dirname, 'scr', 'index.html') }) 
+        template: path.resolve(__dirname, 'src', 'index.html') }),
+      new MiniCssExtractPlugin({
+          filename:"bundle.css"})
    ],
   devServer: {
     static: path.join(__dirname, "dist"),

@@ -2,6 +2,7 @@ import { Figure } from "./figure";
 import { Grid } from "./grid";
 import { GraphicObject } from "./object";
 import { backgroundColor } from "./settings";
+import { NumberArray } from "./types";
 // import { Rect } from "./types";
 
 
@@ -27,10 +28,15 @@ export class Scene extends GraphicObject {
     testAddGrid(){
         var grid = new Grid(this, {...this.canvasRect});
         this.items.push(grid);
-        grid.addItem(new Figure(grid), 0, 0);
+        var f = new Figure(grid);
+        f.figureSettings.axisAlignment = 'horizontal';
+        grid.addItem(f, 0, 0);
         grid.addItem(new Figure(grid), 0, 1);
         grid.addItem(new Figure(grid), 1, 0);
-        grid.addItem(new Figure(grid), 1, 1);
+        grid.gridSettings.widthRatios = new NumberArray(2, 1);
+        grid.gridSettings.heightRatios = new NumberArray(2, 1);
+
+        grid.recalculateGrid();
 
         this.paint()
     }
@@ -49,9 +55,7 @@ export class Scene extends GraphicObject {
         this.ctx.save();
         console.log('initial paint from scene');
 
-        for (const item of this.items) {
-            item.paint();            
-        }
+        super.paint();
     }
 
 

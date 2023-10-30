@@ -3,7 +3,6 @@ import { Rect, Margin } from "./types";
 
 export abstract class GraphicObject{
     protected items: GraphicObject[];
-    abstract paint(): void;
     public parent: GraphicObject | null; // = null;
 
     public canvas: HTMLCanvasElement | null = null;
@@ -11,6 +10,15 @@ export abstract class GraphicObject{
 
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
     public margin: Margin;    // margin from canvasRect in absolute values: [left, right, top, bottom] 
+
+    public cursors = {
+        default: 'default',
+        move: 'move',
+        pointer: 'pointer',
+        crosshair: 'crosshair',
+        leftArrow: 'w-resize',
+        topArrow: 'n-resize'
+    }
 
     constructor(parent: GraphicObject | null = null,
         canvasRect: Rect = {x: 0, y: 0, w: 0, h: 0},
@@ -36,6 +44,11 @@ export abstract class GraphicObject{
         this.items = [];
     }
 
+    public paint(): void {
+        for (const item of this.items) {
+            item.paint();
+        }
+    }
 
     public width() {
         return this.canvas?.width;
