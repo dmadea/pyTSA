@@ -15,7 +15,8 @@ module.exports = {
       },
       {
         test: /\.css?$/,
-        use: [MiniCssExtractPlugin.loader, 'css-loader'],
+        // use: [MiniCssExtractPlugin.loader, 'css-loader'],
+        use: ["style-loader", "css-loader"],
       },
     ],
   },
@@ -30,8 +31,8 @@ module.exports = {
     new HtmlWebpackPlugin({
         title: 'pyTSA', 
         template: path.resolve(__dirname, 'src', 'index.html') }),
-      new MiniCssExtractPlugin({
-          filename:"bundle.css"})
+      // new MiniCssExtractPlugin({
+      //     filename:"bundle.css"})
    ],
   devServer: {
     static: path.join(__dirname, "dist"),

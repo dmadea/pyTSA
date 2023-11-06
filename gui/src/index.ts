@@ -1,5 +1,6 @@
 import { Scene } from "./plotter/scene";
-import styles from "./styles.css";
+// import styles from "./styles.css";
+var styles = require("./styles.css");
 // import { Figure } from "./plotter/figure";
 
 

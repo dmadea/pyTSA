@@ -37,7 +37,11 @@ export class Grid extends GraphicObject {
         }
     }
 
-    recalculateGrid(){
+    public resize(): void {
+        this.recalculateGrid(false);
+    }
+
+    recalculateGrid(repaint: boolean = true){
         let ncols = Math.max(...this.positions.map(p => (p.col))) + 1;
         let nrows = Math.max(...this.positions.map(p => (p.row))) + 1;
 
@@ -79,14 +83,15 @@ export class Grid extends GraphicObject {
         }
 
         //repaint
-        this.paint();
+        if (repaint)
+            this.paint();
     }
 
 
     addItem(item: GraphicObject, row: number = 0, col: number = 0) {
         this.positions.push({row, col});
         this.items.push(item);
-        this.recalculateGrid();
+        this.recalculateGrid(false);
     }
 
 

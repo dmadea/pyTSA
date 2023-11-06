@@ -58,6 +58,10 @@ export abstract class GraphicObject{
         return this.canvas?.height;
     }
 
+    public resize() {
+        this.paint();
+    }
+
     mouseDown(e: MouseEvent) {
     }
 

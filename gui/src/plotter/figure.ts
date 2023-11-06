@@ -2,6 +2,7 @@
 import { GraphicObject } from "./object";
 import { Rect, NumberArray, Point, Margin } from "./types";
 import { backgroundColor, fontSizeLabels, fontSizeNumbers, frameColor, textColor } from "./settings";
+import { formatNumber } from "./utils";
 
 interface IFigureSettings {
     xAxis: {
@@ -58,8 +59,8 @@ export class Figure extends GraphicObject {
         super(parent, canvasRect, margin) ;
 
         this.margin = {
-            left: 40,
-            right: 40,
+            left: 60,
+            right: 60,
             top: 30,
             bottom: 30
         };
@@ -68,6 +69,10 @@ export class Figure extends GraphicObject {
         this.lastMouseDownPos = {x: 0, y: 0};
         this.lastRange = {...this.range};
         this.figureRect = this.getFigureRect();
+
+        this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
+        this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
+
     }
 
     public mapCanvas2Range(p: Point): Point{
@@ -180,8 +185,7 @@ export class Figure extends GraphicObject {
             y: e.offsetY - this.lastMouseDownPos.y
         }
 
-        this.figureSettings.xAxis.viewBounds = [-10, 10];
-        this.figureSettings.yAxis.viewBounds = [-10, 10];
+
         
         if (this.panning){
             this.canvas.style.cursor = this.cursors.move;
@@ -266,6 +270,9 @@ export class Figure extends GraphicObject {
         this.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
         this.drawTicks(this.figureRect);
 
+        //plot content
+
+
     }
 
     public drawTicks(r: Rect){  // r is Figure Rectangle, the frame
@@ -277,6 +284,21 @@ export class Figure extends GraphicObject {
 
         let xticks = this.genMajorTicks(this.range.x, this.range.w);
         let yticks = this.genMajorTicks(this.range.y, this.range.h);
+
+        // estimate the number of significant figures to be plotted
+        let xdiff = xticks[xticks.length - 1] - xticks[0];
+        let ydiff = yticks[xticks.length - 1] - yticks[0];
+
+        let xavrg = (xticks[xticks.length - 1] + xticks[0]) / 2
+        let yavrg = (yticks[yticks.length - 1] + yticks[0]) / 2
+
+        let xFigures = Math.abs(Math.trunc(Math.log10(xavrg / xdiff))) + 2;
+        let yFigures = Math.abs(Math.trunc(Math.log10(yavrg / ydiff))) + 2;
+
+        xFigures = xFigures >= 2 && Number.isFinite(xFigures) ? xFigures : 2;
+        yFigures = yFigures >= 2 && Number.isFinite(yFigures) ? yFigures : 2;
+
+        // console.log(xFigures );
 
         if (this.figureSettings.axisAlignment === 'vertical'){
             [xticks, yticks] = [yticks, xticks];  // swap the axes
@@ -305,11 +327,11 @@ export class Figure extends GraphicObject {
             }
 
             if (this.figureSettings.showTickNumbers.includes('bottom')){
-                this.ctx.fillText(`${xtick}`, p.x, r.y + r.h + tickSize + xtextOffsetBottom);
+                this.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y + r.h + tickSize + xtextOffsetBottom);
             }
 
             if (this.figureSettings.showTickNumbers.includes('top')){
-                this.ctx.fillText(`${xtick}`, p.x, r.y - tickSize - xtextOffsetTop);
+                this.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y - tickSize - xtextOffsetTop);
             }
         }
         this.ctx.stroke();
@@ -332,12 +354,12 @@ export class Figure extends GraphicObject {
 
             if (this.figureSettings.showTickNumbers.includes('left')){
                 this.ctx.textAlign = 'right';
-                this.ctx.fillText(`${ytick}`, r.x - tickSize - ytextOffset, p.y + 3);
+                this.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x - tickSize - ytextOffset, p.y + 3);
             }
 
             if (this.figureSettings.showTickNumbers.includes('right')){
                 this.ctx.textAlign = 'left';
-                this.ctx.fillText(`${ytick}`, r.x + r.w + tickSize + ytextOffset, p.y + 3);
+                this.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x + r.w + tickSize + ytextOffset, p.y + 3);
             }
         }
         this.ctx.stroke();

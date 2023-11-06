@@ -8,6 +8,8 @@ import { NumberArray } from "./types";
 
 export class Scene extends GraphicObject {
 
+    private canvasResizeObserver: ResizeObserver;
+
     constructor(canvas: HTMLCanvasElement) {
         super(null);
         this.canvas = canvas;
@@ -15,7 +17,22 @@ export class Scene extends GraphicObject {
         this.items = [];
         this.margin = {left: 0, right:0 , top: 0, bottom: 0};
         this.canvasRect = {x:0, y:0, w: this.canvas.width, h: this.canvas.height};
+        this.canvasResizeObserver = new ResizeObserver((entries) => this.observerCallback(entries));
+        this.canvasResizeObserver.observe(this.canvas);
+    }
 
+    private observerCallback(entries: ResizeObserverEntry[]) {
+        window.requestAnimationFrame((): void | undefined => {
+            if (!Array.isArray(entries) || !entries.length) {
+              return;
+            }
+
+            if (this.canvas){
+                this.canvas.width = this.canvas.clientWidth;
+                this.canvas.height = this.canvas.clientHeight;
+                this.resize();
+            }
+          });
     }
 
     addFigure(){
@@ -36,16 +53,33 @@ export class Scene extends GraphicObject {
         grid.gridSettings.widthRatios = new NumberArray(2, 1);
         grid.gridSettings.heightRatios = new NumberArray(2, 1);
 
-        grid.recalculateGrid();
+        grid.recalculateGrid(false);
 
         this.paint()
+    }
+
+    public resize(): void {
+        // set new dimensions
+        if (this.canvas){
+            this.canvasRect = {
+                x: 0,
+                y: 0,
+                w: this.canvas.width,
+                h: this.canvas.height
+            }
+        }
+        for (const item of this.items) {
+            item.canvasRect = this.canvasRect;
+            item.resize();
+        }
+        super.resize();
     }
 
     paint(): void {
         if (this.canvas === null || this.ctx === null)
             return;
         
-        // set some dimensions
+        console.log(this.canvasRect);
 
         // clear plot
 
@@ -56,6 +90,7 @@ export class Scene extends GraphicObject {
         console.log('initial paint from scene');
 
         super.paint();
+
     }
 
 
