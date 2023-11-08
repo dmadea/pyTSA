@@ -4,6 +4,7 @@ import { GraphicObject } from "./object";
 import { backgroundColor } from "./settings";
 import { NumberArray } from "./types";
 // import { Rect } from "./types";
+import { genTestData } from "./utils";
 
 
 export class Scene extends GraphicObject {
@@ -47,8 +48,19 @@ export class Scene extends GraphicObject {
         this.items.push(grid);
         var f = new Figure(grid);
         f.figureSettings.axisAlignment = 'horizontal';
+        
+        var [x, y]  = genTestData(1000);
+        // f.plot(x, y, 'red', '-', 1);
+
         grid.addItem(f, 0, 0);
-        grid.addItem(new Figure(grid), 0, 1);
+
+        var f1 = new Figure(grid);
+        var [x, y]  = genTestData(50);
+        f1.plot(new NumberArray(-1, 0, 1), new NumberArray(-1, 2, -0.5), 'green'); 
+        f.plot(x, y, 'blue', '-', 3); 
+
+
+        grid.addItem(f1, 0, 1);
         grid.addItem(new Figure(grid), 1, 0);
         grid.gridSettings.widthRatios = new NumberArray(2, 1);
         grid.gridSettings.heightRatios = new NumberArray(2, 1);
@@ -68,6 +80,7 @@ export class Scene extends GraphicObject {
                 h: this.canvas.height
             }
         }
+        //set new dimensions also for items
         for (const item of this.items) {
             item.canvasRect = this.canvasRect;
             item.resize();
@@ -79,7 +92,7 @@ export class Scene extends GraphicObject {
         if (this.canvas === null || this.ctx === null)
             return;
         
-        console.log(this.canvasRect);
+        // console.log(this.canvasRect);
 
         // clear plot
 

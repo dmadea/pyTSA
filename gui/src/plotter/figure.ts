@@ -22,6 +22,15 @@ interface IFigureSettings {
 
 }
 
+interface ILinePlot {
+    x: NumberArray,
+    y: NumberArray,
+    color: string,
+    ls: string,  // line style
+    lw: number,  // line width
+    zValue: number
+}
+
 export class Figure extends GraphicObject {
 
     public range: Rect;
@@ -46,14 +55,17 @@ export class Figure extends GraphicObject {
         axisAlignment: 'horizontal',   // could be vertical
     }
 
+    private linePlots: Array<ILinePlot> = [];
+
     private lastMouseDownPos: Point;
     private lastRange: Rect;
 
     private panning: boolean = false;
     private scaling: boolean = false;
+    private lastCenterPoint: Point;
     private figureRect: Rect;
 
-    private plotCanvasRect = true;
+    private plotCanvasRect = false;
 
     constructor(parent: GraphicObject, canvasRect?: Rect, margin?: Margin) {
         super(parent, canvasRect, margin) ;
@@ -72,11 +84,11 @@ export class Figure extends GraphicObject {
 
         this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
         this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
-
+        this.lastCenterPoint = {x: 0, y: 0};
     }
 
     public mapCanvas2Range(p: Point): Point{
-        let r = this.getFigureRect();
+        let r = this.figureRect;
         let xScaled = (p.x - r.x) / r.w;
         let yScaled = (p.y - r.y) / r.h;
 
@@ -88,7 +100,7 @@ export class Figure extends GraphicObject {
 
     public mapRange2Canvas(p: Point): Point{
         // rewrite for vertical-aligned axis
-        let r = this.getFigureRect();
+        let r = this.figureRect;
         let xScaled = (p.x - this.range.x) / this.range.w;
         let yScaled = (p.y - this.range.y) / this.range.h;
 
@@ -135,9 +147,11 @@ export class Figure extends GraphicObject {
 
         if (this.panning || this.scaling)
             this.canvas.style.cursor = this.cursors.move;
-    
+        
         this.lastMouseDownPos = {x: x, y: y};
         this.lastRange = {...this.range};
+
+        this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
     }
 
     private getBoundedRange(rect: Rect, dontZoom: boolean): Rect {
@@ -184,8 +198,6 @@ export class Figure extends GraphicObject {
             x: e.offsetX - this.lastMouseDownPos.x,
             y: e.offsetY - this.lastMouseDownPos.y
         }
-
-
         
         if (this.panning){
             this.canvas.style.cursor = this.cursors.move;
@@ -211,15 +223,9 @@ export class Figure extends GraphicObject {
             let xZoom = 1.01 ** dist.x;
             let yZoom = 1.01 ** dist.y;
 
-            let centerPoint = this.mapCanvas2Range(this.lastMouseDownPos);
-
-            // console.log(xZoom, yZoom);
-
-            // console.log((centerPoint.x - this.lastRange.x) / xZoom)
-
             let newRect: Rect = {
-                x: centerPoint.x - (centerPoint.x - this.lastRange.x) / xZoom, 
-                y: centerPoint.y - (centerPoint.y - this.lastRange.y) * yZoom,
+                x: this.lastCenterPoint.x - (this.lastCenterPoint.x - this.lastRange.x) / xZoom, 
+                y: this.lastCenterPoint.y - (this.lastCenterPoint.y - this.lastRange.y) * yZoom,
                 w: this.lastRange.w / xZoom,
                 h: this.lastRange.h * yZoom
             };
@@ -248,6 +254,128 @@ export class Figure extends GraphicObject {
         // console.log(this.scaling, this.panning); 
     }
 
+    public plot(x: NumberArray, y: NumberArray, color = "black", ls = "-", lw = 1, zValue = 10) {
+        this.linePlots.push({x: x.copy(), y: y.copy(), color, ls, lw, zValue});
+        this.paint();
+    }
+
+    private evalYPointOnLine(p1: Point, p2: Point, y: number): Point {
+        // gets the point on the line determined by points p1 and p2 at y
+        // returns {x: [calculated], y: y}
+
+        let slope = (p2.y - p1.y) / (p2.x - p1.x)
+        return {x: p1.x + (y - p1.y) / slope, y}  // y = slope * (x - p1.x) + p1.y
+    }
+
+    private evalXPointOnLine(p1: Point, p2: Point, x: number): Point {
+        // gets the point on the line determined by points p1 and p2 at y
+        // returns {x:x, y: [calculated]}
+
+        let slope = (p2.y - p1.y) / (p2.x - p1.x)
+        return {x, y: slope * (x - p1.x) + p1.y}  // y = slope * (x - p1.x) + p1.y
+    }
+
+    private paintPlots(){
+        if (!this.ctx){
+            return;
+        }
+
+        this.ctx.save()
+        for (const plot of this.linePlots) {
+            this.ctx.strokeStyle = plot.color;
+
+            var pathStarted = false;
+
+            var getYInterpolate = (i: number, iCheckRange: number) => {
+                let p: Point;
+                if (plot.y[iCheckRange] < this.range.y) {
+                    // make linear interpolation
+                    p = this.evalYPointOnLine({x: plot.x[i-1], y: plot.y[i-1]}, {x: plot.x[i], y: plot.y[i]}, this.range.y);
+                    pathStarted = false;
+                } else if (plot.y[iCheckRange] > this.range.y + this.range.h) {
+                    p = this.evalYPointOnLine({x: plot.x[i-1], y: plot.y[i-1]}, {x: plot.x[i], y: plot.y[i]}, this.range.y + this.range.h);
+                    pathStarted = false;
+                } else {
+                    p = {x: plot.x[i], y: plot.y[i]};
+                }
+    
+                return p;
+            }
+
+            this.ctx.beginPath()
+        
+            for (let i = 0; i < plot.x.length; i++) {
+                if (plot.x[i] < this.range.x)
+                    continue;
+
+                // if (i === 0)
+                //     continue;
+
+                console.log(i, pathStarted);
+            
+                if (!pathStarted) {
+                    // if (plot.y[i] < this.range.y || plot.y[i] > this.range.y + this.range.h){
+                    //     continue;
+                    // }
+                    console.log('path started');
+
+
+                    let p0: Point = {x: 0, y: 0};
+                    let checkY = true;
+                    
+                    // if the previous x point was outside of range
+                    if (i > 0 && plot.x[i - 1] < this.range.x) {
+                        console.log('previous x outside of range');
+                        checkY = false;
+                        p0 = this.evalXPointOnLine({x: plot.x[i-1], y: plot.y[i-1]}, {x: plot.x[i], y: plot.y[i]}, this.range.x);
+
+                        // if p0.y is outside of y range, check y
+                        if (p0.y < this.range.y || p0.y > this.range.y + this.range.h)
+                            checkY = true;
+                    }
+                    // console.log(checkY);
+
+                    if (checkY){
+                        p0 = getYInterpolate(i, i);
+                        console.log(p0);
+                    }
+
+                    p0 = this.mapRange2Canvas(p0);
+                    this.ctx.moveTo(p0.x, p0.y);
+                    pathStarted = true;
+                }
+
+                // if it is the last line
+                if (plot.x[i] > this.range.x + this.range.w){
+                    console.log('last x outside of range');
+                    let checkY = false;
+                    let p = this.evalXPointOnLine({x: plot.x[i-1], y: plot.y[i-1]}, {x: plot.x[i], y: plot.y[i]}, this.range.x + this.range.w);
+                    // if p0.y is outside of range, check y
+                    if (p.y < this.range.y || p.y > this.range.y + this.range.h)
+                        checkY = true;
+
+                    if (checkY){
+                        p = getYInterpolate(i, i+1);
+                    }
+
+                    p = this.mapRange2Canvas(p);
+                    this.ctx.lineTo(p.x, p.y);
+                    break;
+
+                } else {
+                    let p = getYInterpolate(i, i+1);
+                    p = this.mapRange2Canvas(p);
+                    this.ctx.lineTo(p.x, p.y);
+                }
+                
+            }
+            this.ctx.lineWidth = plot.lw;
+            this.ctx.stroke();
+        }
+        this.ctx.restore();
+        
+    }
+
     paint(): void {
         // plot rectangle
         if (!this.ctx){
@@ -266,16 +394,17 @@ export class Figure extends GraphicObject {
         }
 
         this.figureRect = this.getFigureRect();
-
+        
+        // draw figure rectangle
         this.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
-        this.drawTicks(this.figureRect);
+        this.drawTicks();
 
         //plot content
-
+        this.paintPlots();
 
     }
 
-    public drawTicks(r: Rect){  // r is Figure Rectangle, the frame
+    public drawTicks(){  // r is Figure Rectangle, the frame
         if (!this.ctx){
             return;
         }
@@ -286,19 +415,14 @@ export class Figure extends GraphicObject {
         let yticks = this.genMajorTicks(this.range.y, this.range.h);
 
         // estimate the number of significant figures to be plotted
-        let xdiff = xticks[xticks.length - 1] - xticks[0];
-        let ydiff = yticks[xticks.length - 1] - yticks[0];
+        let xdiff = xticks[1] - xticks[0];
+        let ydiff = yticks[1] - yticks[0];
 
-        let xavrg = (xticks[xticks.length - 1] + xticks[0]) / 2
-        let yavrg = (yticks[yticks.length - 1] + yticks[0]) / 2
+        let xmax = Math.max(Math.abs(xticks[0]), Math.abs(xticks[xticks.length - 1]));
+        let ymax = Math.max(Math.abs(yticks[0]), Math.abs(yticks[yticks.length - 1]));
 
-        let xFigures = Math.abs(Math.trunc(Math.log10(xavrg / xdiff))) + 2;
-        let yFigures = Math.abs(Math.trunc(Math.log10(yavrg / ydiff))) + 2;
-
-        xFigures = xFigures >= 2 && Number.isFinite(xFigures) ? xFigures : 2;
-        yFigures = yFigures >= 2 && Number.isFinite(yFigures) ? yFigures : 2;
-
-        // console.log(xFigures );
+        let xFigures = Math.ceil(Math.log10(xmax / xdiff)) + 1;
+        let yFigures = Math.ceil(Math.log10(ymax / ydiff)) + 1;
 
         if (this.figureSettings.axisAlignment === 'vertical'){
             [xticks, yticks] = [yticks, xticks];  // swap the axes
@@ -310,6 +434,8 @@ export class Figure extends GraphicObject {
         let ytextOffset = 10;
 
         // draw x ticks
+
+        let r = this.figureRect;
 
         this.ctx.textAlign = 'center';
         this.ctx.beginPath();
