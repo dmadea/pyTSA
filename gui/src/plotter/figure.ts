@@ -259,121 +259,32 @@ export class Figure extends GraphicObject {
         this.paint();
     }
 
-    private evalYPointOnLine(p1: Point, p2: Point, y: number): Point {
-        // gets the point on the line determined by points p1 and p2 at y
-        // returns {x: [calculated], y: y}
-
-        let slope = (p2.y - p1.y) / (p2.x - p1.x)
-        return {x: p1.x + (y - p1.y) / slope, y}  // y = slope * (x - p1.x) + p1.y
-    }
-
-    private evalXPointOnLine(p1: Point, p2: Point, x: number): Point {
-        // gets the point on the line determined by points p1 and p2 at y
-        // returns {x:x, y: [calculated]}
-
-        let slope = (p2.y - p1.y) / (p2.x - p1.x)
-        return {x, y: slope * (x - p1.x) + p1.y}  // y = slope * (x - p1.x) + p1.y
-    }
-
-    private paintPlots(){
+    private paintPlots() {
         if (!this.ctx){
             return;
         }
+        this.ctx.save();
+        this.ctx.rect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
+        this.ctx.clip();
 
-        this.ctx.save()
+        // TODO benchmark it
         for (const plot of this.linePlots) {
+
+            this.ctx.beginPath();
+            let p0 = this.mapRange2Canvas({x: plot.x[0], y: plot.y[0]})
+            this.ctx.moveTo(p0.x, p0.y);
+
+            for (let i = 1; i < plot.x.length; i++) {
+                let p = this.mapRange2Canvas({x: plot.x[i], y: plot.y[i]})
+                this.ctx.lineTo(p.x, p.y);
+            }
             this.ctx.strokeStyle = plot.color;
-
-            var pathStarted = false;
-
-            var getYInterpolate = (i: number, iCheckRange: number) => {
-                let p: Point;
-                if (plot.y[iCheckRange] < this.range.y) {
-                    // make linear interpolation
-                    p = this.evalYPointOnLine({x: plot.x[i-1], y: plot.y[i-1]}, {x: plot.x[i], y: plot.y[i]}, this.range.y);
-                    pathStarted = false;
-                } else if (plot.y[iCheckRange] > this.range.y + this.range.h) {
-                    p = this.evalYPointOnLine({x: plot.x[i-1], y: plot.y[i-1]}, {x: plot.x[i], y: plot.y[i]}, this.range.y + this.range.h);
-                    pathStarted = false;
-                } else {
-                    p = {x: plot.x[i], y: plot.y[i]};
-                }
-    
-                return p;
-            }
-
-            this.ctx.beginPath()
-        
-            for (let i = 0; i < plot.x.length; i++) {
-                if (plot.x[i] < this.range.x)
-                    continue;
-
-                // if (i === 0)
-                //     continue;
-
-                console.log(i, pathStarted);
-            
-                if (!pathStarted) {
-                    // if (plot.y[i] < this.range.y || plot.y[i] > this.range.y + this.range.h){
-                    //     continue;
-                    // }
-                    console.log('path started');
-
-
-                    let p0: Point = {x: 0, y: 0};
-                    let checkY = true;
-                    
-                    // if the previous x point was outside of range
-                    if (i > 0 && plot.x[i - 1] < this.range.x) {
-                        console.log('previous x outside of range');
-                        checkY = false;
-                        p0 = this.evalXPointOnLine({x: plot.x[i-1], y: plot.y[i-1]}, {x: plot.x[i], y: plot.y[i]}, this.range.x);
-
-                        // if p0.y is outside of y range, check y
-                        if (p0.y < this.range.y || p0.y > this.range.y + this.range.h)
-                            checkY = true;
-                    }
-                    // console.log(checkY);
-
-                    if (checkY){
-                        p0 = getYInterpolate(i, i);
-                        console.log(p0);
-                    }
-
-                    p0 = this.mapRange2Canvas(p0);
-                    this.ctx.moveTo(p0.x, p0.y);
-                    pathStarted = true;
-                }
-
-                // if it is the last line
-                if (plot.x[i] > this.range.x + this.range.w){
-                    console.log('last x outside of range');
-                    let checkY = false;
-                    let p = this.evalXPointOnLine({x: plot.x[i-1], y: plot.y[i-1]}, {x: plot.x[i], y: plot.y[i]}, this.range.x + this.range.w);
-                    // if p0.y is outside of range, check y
-                    if (p.y < this.range.y || p.y > this.range.y + this.range.h)
-                        checkY = true;
-
-                    if (checkY){
-                        p = getYInterpolate(i, i+1);
-                    }
-
-                    p = this.mapRange2Canvas(p);
-                    this.ctx.lineTo(p.x, p.y);
-                    break;
-
-                } else {
-                    let p = getYInterpolate(i, i+1);
-                    p = this.mapRange2Canvas(p);
-                    this.ctx.lineTo(p.x, p.y);
-                }
-                
-            }
             this.ctx.lineWidth = plot.lw;
             this.ctx.stroke();
         }
+
         this.ctx.restore();
-        
+
     }
 
     paint(): void {
@@ -381,6 +292,12 @@ export class Figure extends GraphicObject {
         if (!this.ctx){
             return;
         }
+
+        this.ctx.save();
+
+        // clip to canvas rectangle
+        // this.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // this.ctx.clip();
 
         this.ctx.fillStyle = backgroundColor;
         this.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
@@ -399,8 +316,11 @@ export class Figure extends GraphicObject {
         this.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
         this.drawTicks();
 
+        this.ctx.restore();
+
         //plot content
         this.paintPlots();
+
 
     }
 

@@ -55,9 +55,11 @@ export class Scene extends GraphicObject {
         grid.addItem(f, 0, 0);
 
         var f1 = new Figure(grid);
-        var [x, y]  = genTestData(50);
+        var [x, y]  = genTestData(1e4);
         f1.plot(new NumberArray(-1, 0, 1), new NumberArray(-1, 2, -0.5), 'green'); 
-        f.plot(x, y, 'blue', '-', 3); 
+        f1.plot(new NumberArray(-1, 0, 1), new NumberArray(1, -2, 0.5), 'red'); 
+
+        f.plot(x, y, 'blue', '-', 1);
 
 
         grid.addItem(f1, 0, 1);
