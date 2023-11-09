@@ -1,6 +1,6 @@
 
 import { GraphicObject } from "./object";
-import { Rect, NumberArray, Point, Margin } from "./types";
+import { Rect, NumberArray, Point, Margin, Matrix } from "./types";
 import { backgroundColor, fontSizeLabels, fontSizeNumbers, frameColor, textColor } from "./settings";
 import { formatNumber } from "./utils";
 
@@ -31,6 +31,14 @@ interface ILinePlot {
     zValue: number
 }
 
+interface IHeatMap {
+    x: NumberArray,
+    y: NumberArray,
+    data: Matrix,
+    colormap: string,
+    iData: ImageData
+}
+
 export class Figure extends GraphicObject {
 
     public range: Rect;
@@ -56,6 +64,7 @@ export class Figure extends GraphicObject {
     }
 
     private linePlots: Array<ILinePlot> = [];
+    private heatmap: IHeatMap | null = null;
 
     private lastMouseDownPos: Point;
     private lastRange: Rect;
@@ -66,6 +75,9 @@ export class Figure extends GraphicObject {
     private figureRect: Rect;
 
     private plotCanvasRect = false;
+
+    private offScreenCanvas: OffscreenCanvas;
+    private offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null = null;
 
     constructor(parent: GraphicObject, canvasRect?: Rect, margin?: Margin) {
         super(parent, canvasRect, margin) ;
@@ -85,6 +97,8 @@ export class Figure extends GraphicObject {
         this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
         this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
         this.lastCenterPoint = {x: 0, y: 0};
+        this.offScreenCanvas = new OffscreenCanvas(10, 10);
+        // this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
     }
 
     public mapCanvas2Range(p: Point): Point{
@@ -108,6 +122,24 @@ export class Figure extends GraphicObject {
             x: r.x + xScaled * r.w,
             y: r.y + (1 - yScaled) * r.h  // inverted y axis
         }
+    }
+
+    public mapRange2CanvasArr(xvals: NumberArray, yvals: NumberArray): [NumberArray, NumberArray]{
+        if (xvals.length !== yvals.length){
+            throw TypeError("Different length of input arrays");
+        }
+        var newX = new NumberArray(xvals.length)
+        var newY = new NumberArray(xvals.length);
+        let r = this.figureRect;
+
+        for (let i = 0; i < xvals.length; i++) {
+            let xScaled = (xvals[i] - this.range.x) / this.range.w;
+            let yScaled = (yvals[i] - this.range.y) / this.range.h;
+
+            newX[i] = r.x + xScaled * r.w;
+            newY[i] = r.y + (1 - yScaled) * r.h;
+        }
+        return [newX, newY];
     }
 
     // gets the canvas Rect of the figure frame
@@ -254,36 +286,150 @@ export class Figure extends GraphicObject {
         // console.log(this.scaling, this.panning); 
     }
 
-    public plot(x: NumberArray, y: NumberArray, color = "black", ls = "-", lw = 1, zValue = 10) {
-        this.linePlots.push({x: x.copy(), y: y.copy(), color, ls, lw, zValue});
+    public plotLine(x: NumberArray, y: NumberArray, color = "black", ls = "-", lw = 1, zValue = 10) {
+        var plot: ILinePlot = {x: x.copy(), y: y.copy(), color, ls, lw, zValue}; 
+        this.linePlots.push(plot);
         this.paint();
+        return plot;
+    }
+
+    public plotHeatmap(data: Matrix, x: NumberArray, y: NumberArray, colormap: string = "Femto"): IHeatMap | null {
+        if (data.nrows !== x.length || data.ncols !== y.length) {
+            throw TypeError("Dimensions are not aligned with x and y arrays.");
+        }
+        
+        // https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas
+        this.offScreenCanvas = new OffscreenCanvas(x.length, y.length);
+        this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
+        
+        if(!this.offScreenCanvasCtx) {
+            return null;
+        }
+        
+        const iData = new ImageData(x.length, y.length);
+
+        console.log(iData.data);
+        
+        // fill the image buffer
+        for(let i = 0; i < x.length; i++) {
+            for(let j = 0; j < y.length; j++) {
+                let pos = (i * x.length + j) * 4;        // position in buffer based on x and y
+                iData.data[pos] = data.get(i, j);              // some R value [0, 255]
+                iData.data[pos+1] = data.get(i, j);              // some G value
+                iData.data[pos+2] = data.get(i, j);              // some B value
+                iData.data[pos+3] = 50;                  // set alpha channel
+            }
+        }
+
+        console.log(iData);
+
+        // plot the buffer to offScreenCanvas
+        this.offScreenCanvasCtx.clearRect(0, 0, iData.width, iData.height);
+        this.offScreenCanvasCtx.fillStyle = 'black';
+        this.offScreenCanvasCtx.fillRect(0, 0, iData.width, iData.height);
+        // this.offScreenCanvasCtx.putImageData(iData, 0, 0);
+        
+        this.heatmap = {x, y, data, colormap, iData};
+        this.paint();
+        return this.heatmap;
+    }
+
+    public removePlot(plot: ILinePlot){
+        let i = this.linePlots.indexOf(plot);
+        if (i > -1) {
+            this.linePlots.splice(i, 0);
+        }
+    }
+
+    private paintHeatMap(){
+        if (!this.ctx || !this.heatmap || !this.offScreenCanvasCtx){
+            return;
+        }
+
+        this.ctx.imageSmoothingEnabled = false;
+
+        // let b = this.offScreenCanvas.transferToImageBitmap();
+        // console.log(b);
+
+        let idata = this.heatmap.iData;
+
+        // this.offScreenCanvasCtx.clearRect(0, 0, idata.width, idata.height);
+        // this.offScreenCanvasCtx.fillStyle = 'red';
+        // this.offScreenCanvasCtx.fillRect(0, 0, idata.width, idata.height);
+        
+        for(let i = 0; i < this.heatmap.x.length; i++) {
+            for(let j = 0; j < this.heatmap.y.length; j++) {
+                let pos = (i * this.heatmap.x.length + j) * 4;        // position in buffer based on x and y
+                this.heatmap.iData.data[pos] = this.heatmap.data.get(i, j);              // some R value [0, 255]
+                this.heatmap.iData.data[pos+1] = this.heatmap.data.get(i, j);              // some G value
+                this.heatmap.iData.data[pos+2] = this.heatmap.data.get(i, j);              // some B value
+                this.heatmap.iData.data[pos+3] = 255;                  // set alpha channel
+            }
+        }
+
+        this.offScreenCanvasCtx.putImageData(this.heatmap.iData, 0, 0);
+
+        
+        let b = this.offScreenCanvas.transferToImageBitmap();
+        // this.ctx.drawImage(b, 50, 50);
+
+        // this.ctx.putImageData(this.heatmap.iData, this.figureRect.x, this.figureRect.y);
+
+        // this.ctx.drawImage(b, 50, 50);
+
+
+        this.ctx.drawImage(b, 
+        0, 0, this.heatmap.iData.width, this.heatmap.iData.height,
+        this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
+        
+        console.log('Heatmap paint');
+
     }
 
     private paintPlots() {
         if (!this.ctx){
             return;
         }
-        this.ctx.save();
-        this.ctx.rect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
-        this.ctx.clip();
+        
+        // console.time('paintPlots');
 
-        // TODO benchmark it
         for (const plot of this.linePlots) {
 
+            // transform the data to canvas coordinates
+            let [x, y] = this.mapRange2CanvasArr(plot.x, plot.y);
+
             this.ctx.beginPath();
-            let p0 = this.mapRange2Canvas({x: plot.x[0], y: plot.y[0]})
-            this.ctx.moveTo(p0.x, p0.y);
+            this.ctx.moveTo(x[0], y[0]);
 
             for (let i = 1; i < plot.x.length; i++) {
-                let p = this.mapRange2Canvas({x: plot.x[i], y: plot.y[i]})
-                this.ctx.lineTo(p.x, p.y);
+                this.ctx.lineTo(x[i], y[i]);
             }
+            // this.ctx.closePath();  // will do another line from the end point to starting point
             this.ctx.strokeStyle = plot.color;
             this.ctx.lineWidth = plot.lw;
             this.ctx.stroke();
         }
 
+        // the speed was almost the same as for the above case
+        // for (const plot of this.linePlots) {
+
+        //     this.ctx.beginPath();
+        //     let p0 = this.mapRange2Canvas({x: plot.x[0], y: plot.y[0]})
+        //     this.ctx.moveTo(p0.x, p0.y);
+
+        //     for (let i = 1; i < plot.x.length; i++) {
+        //         let p = this.mapRange2Canvas({x: plot.x[i], y: plot.y[i]})
+        //         this.ctx.lineTo(p.x, p.y);
+        //     }
+        //     this.ctx.strokeStyle = plot.color;
+        //     this.ctx.lineWidth = plot.lw;
+        //     this.ctx.stroke();
+        // }
+
         this.ctx.restore();
+
+        // console.timeEnd('paintPlots');
+
 
     }
 
@@ -296,8 +442,6 @@ export class Figure extends GraphicObject {
         this.ctx.save();
 
         // clip to canvas rectangle
-        // this.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        // this.ctx.clip();
 
         this.ctx.fillStyle = backgroundColor;
         this.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
@@ -310,17 +454,30 @@ export class Figure extends GraphicObject {
             this.ctx.setLineDash([]);
         }
 
+        // this.ctx.restore();
+
+        // this.ctx.save();
+
+        // this.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // this.ctx.clip();
         this.figureRect = this.getFigureRect();
         
         // draw figure rectangle
         this.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
         this.drawTicks();
 
-        this.ctx.restore();
+        // this.ctx.restore();
 
+        // this.ctx.save();
         //plot content
-        this.paintPlots();
 
+        this.ctx.rect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
+        this.ctx.clip();
+
+        this.paintHeatMap();
+        this.paintPlots();
+        
+        this.ctx.restore();
 
     }
 

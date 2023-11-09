@@ -29,7 +29,18 @@ export interface Point {
 }
 
 
+
+
 export class NumberArray extends Array<number> {
+
+    static linspace(start: number, end: number, n: number): NumberArray {
+        let diff = (end - start) / n;
+        let arr = new NumberArray(n);
+        for (let i = 0; i < n; i++) {
+            arr[i] = start + i * diff;
+        }
+        return arr;
+    }
 
     public nearestIndex(value: number) {
         let diffArray = new NumberArray(this.length);
@@ -114,7 +125,94 @@ export class NumberArray extends Array<number> {
         }
         return sum;
     }
+
+    public fillRandom() {
+        for (let i = 0; i < this.length; i++) {
+            this[i] = Math.random();
+        }
+    }
 }
 
 // https://stackoverflow.com/questions/26933365/how-to-write-an-interface-represents-a-tuple-type-in-typescript
 // or type IData = [string, number, number];
+
+
+export class Matrix extends NumberArray {
+
+    public readonly nrows: number;
+    public readonly ncols: number;
+    
+    constructor (nrows: number, ncols: number) {
+        super(nrows * ncols);
+        this.nrows = nrows;
+        this.ncols = ncols;
+
+        // rows will be added in the flat array: [...row1, ...row2, etc.]
+    }
+
+    public get(row: number, column: number) {
+        return this[row * this.ncols + column];
+    }
+
+
+    init(arr: NumberArray) {
+        for (let i = 0; i < arr.length; i++) {
+            this[i] = arr[i];            
+        }
+    }
+
+    getRow(index: number) {
+        if (index >= this.nrows) {
+            throw TypeError("Index is out of range.");
+        }
+        let arr = new NumberArray(this.ncols);
+        for (let i = 0; i < this.ncols; i++) {
+            arr[i] = this[index * this.ncols + i];
+        }
+        return arr;
+    }
+
+    getCol(index: number) {
+        if (index >= this.ncols) {
+            throw TypeError("Index is out of range.");
+        }
+        let arr = new NumberArray(this.nrows);
+        for (let i = 0; i < this.ncols; i++) {
+            arr[i] = this[i * this.ncols + index];
+        }
+        return arr;
+    }
+
+
+}
+
+// export class MatrixArray {
+
+//     public data: Array<Array<number>>;
+//     public nrows: number;
+//     public ncols: number;
+
+//     constructor (nrows: number, ncols: number) {
+//         this.data = new Array<Array<number>>(nrows);
+//         for (let i = 0; i < nrows; i++) {
+//             this.data[i] = new Array<number>(ncols);
+//         }
+//         this.nrows = nrows;
+//         this.ncols = ncols;
+//     }
+
+//     public fill(value: number) {
+//         for (let i = 0; i < this.nrows; i++) {
+//             for (let j = 0; j < this.ncols; j++) {
+//                 this.data[i][j] = value;
+//             }
+//         }
+//     }
+
+//     getRow(index: number) {
+//         return this.data[index];
+//     }
+
+
+
+// }

@@ -2,7 +2,7 @@ import { Figure } from "./figure";
 import { Grid } from "./grid";
 import { GraphicObject } from "./object";
 import { backgroundColor } from "./settings";
-import { NumberArray } from "./types";
+import { NumberArray, Matrix } from "./types";
 // import { Rect } from "./types";
 import { genTestData } from "./utils";
 
@@ -49,18 +49,25 @@ export class Scene extends GraphicObject {
         var f = new Figure(grid);
         f.figureSettings.axisAlignment = 'horizontal';
         
-        var [x, y]  = genTestData(1000);
         // f.plot(x, y, 'red', '-', 1);
 
         grid.addItem(f, 0, 0);
 
         var f1 = new Figure(grid);
-        var [x, y]  = genTestData(1e4);
-        f1.plot(new NumberArray(-1, 0, 1), new NumberArray(-1, 2, -0.5), 'green'); 
-        f1.plot(new NumberArray(-1, 0, 1), new NumberArray(1, -2, 0.5), 'red'); 
+        var [x, y]  = genTestData(5);
+        f1.plotLine(new NumberArray(-1, 0, 1), new NumberArray(-1, 2, -0.5), 'green'); 
+        f1.plotLine(new NumberArray(-1, 0, 1), new NumberArray(1, -2, 0.5), 'red'); 
 
-        f.plot(x, y, 'blue', '-', 1);
-
+        f.plotLine(x, y, 'blue', '-', 1);
+    
+        // test heatmap
+        var x = NumberArray.linspace(-1, 1, 100);
+        var y = NumberArray.linspace(-1, 1, 50);
+        var m = new Matrix(x.length, y.length);
+        m.fillRandom();
+        m.mul(255, false);
+        console.log(m);
+        f.plotHeatmap(m, x, y);
 
         grid.addItem(f1, 0, 1);
         grid.addItem(new Figure(grid), 1, 0);
