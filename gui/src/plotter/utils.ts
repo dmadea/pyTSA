@@ -1,4 +1,10 @@
-import { NumberArray } from "./types";
+import { NumberArray, Matrix } from "./types";
+
+export interface Dataset {
+    data: Matrix,
+    x: NumberArray,
+    y: NumberArray
+}
 
 
 export function formatNumber(num: number, sigFigures: number): string {
@@ -27,6 +33,53 @@ export function genTestData(n=100){
 }
 
 
+export function loadData(text: string, delimiter: string = '\t', newLine = '\n'): Dataset | null {
+
+    let rowData: NumberArray = new NumberArray();
+    let colData = new NumberArray();
+    let data = new NumberArray();
+
+    // console.log(data);
+    const lines = text.split(newLine);
+    let ncols: number | null = null;
+
+    for (let i = 0; i < lines.length; i++) {
+        let entries = lines[i].split(delimiter);
+
+        if (!ncols) {
+            ncols = entries.length - 1;
+            rowData = new NumberArray(ncols);
+            for (let j = 1; j < ncols + 1; j++) {
+                rowData[j - 1] = parseFloat(entries[j]);
+            }
+            continue;
+        }
+
+        if (entries.length !== ncols + 1){
+            throw TypeError("Number of entries does not match the number of columns.");
+        }
+
+        colData.push(parseFloat(entries[0]));
+
+        for (let j = 1; j < ncols + 1; j++) {
+            data.push(parseFloat(entries[j]));
+        }
+    }
+
+    if (!ncols)
+        return null;
+
+    let m: Dataset = {
+        data: new Matrix(ncols, colData.length, data),
+        x: rowData,
+        y: colData
+    }
+    console.log(m)
+
+    return m;
+
+
+}
 
 
     // totally useless code, the same thing can be done elegantly with clipping

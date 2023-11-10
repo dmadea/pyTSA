@@ -4,12 +4,14 @@ import { GraphicObject } from "./object";
 import { backgroundColor } from "./settings";
 import { NumberArray, Matrix } from "./types";
 // import { Rect } from "./types";
-import { genTestData } from "./utils";
+import { Dataset, genTestData } from "./utils";
+
 
 
 export class Scene extends GraphicObject {
 
     private canvasResizeObserver: ResizeObserver;
+    public fig: Figure | null = null;
 
     constructor(canvas: HTMLCanvasElement) {
         super(null);
@@ -46,38 +48,44 @@ export class Scene extends GraphicObject {
     testAddGrid(){
         var grid = new Grid(this, {...this.canvasRect});
         this.items.push(grid);
-        var f = new Figure(grid);
-        f.figureSettings.axisAlignment = 'horizontal';
+        this.fig = new Figure(grid);
+        this.fig.figureSettings.axisAlignment = 'horizontal';
         
         // f.plot(x, y, 'red', '-', 1);
 
-        grid.addItem(f, 0, 0);
+        grid.addItem(this.fig, 0, 0);
 
         var f1 = new Figure(grid);
         var [x, y]  = genTestData(5);
-        f1.plotLine(new NumberArray(-1, 0, 1), new NumberArray(-1, 2, -0.5), 'green'); 
-        f1.plotLine(new NumberArray(-1, 0, 1), new NumberArray(1, -2, 0.5), 'red'); 
+        f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([-1, 2, -0.5]), 'green'); 
+        f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
 
-        f.plotLine(x, y, 'blue', '-', 1);
+        this.fig.plotLine(x, y, 'blue', '-', 1);
     
         // test heatmap
-        var x = NumberArray.linspace(-1, 1, 100);
-        var y = NumberArray.linspace(-1, 1, 50);
-        var m = new Matrix(x.length, y.length);
-        m.fillRandom();
-        m.mul(255, false);
-        console.log(m);
-        f.plotHeatmap(m, x, y);
+        // var x = NumberArray.linspace(-1, 1, 100);
+        // var y = NumberArray.linspace(-1, 1, 200);
+        // var m = new Matrix(x.length, y.length);
+        // m.fillRandom();
+        // m.mul(255, false);
+        // console.log(m);
+        // this.fig.plotHeatmap({data: m, x, y});
 
         grid.addItem(f1, 0, 1);
         grid.addItem(new Figure(grid), 1, 0);
-        grid.gridSettings.widthRatios = new NumberArray(2, 1);
-        grid.gridSettings.heightRatios = new NumberArray(2, 1);
+        grid.gridSettings.widthRatios = NumberArray.fromArray([2, 1]);
+        grid.gridSettings.heightRatios = NumberArray.fromArray([2, 1]);
 
         grid.recalculateGrid(false);
 
         this.paint()
+        // f.redrawHeatmapOffCanvas();
     }
+
+    // public addHeatmap(dataset: Dataset) {
+    //     this.fig?.plotHeatmap(dataset);
+    // }
+
 
     public resize(): void {
         // set new dimensions

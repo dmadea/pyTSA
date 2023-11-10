@@ -1,8 +1,10 @@
 import { Scene } from "./plotter/scene";
 import { Matrix } from "./plotter/types";
+import { loadData } from "./plotter/utils";
 // import styles from "./styles.css";
 var styles = require("./styles.css");
-// import { Figure } from "./plotter/figure";
+
+
 
 
 
@@ -40,6 +42,39 @@ function abc(): void {
     // var fig = scene.addFigure();
     scene.testAddGrid();
     // fig.paint();
+
+    var button = document.getElementById('openFile') as HTMLInputElement;
+    button.addEventListener("change", (ev) => {
+
+        if (!button.files) {
+            return;
+        }
+
+        var file = button.files[0];
+
+        var reader = new FileReader();
+
+        reader.addEventListener('load', function (e) {
+
+            if (typeof reader.result === 'string') {
+                let dataset = loadData(reader.result);
+
+                if (dataset){
+                    scene.fig?.plotHeatmap(dataset);
+                }
+
+            }
+
+        });
+          
+          
+        reader.readAsBinaryString(file);
+
+        // var fname = 'file:///Users/dominikmadea/Library/CloudStorage/OneDrive-OIST/Projects/Test%20files/Femto/2023_08_07_3Z_MeOH_387_01-avrg.txt'
+        // // loadData();
+
+
+    });
 
     // for (let i = 0; i < 100; i++) {
     //     benchmark();

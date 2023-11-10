@@ -29,9 +29,23 @@ export interface Point {
 }
 
 
-
-
 export class NumberArray extends Array<number> {
+
+    static fromArray(array: Array<number>) {
+        let a = new NumberArray(array.length)
+        for (let i = 0; i < array.length; i++) {
+            a[i] = array[i];            
+        }
+        return a;
+    }
+
+    constructor(arrayLength: number | null = null) {
+        if (arrayLength){
+            super(arrayLength);
+        } else {
+            super();
+        }
+    }
 
     static linspace(start: number, end: number, n: number): NumberArray {
         let diff = (end - start) / n;
@@ -141,24 +155,25 @@ export class Matrix extends NumberArray {
 
     public readonly nrows: number;
     public readonly ncols: number;
-    
-    constructor (nrows: number, ncols: number) {
+
+    constructor (nrows: number, ncols: number, arr: NumberArray | null = null) {
         super(nrows * ncols);
         this.nrows = nrows;
         this.ncols = ncols;
 
+        if (arr) {
+            if (arr.length !== nrows * ncols) {
+                throw TypeError("Number of entries in array does not match the dimension");
+            }
+            for (let i = 0; i < arr.length; i++) {
+                this[i] = arr[i];            
+            }
+        }
         // rows will be added in the flat array: [...row1, ...row2, etc.]
     }
 
     public get(row: number, column: number) {
         return this[row * this.ncols + column];
-    }
-
-
-    init(arr: NumberArray) {
-        for (let i = 0; i < arr.length; i++) {
-            this[i] = arr[i];            
-        }
     }
 
     getRow(index: number) {

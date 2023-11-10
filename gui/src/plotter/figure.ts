@@ -2,7 +2,7 @@
 import { GraphicObject } from "./object";
 import { Rect, NumberArray, Point, Margin, Matrix } from "./types";
 import { backgroundColor, fontSizeLabels, fontSizeNumbers, frameColor, textColor } from "./settings";
-import { formatNumber } from "./utils";
+import { Dataset, formatNumber } from "./utils";
 
 interface IFigureSettings {
     xAxis: {
@@ -89,7 +89,7 @@ export class Figure extends GraphicObject {
             bottom: 30
         };
         this.range = {x: -1, y: -1, w: 2, h: 2};
-        this.steps = new NumberArray(1, 2, 2.5, 5);
+        this.steps = NumberArray.fromArray([1, 2, 2.5, 5]);
         this.lastMouseDownPos = {x: 0, y: 0};
         this.lastRange = {...this.range};
         this.figureRect = this.getFigureRect();
@@ -293,43 +293,55 @@ export class Figure extends GraphicObject {
         return plot;
     }
 
-    public plotHeatmap(data: Matrix, x: NumberArray, y: NumberArray, colormap: string = "Femto"): IHeatMap | null {
-        if (data.nrows !== x.length || data.ncols !== y.length) {
+    public redrawHeatmapOffCanvas(){
+        if (!this.heatmap || !this.offScreenCanvas || !this.offScreenCanvasCtx) {
+            return;
+        }
+
+        let iData = this.heatmap?.iData;
+
+        for(let i = 0; i < iData.width; i++) {
+            for(let j = 0; j < iData.height; j++) {
+                let pos = (i * iData.height + j) * 4;        // position in buffer based on x and y
+                iData.data[pos] = this.heatmap.data.get(i, j);              // some R value [0, 255]
+                iData.data[pos+1] = this.heatmap.data.get(i, j);              // some G value
+                iData.data[pos+2] = this.heatmap.data.get(i, j);              // some B value
+                iData.data[pos+3] = 255;                  // set alpha channel
+            }
+        }
+
+        this.offScreenCanvasCtx.putImageData(iData, 0, 0);
+        // this.paint();
+    }
+
+    public plotHeatmap(dataset: Dataset, colormap: string = "Femto"): IHeatMap | null {
+        let data = dataset.data;
+
+        if (data.nrows !== dataset.x.length || data.ncols !== dataset.y.length) {
             throw TypeError("Dimensions are not aligned with x and y arrays.");
         }
         
         // https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas
-        this.offScreenCanvas = new OffscreenCanvas(x.length, y.length);
+        this.offScreenCanvas = new OffscreenCanvas(dataset.x.length, dataset.y.length);
         this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
         
         if(!this.offScreenCanvasCtx) {
             return null;
         }
         
-        const iData = new ImageData(x.length, y.length);
+        const iData = new ImageData(dataset.x.length, dataset.y.length);
+        this.heatmap = {x: dataset.x, y: dataset.y, data, colormap, iData};
 
-        console.log(iData.data);
-        
-        // fill the image buffer
-        for(let i = 0; i < x.length; i++) {
-            for(let j = 0; j < y.length; j++) {
-                let pos = (i * x.length + j) * 4;        // position in buffer based on x and y
-                iData.data[pos] = data.get(i, j);              // some R value [0, 255]
-                iData.data[pos+1] = data.get(i, j);              // some G value
-                iData.data[pos+2] = data.get(i, j);              // some B value
-                iData.data[pos+3] = 50;                  // set alpha channel
-            }
-        }
+        this.redrawHeatmapOffCanvas();
 
-        console.log(iData);
+        // console.log(iData);
 
         // plot the buffer to offScreenCanvas
-        this.offScreenCanvasCtx.clearRect(0, 0, iData.width, iData.height);
-        this.offScreenCanvasCtx.fillStyle = 'black';
-        this.offScreenCanvasCtx.fillRect(0, 0, iData.width, iData.height);
+        // this.offScreenCanvasCtx.clearRect(0, 0, iData.width, iData.height);
+        // this.offScreenCanvasCtx.fillStyle = 'black';
+        // this.offScreenCanvasCtx.fillRect(0, 0, iData.width, iData.height);
         // this.offScreenCanvasCtx.putImageData(iData, 0, 0);
         
-        this.heatmap = {x, y, data, colormap, iData};
         this.paint();
         return this.heatmap;
     }
@@ -347,40 +359,18 @@ export class Figure extends GraphicObject {
         }
 
         this.ctx.imageSmoothingEnabled = false;
+        this.redrawHeatmapOffCanvas();
 
-        // let b = this.offScreenCanvas.transferToImageBitmap();
-        // console.log(b);
 
-        let idata = this.heatmap.iData;
-
-        // this.offScreenCanvasCtx.clearRect(0, 0, idata.width, idata.height);
-        // this.offScreenCanvasCtx.fillStyle = 'red';
-        // this.offScreenCanvasCtx.fillRect(0, 0, idata.width, idata.height);
-        
-        for(let i = 0; i < this.heatmap.x.length; i++) {
-            for(let j = 0; j < this.heatmap.y.length; j++) {
-                let pos = (i * this.heatmap.x.length + j) * 4;        // position in buffer based on x and y
-                this.heatmap.iData.data[pos] = this.heatmap.data.get(i, j);              // some R value [0, 255]
-                this.heatmap.iData.data[pos+1] = this.heatmap.data.get(i, j);              // some G value
-                this.heatmap.iData.data[pos+2] = this.heatmap.data.get(i, j);              // some B value
-                this.heatmap.iData.data[pos+3] = 255;                  // set alpha channel
-            }
-        }
-
-        this.offScreenCanvasCtx.putImageData(this.heatmap.iData, 0, 0);
-
-        
         let b = this.offScreenCanvas.transferToImageBitmap();
-        // this.ctx.drawImage(b, 50, 50);
 
-        // this.ctx.putImageData(this.heatmap.iData, this.figureRect.x, this.figureRect.y);
-
-        // this.ctx.drawImage(b, 50, 50);
-
+        let p0 = this.mapRange2Canvas({x: this.heatmap.x[0], y: this.heatmap.y[0]});
+        let p1 = this.mapRange2Canvas({x: this.heatmap.x[this.heatmap.x.length - 1],
+                                       y: this.heatmap.y[this.heatmap.y.length - 1]});
 
         this.ctx.drawImage(b, 
         0, 0, this.heatmap.iData.width, this.heatmap.iData.height,
-        this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
+        p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
         
         console.log('Heatmap paint');
 
@@ -573,10 +563,10 @@ export class Figure extends GraphicObject {
         // calculate scale
         var scale = 10 ** Math.trunc(Math.log10(Math.abs(size)));
     
-        var extStepsScaled = new NumberArray(
+        var extStepsScaled = NumberArray.fromArray([
             ...this.steps.mul(0.01 * scale, true), 
             ...this.steps.mul(0.1 * scale, true), 
-            ...this.steps.mul(scale, true));
+            ...this.steps.mul(scale, true)]);
     
         let rawStep = size / this.prefferedNBins;
     
