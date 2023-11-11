@@ -32,9 +32,7 @@ interface ILinePlot {
 }
 
 interface IHeatMap {
-    x: NumberArray,
-    y: NumberArray,
-    data: Matrix,
+    dataset: Dataset,
     colormap: string,
     iData: ImageData
 }
@@ -293,20 +291,95 @@ export class Figure extends GraphicObject {
         return plot;
     }
 
+    private getRGBA(pos: number): number[] {
+
+        var colormap = [
+            {pos: 0, r: 255, g: 255, b: 255, a: 255},
+            {pos: 0.5, r: 255, g: 255, b: 255, a: 255},
+            {pos: 1, r: 0, g: 160, b: 0, a: 255}
+        ]
+
+        var sym_grad =  [
+            {pos: 0, r: 75, g: 0, b: 130, a: 255},
+            {pos: 0.333, r: 0, g: 0, b: 255, a: 255},
+            {pos: 0.5, r: 255, g: 255, b: 255, a: 255},
+            {pos: 0.625, r: 255, g: 255, b: 0, a: 255},
+            {pos: 0.75, r: 255, g: 165, b: 0, a: 255},
+            {pos: 0.875, r: 255, g: 0, b: 0, a: 255},
+            {pos: 1, r: 150, g: 0, b: 0, a: 255}
+        ]
+
+        // s tyrkysovou
+        // var sym_grad =  [
+        //     {pos: 0, r: 75, g: 0, b: 130, a: 255},
+        //     {pos: 0.29, r: 0, g: 0, b: 255, a: 255},
+        //     {pos: 0.38, r: 0, g: 255, b: 255, a: 255},
+        //     {pos: 0.5, r: 255, g: 255, b: 255, a: 255},
+        //     {pos: 0.625, r: 255, g: 255, b: 0, a: 255},
+        //     {pos: 0.75, r: 255, g: 165, b: 0, a: 255},
+        //     {pos: 0.875, r: 255, g: 0, b: 0, a: 255},
+        //     {pos: 1, r: 150, g: 0, b: 0, a: 255}
+        // ]
+
+        colormap = sym_grad;
+
+        pos = (pos < 0) ? 0 : pos;
+        pos = (pos > 1) ? 1 : pos;
+
+        for (var i = 0; i < colormap.length - 1; i++) {
+            if (colormap[i].pos === pos) break;
+            if (colormap[i].pos < pos && pos <= colormap[i + 1].pos){
+                break;
+            }
+        }
+
+        let diff = colormap[i+1].pos - colormap[i].pos;
+        let x = (pos - colormap[i].pos) / diff;
+        
+        return [x * colormap[i+1].r + (1 - x) * colormap[i].r,
+                x * colormap[i+1].g + (1 - x) * colormap[i].g,
+                x * colormap[i+1].b + (1 - x) * colormap[i].b,
+                x * colormap[i+1].a + (1 - x) * colormap[i].a]
+
+    }
+
     public redrawHeatmapOffCanvas(){
         if (!this.heatmap || !this.offScreenCanvas || !this.offScreenCanvasCtx) {
             return;
         }
 
-        let iData = this.heatmap?.iData;
 
-        for(let i = 0; i < iData.width; i++) {
-            for(let j = 0; j < iData.height; j++) {
-                let pos = (i * iData.height + j) * 4;        // position in buffer based on x and y
-                iData.data[pos] = this.heatmap.data.get(i, j);              // some R value [0, 255]
-                iData.data[pos+1] = this.heatmap.data.get(i, j);              // some G value
-                iData.data[pos+2] = this.heatmap.data.get(i, j);              // some B value
-                iData.data[pos+3] = 255;                  // set alpha channel
+        let iData = this.heatmap.iData;
+
+        let m = this.heatmap.dataset.data;
+
+        // console.log(iData.width, iData.height);
+        // console.log(m.ncols, m.nrows);
+
+        let extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
+
+        let zmin = - extreme;
+        let zmax = + extreme;
+        let diff = zmax - zmin; 
+
+        // C-contiguous buffer
+        for(let row = 0; row < iData.height; row++) {
+            for(let col = 0; col < iData.width; col++) {
+                let pos = (row * iData.width + col) * 4;        // position in buffer based on x and y
+                
+                let z = m.get(iData.height - row - 1, col);  // inverted y axis
+                // console.log('row', row, 'col', col, z, m.isCContiguous);
+
+                let zScaled = (z - zmin) / diff; 
+                // interpolate the rgba values
+                // console.log(zScaled);
+
+                let rgba = this.getRGBA(zScaled);
+
+                iData.data[pos] = rgba[0];              // some R value [0, 255]
+                iData.data[pos+1] = rgba[1];              // some G value
+                iData.data[pos+2] = rgba[2];              // some B value
+                iData.data[pos+3] = rgba[3];                  // set alpha channel
             }
         }
 
@@ -317,7 +390,7 @@ export class Figure extends GraphicObject {
     public plotHeatmap(dataset: Dataset, colormap: string = "Femto"): IHeatMap | null {
         let data = dataset.data;
 
-        if (data.nrows !== dataset.x.length || data.ncols !== dataset.y.length) {
+        if (data.ncols !== dataset.x.length || data.nrows !== dataset.y.length) {
             throw TypeError("Dimensions are not aligned with x and y arrays.");
         }
         
@@ -330,7 +403,7 @@ export class Figure extends GraphicObject {
         }
         
         const iData = new ImageData(dataset.x.length, dataset.y.length);
-        this.heatmap = {x: dataset.x, y: dataset.y, data, colormap, iData};
+        this.heatmap = {dataset, colormap, iData};
 
         this.redrawHeatmapOffCanvas();
 
@@ -358,15 +431,17 @@ export class Figure extends GraphicObject {
             return;
         }
 
-        this.ctx.imageSmoothingEnabled = false;
+        this.ctx.imageSmoothingEnabled = true;
         this.redrawHeatmapOffCanvas();
 
 
         let b = this.offScreenCanvas.transferToImageBitmap();
 
-        let p0 = this.mapRange2Canvas({x: this.heatmap.x[0], y: this.heatmap.y[0]});
-        let p1 = this.mapRange2Canvas({x: this.heatmap.x[this.heatmap.x.length - 1],
-                                       y: this.heatmap.y[this.heatmap.y.length - 1]});
+        let x = this.heatmap.dataset.x;
+        let y = this.heatmap.dataset.y;
+
+        let p0 = this.mapRange2Canvas({x: x[0], y: y[0]});
+        let p1 = this.mapRange2Canvas({x: x[x.length - 1], y: y[y.length - 1]});
 
         this.ctx.drawImage(b, 
         0, 0, this.heatmap.iData.width, this.heatmap.iData.height,
@@ -451,6 +526,15 @@ export class Figure extends GraphicObject {
         // this.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
         // this.ctx.clip();
         this.figureRect = this.getFigureRect();
+
+        this.ctx.rect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
+        this.ctx.clip();
+
+        this.paintHeatMap();
+        this.paintPlots();
+        
+        this.ctx.restore();
+
         
         // draw figure rectangle
         this.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
@@ -461,13 +545,6 @@ export class Figure extends GraphicObject {
         // this.ctx.save();
         //plot content
 
-        this.ctx.rect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
-        this.ctx.clip();
-
-        this.paintHeatMap();
-        this.paintPlots();
-        
-        this.ctx.restore();
 
     }
 
@@ -564,9 +641,9 @@ export class Figure extends GraphicObject {
         var scale = 10 ** Math.trunc(Math.log10(Math.abs(size)));
     
         var extStepsScaled = NumberArray.fromArray([
-            ...this.steps.mul(0.01 * scale, true), 
-            ...this.steps.mul(0.1 * scale, true), 
-            ...this.steps.mul(scale, true)]);
+            ...NumberArray.mul(this.steps, 0.01 * scale), 
+            ...NumberArray.mul(this.steps, 0.1 * scale), 
+            ...NumberArray.mul(this.steps, scale)]);
     
         let rawStep = size / this.prefferedNBins;
     

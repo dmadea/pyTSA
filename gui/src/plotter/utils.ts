@@ -1,9 +1,31 @@
 import { NumberArray, Matrix } from "./types";
 
-export interface Dataset {
-    data: Matrix,
-    x: NumberArray,
-    y: NumberArray
+// export interface Dataset {
+//     data: Matrix,
+//     x: NumberArray,
+//     y: NumberArray
+// }
+
+export class Dataset {
+    public data: Matrix;
+    public x: NumberArray;
+    public y: NumberArray;
+
+    constructor(data: Matrix, x: NumberArray, y: NumberArray) {
+        //usually first dimension is time (rows) and second is wavelength (columns)
+        if (data.ncols !== x.length || data.nrows !== y.length) {
+            throw TypeError("Dimensions are not aligned with x and y arrays.");
+        }
+        this.data = data;
+        this.x = x;
+        this.y = y;
+    }
+
+    public transpose(): Dataset {
+        [this.x, this.y] = [this.y, this.x];
+        this.data.transpose();
+        return this;
+    }
 }
 
 
@@ -69,14 +91,10 @@ export function loadData(text: string, delimiter: string = '\t', newLine = '\n')
     if (!ncols)
         return null;
 
-    let m: Dataset = {
-        data: new Matrix(ncols, colData.length, data),
-        x: rowData,
-        y: colData
-    }
-    console.log(m)
+    let dataset = new Dataset(new Matrix(colData.length, ncols, data), rowData, colData)
+    // console.log(dataset)
 
-    return m;
+    return dataset;
 
 
 }

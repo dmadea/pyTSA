@@ -1,1 +1,1 @@
-# pyTSA
+# pyTSA gui and python package

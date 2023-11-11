@@ -1,6 +1,6 @@
 import { Scene } from "./plotter/scene";
-import { Matrix } from "./plotter/types";
-import { loadData } from "./plotter/utils";
+import { Matrix, NumberArray } from "./plotter/types";
+import { Dataset, loadData } from "./plotter/utils";
 // import styles from "./styles.css";
 var styles = require("./styles.css");
 
@@ -43,6 +43,26 @@ function abc(): void {
     scene.testAddGrid();
     // fig.paint();
 
+    var testbtn = document.getElementById('btnTest') as HTMLInputElement;
+    testbtn.addEventListener("click", (ev) => {
+
+        let x = NumberArray.linspace(-1, 1, 2);  // wls
+        let y = NumberArray.linspace(-1, 1, 3);  // time
+
+        var arr = NumberArray.linspace(0, 5, x.length * y.length);
+        var m = new Matrix(y.length, x.length, arr);
+
+        let d = new Dataset(m, x, y);
+        d.data.log();
+        d.transpose();
+        d.data.log();
+
+        scene.fig?.plotHeatmap(d);
+
+
+
+    });
+
     var button = document.getElementById('openFile') as HTMLInputElement;
     button.addEventListener("change", (ev) => {
 
@@ -57,18 +77,30 @@ function abc(): void {
         reader.addEventListener('load', function (e) {
 
             if (typeof reader.result === 'string') {
-                let dataset = loadData(reader.result);
+                console.time('load');
+                let dataset = loadData(reader.result, ',');
 
                 if (dataset){
+                    // dataset.data.log();
+                    // dataset.transpose(); 
+                    // dataset.data.log();
+
+                    // console.log(dataset);
                     scene.fig?.plotHeatmap(dataset);
                 }
+                console.timeEnd('load');
+
 
             }
 
         });
+
+        if (file) {
+
+            reader.readAsBinaryString(file);
+        }
           
           
-        reader.readAsBinaryString(file);
 
         // var fname = 'file:///Users/dominikmadea/Library/CloudStorage/OneDrive-OIST/Projects/Test%20files/Femto/2023_08_07_3Z_MeOH_387_01-avrg.txt'
         // // loadData();
