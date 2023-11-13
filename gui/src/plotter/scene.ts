@@ -1,6 +1,6 @@
 import { Figure } from "./figure";
 import { Grid } from "./grid";
-import { GraphicObject } from "./object";
+import { DraggableLines, GraphicObject, IPaintEvent } from "./object";
 import { backgroundColor } from "./settings";
 import { NumberArray, Matrix } from "./types";
 // import { Rect } from "./types";
@@ -22,6 +22,11 @@ export class Scene extends GraphicObject {
         this.canvasRect = {x:0, y:0, w: this.canvas.width, h: this.canvas.height};
         this.canvasResizeObserver = new ResizeObserver((entries) => this.observerCallback(entries));
         this.canvasResizeObserver.observe(this.canvas);
+
+        this.canvas.addEventListener('mousedown', e => this.mouseDown(e));
+        this.canvas.addEventListener('mouseup', e => this.mouseUp(e));
+        this.canvas.addEventListener('mousemove', e => this.mouseMove(e));
+        this.canvas.addEventListener("contextmenu", e => this.contextMenu(e));
     }
 
     private observerCallback(entries: ResizeObserverEntry[]) {
@@ -41,7 +46,7 @@ export class Scene extends GraphicObject {
     addFigure(){
         var figure = new Figure(this, {...this.canvasRect});
         this.items.push(figure);
-        this.paint();
+        this.repaint();
         return figure;
     }
 
@@ -61,6 +66,7 @@ export class Scene extends GraphicObject {
         f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
 
         this.fig.plotLine(x, y, 'blue', '-', 1);
+        this.fig.addDraggableLines(DraggableLines.Orientation.Both);
     
         // test heatmap
         // var x = NumberArray.linspace(-1, 1, 100);
@@ -72,13 +78,18 @@ export class Scene extends GraphicObject {
         // this.fig.plotHeatmap({data: m, x, y});
 
         grid.addItem(f1, 0, 1);
-        grid.addItem(new Figure(grid), 1, 0);
+
+        var f2 = new Figure(grid);
+        this.fig.linkXRange(f2);
+        this.fig.linkYRange(f1);
+
+        grid.addItem(f2, 1, 0);
         grid.gridSettings.widthRatios = NumberArray.fromArray([2, 1]);
         grid.gridSettings.heightRatios = NumberArray.fromArray([2, 1]);
 
         grid.recalculateGrid(false);
 
-        this.paint()
+        this.repaint()
         // f.redrawHeatmapOffCanvas();
     }
 
@@ -105,21 +116,18 @@ export class Scene extends GraphicObject {
         super.resize();
     }
 
-    paint(): void {
-        if (this.canvas === null || this.ctx === null)
-            return;
-        
+    public paint(e: IPaintEvent): void {
         // console.log(this.canvasRect);
 
         // clear plot
 
-        this.ctx.restore();
+        e.ctx.restore();
         // this.ctx.fillStyle = backgroundColor;
-        this.ctx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        this.ctx.save();
+        e.ctx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.ctx.save();
         console.log('initial paint from scene');
 
-        super.paint();
+        super.paint(e);
 
     }
 

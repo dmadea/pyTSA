@@ -46,10 +46,10 @@ function abc(): void {
     var testbtn = document.getElementById('btnTest') as HTMLInputElement;
     testbtn.addEventListener("click", (ev) => {
 
-        let x = NumberArray.linspace(-1, 1, 2);  // wls
-        let y = NumberArray.linspace(-1, 1, 3);  // time
+        let x = NumberArray.linspace(-1, 1, 10);  // wls
+        let y = NumberArray.linspace(-1, 1, 10);  // time
 
-        var arr = NumberArray.linspace(0, 5, x.length * y.length);
+        var arr = NumberArray.linspace(0, 10, x.length * y.length, true);
         var m = new Matrix(y.length, x.length, arr);
 
         let d = new Dataset(m, x, y);

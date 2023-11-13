@@ -45,7 +45,7 @@ export class NumberArray extends Array<number> {
         }
     }
 
-    static linspace(start: number, end: number, n: number, endpoint: boolean = true): NumberArray {
+    static linspace(start: number, end: number, n: number, endpoint: boolean = false): NumberArray {
         if (n < 2) {
             throw TypeError("At least 2 points are required.");
         }

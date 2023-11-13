@@ -84,7 +84,7 @@ export class Grid extends GraphicObject {
 
         //repaint
         if (repaint)
-            this.paint();
+            this.repaint();
     }
 
 

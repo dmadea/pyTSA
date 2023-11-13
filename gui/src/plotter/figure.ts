@@ -1,5 +1,5 @@
 
-import { GraphicObject } from "./object";
+import { DraggableLines, GraphicObject, IPaintEvent, Orientation } from "./object";
 import { Rect, NumberArray, Point, Margin, Matrix } from "./types";
 import { backgroundColor, fontSizeLabels, fontSizeNumbers, frameColor, textColor } from "./settings";
 import { Dataset, formatNumber } from "./utils";
@@ -35,7 +35,8 @@ interface ILinePlot {
 interface IHeatMap {
     dataset: Dataset,
     colormap: IColorMap,
-    iData: ImageData
+    iData: ImageData,
+    imageBitmap: ImageBitmap | null
 }
 
 export class Figure extends GraphicObject {
@@ -65,18 +66,24 @@ export class Figure extends GraphicObject {
     private linePlots: Array<ILinePlot> = [];
     private heatmap: IHeatMap | null = null;
 
+    public xRangeLinks: Figure[] = [];
+    public yRangeLinks: Figure[] = [];
+
     private lastMouseDownPos: Point;
     private lastRange: Rect;
 
     private panning: boolean = false;
     private scaling: boolean = false;
     private lastCenterPoint: Point;
-    private figureRect: Rect;
+    public figureRect: Rect;
+    private _preventMouseEvents: boolean = false;
 
     private plotCanvasRect = false;
 
     private offScreenCanvas: OffscreenCanvas;
     private offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null = null;
+
+    public draggableLines: DraggableLines | null = null;
 
     constructor(parent: GraphicObject, canvasRect?: Rect, margin?: Margin) {
         super(parent, canvasRect, margin) ;
@@ -97,7 +104,6 @@ export class Figure extends GraphicObject {
         this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
         this.lastCenterPoint = {x: 0, y: 0};
         this.offScreenCanvas = new OffscreenCanvas(10, 10);
-        // this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
     }
 
     public mapCanvas2Range(p: Point): Point{
@@ -121,6 +127,24 @@ export class Figure extends GraphicObject {
             x: r.x + xScaled * r.w,
             y: r.y + (1 - yScaled) * r.h  // inverted y axis
         }
+    }
+
+    public linkXRange(figure: Figure) {
+        if (figure === this) {
+            return;
+        }
+
+        figure.xRangeLinks.push(this);
+        this.xRangeLinks.push(figure);
+    }
+
+    public linkYRange(figure: Figure) {
+        if (figure === this) {
+            return;
+        }
+
+        figure.yRangeLinks.push(this);
+        this.yRangeLinks.push(figure);
     }
 
     public mapRange2CanvasArr(xvals: NumberArray, yvals: NumberArray): [NumberArray, NumberArray]{
@@ -162,7 +186,12 @@ export class Figure extends GraphicObject {
         }
         return true;
     }
-    mouseDown(e: MouseEvent): void {
+
+    public preventMouseEvents(prevent: boolean) {
+        this._preventMouseEvents = prevent;
+    }
+
+    public mouseDown(e: MouseEvent): void {
         if (!this.canvas)
             return;
 
@@ -171,18 +200,26 @@ export class Figure extends GraphicObject {
 
         // we are outside of figure frame
         if (!this.isInsideFigureRect(x, y))
-            return
+            return;
+
+        if (this._preventMouseEvents) {
+            super.mouseDown(e);
+            return;
+        }
 
         this.scaling = e.button == 2;
         this.panning = e.button == 0 || e.button == 1;
 
-        if (this.panning || this.scaling)
-            this.canvas.style.cursor = this.cursors.move;
-        
         this.lastMouseDownPos = {x: x, y: y};
         this.lastRange = {...this.range};
-
+        
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
+
+        if (this.panning || this.scaling) {
+            this.canvas.style.cursor = this.cursors.move;
+        } else {
+            super.mouseDown(e);
+        }
     }
 
     private getBoundedRange(rect: Rect, dontZoom: boolean): Rect {
@@ -218,9 +255,14 @@ export class Figure extends GraphicObject {
         return retRect;
     }
 
-    mouseMove(e: MouseEvent): void {
+    public mouseMove(e: MouseEvent): void {
         if (!this.canvas)
             return
+
+        if (this._preventMouseEvents) {
+            super.mouseMove(e);
+            return;
+        }
 
         if (this.isInsideFigureRect(e.offsetX, e.offsetY))
             this.canvas.style.cursor = this.cursors.crosshair;
@@ -229,7 +271,9 @@ export class Figure extends GraphicObject {
             x: e.offsetX - this.lastMouseDownPos.x,
             y: e.offsetY - this.lastMouseDownPos.y
         }
-        
+
+        let rangeChanged = false;
+
         if (this.panning){
             this.canvas.style.cursor = this.cursors.move;
 
@@ -244,7 +288,7 @@ export class Figure extends GraphicObject {
             };
 
             this.range = this.getBoundedRange(newRect, true);
-            this.paint();
+            rangeChanged = true;
         }
         // analogous as in pyqtgraph
         // https://github.com/pyqtgraph/pyqtgraph/blob/7ab6fa3d2fb6832b624541b58eefc52c0dfb4b08/pyqtgraph/widgets/GraphicsView.py
@@ -262,12 +306,52 @@ export class Figure extends GraphicObject {
             };
 
             this.range = this.getBoundedRange(newRect, false);
-            this.paint();
+            rangeChanged = true;
+        }
+
+        if (rangeChanged){
+            for (const fig of this.xRangeLinks) {
+                fig.range.x = this.range.x;
+                fig.range.w = this.range.w;
+                fig.repaint();
+            }
+            for (const fig of this.yRangeLinks) {
+                fig.range.y = this.range.y;
+                fig.range.h = this.range.h;
+                fig.repaint();
+            }
+
+            if (this.draggableLines) {
+                if (this.draggableLines.position.x < this.range.x)
+                    this.draggableLines.position.x = this.range.x;
+
+                if (this.draggableLines.position.y < this.range.y)
+                    this.draggableLines.position.y = this.range.y;
+
+                if (this.draggableLines.position.x > this.range.x + this.range.w)
+                    this.draggableLines.position.x = this.range.x + this.range.w;
+
+                if (this.draggableLines.position.y > this.range.y + this.range.h)
+                    this.draggableLines.position.y = this.range.y + this.range.h;
+
+            }
+
+            this.repaint();
+        }
+
+        // for handling hovering
+        if (!this.panning && !this.scaling) {
+            super.mouseMove(e);
         }
 
     }
 
     mouseUp(e: MouseEvent): void {
+        if (this._preventMouseEvents) {
+            super.mouseUp(e);
+            return;
+        }
+
         switch(e.button) {
             case 0: 
                 this.panning = false;
@@ -278,32 +362,30 @@ export class Figure extends GraphicObject {
             case 2: 
                 this.scaling = false
         }
-
+        
         if (this.canvas)
-            this.canvas.style.cursor = this.cursors.crosshair;
+        this.canvas.style.cursor = this.cursors.crosshair;
+    }
 
-        // console.log(this.scaling, this.panning); 
+    public addDraggableLines(orientation: Orientation) {
+        this.draggableLines = new DraggableLines(this, orientation)
+        this.items.push(this.draggableLines);
     }
 
     public plotLine(x: NumberArray, y: NumberArray, color = "black", ls = "-", lw = 1, zValue = 10) {
         var plot: ILinePlot = {x: x.copy(), y: y.copy(), color, ls, lw, zValue}; 
         this.linePlots.push(plot);
-        this.paint();
+        this.repaint();
         return plot;
     }
 
-    public redrawHeatmapOffCanvas(){
+    private recalculateHeatMapImage(){
         if (!this.heatmap || !this.offScreenCanvas || !this.offScreenCanvasCtx) {
             return;
         }
 
-
         let iData = this.heatmap.iData;
-
         let m = this.heatmap.dataset.data;
-
-        // console.log(iData.width, iData.height);
-        // console.log(m.ncols, m.nrows);
 
         let extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
 
@@ -333,7 +415,8 @@ export class Figure extends GraphicObject {
         }
 
         this.offScreenCanvasCtx.putImageData(iData, 0, 0);
-        // this.paint();
+        this.heatmap.imageBitmap = this.offScreenCanvas.transferToImageBitmap();
+        // console.log('off screen canvas redrawn');
     }
 
     public plotHeatmap(dataset: Dataset, colormap: IColorMap = Colormap.symgrad ): IHeatMap | null {
@@ -352,19 +435,11 @@ export class Figure extends GraphicObject {
         }
         
         const iData = new ImageData(dataset.x.length, dataset.y.length);
-        this.heatmap = {dataset, colormap, iData};
+        this.heatmap = {dataset, colormap, iData, imageBitmap: null};
 
-        this.redrawHeatmapOffCanvas();
+        this.recalculateHeatMapImage();
 
-        // console.log(iData);
-
-        // plot the buffer to offScreenCanvas
-        // this.offScreenCanvasCtx.clearRect(0, 0, iData.width, iData.height);
-        // this.offScreenCanvasCtx.fillStyle = 'black';
-        // this.offScreenCanvasCtx.fillRect(0, 0, iData.width, iData.height);
-        // this.offScreenCanvasCtx.putImageData(iData, 0, 0);
-        
-        this.paint();
+        this.repaint();
         return this.heatmap;
     }
 
@@ -375,16 +450,12 @@ export class Figure extends GraphicObject {
         }
     }
 
-    private paintHeatMap(){
-        if (!this.ctx || !this.heatmap || !this.offScreenCanvasCtx){
+    private paintHeatMap(e: IPaintEvent){
+        if (!this.heatmap || !this.heatmap.imageBitmap) {
             return;
         }
 
-        this.ctx.imageSmoothingEnabled = false;
-        this.redrawHeatmapOffCanvas();
-
-
-        let b = this.offScreenCanvas.transferToImageBitmap();
+        e.ctx.imageSmoothingEnabled = false;
 
         let x = this.heatmap.dataset.x;
         let y = this.heatmap.dataset.y;
@@ -396,7 +467,8 @@ export class Figure extends GraphicObject {
         let p0 = this.mapRange2Canvas({x: x[0] - xdiff / 2, y: y[0] - ydiff / 2});
         let p1 = this.mapRange2Canvas({x: x[x.length - 1] + xdiff / 2, y: y[y.length - 1] + ydiff / 2});
 
-        this.ctx.drawImage(b, 
+
+        e.ctx.drawImage(this.heatmap.imageBitmap, 
         0, 0, this.heatmap.iData.width, this.heatmap.iData.height,
         p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
         
@@ -404,72 +476,67 @@ export class Figure extends GraphicObject {
 
     }
 
-    private paintPlots() {
-        if (!this.ctx){
-            return;
-        }
-        
+    private paintPlots(e: IPaintEvent) {
         // console.time('paintPlots');
 
-        for (const plot of this.linePlots) {
-
-            // transform the data to canvas coordinates
-            let [x, y] = this.mapRange2CanvasArr(plot.x, plot.y);
-
-            this.ctx.beginPath();
-            this.ctx.moveTo(x[0], y[0]);
-
-            for (let i = 1; i < plot.x.length; i++) {
-                this.ctx.lineTo(x[i], y[i]);
-            }
-            // this.ctx.closePath();  // will do another line from the end point to starting point
-            this.ctx.strokeStyle = plot.color;
-            this.ctx.lineWidth = plot.lw;
-            this.ctx.stroke();
-        }
-
-        // the speed was almost the same as for the above case
         // for (const plot of this.linePlots) {
 
-        //     this.ctx.beginPath();
-        //     let p0 = this.mapRange2Canvas({x: plot.x[0], y: plot.y[0]})
-        //     this.ctx.moveTo(p0.x, p0.y);
+        //     // transform the data to canvas coordinates
+        //     let [x, y] = this.mapRange2CanvasArr(plot.x, plot.y);
+
+        //     e.ctx.beginPath();
+        //     e.ctx.moveTo(x[0], y[0]);
 
         //     for (let i = 1; i < plot.x.length; i++) {
-        //         let p = this.mapRange2Canvas({x: plot.x[i], y: plot.y[i]})
-        //         this.ctx.lineTo(p.x, p.y);
+        //         e.ctx.lineTo(x[i], y[i]);
         //     }
-        //     this.ctx.strokeStyle = plot.color;
-        //     this.ctx.lineWidth = plot.lw;
-        //     this.ctx.stroke();
+        //     // this.ctx.closePath();  // will do another line from the end point to starting point
+        //     e.ctx.strokeStyle = plot.color;
+        //     e.ctx.lineWidth = plot.lw;
+        //     e.ctx.stroke();
         // }
 
-        this.ctx.restore();
+        e.ctx.save();
+
+        // the speed was almost the same as for the above case
+        for (const plot of this.linePlots) {
+
+            e.ctx.beginPath();
+            let p0 = this.mapRange2Canvas({x: plot.x[0], y: plot.y[0]})
+            e.ctx.moveTo(p0.x, p0.y);
+
+            for (let i = 1; i < plot.x.length; i++) {
+                let p = this.mapRange2Canvas({x: plot.x[i], y: plot.y[i]})
+                e.ctx.lineTo(p.x, p.y);
+            }
+            e.ctx.strokeStyle = plot.color;
+            e.ctx.lineWidth = plot.lw;
+            e.ctx.stroke();
+        }
+
+        e.ctx.restore();
 
         // console.timeEnd('paintPlots');
 
 
     }
 
-    paint(): void {
+    paint(e: IPaintEvent): void {
         // plot rectangle
-        if (!this.ctx){
-            return;
-        }
 
-        this.ctx.save();
+        e.ctx.save();
 
         // clip to canvas rectangle
 
-        this.ctx.fillStyle = backgroundColor;
-        this.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.ctx.fillStyle = backgroundColor;
+        e.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
 
-        this.ctx.strokeStyle = frameColor;
+        e.ctx.strokeStyle = frameColor;
 
         if (this.plotCanvasRect){
-            this.ctx.setLineDash([4, 2]);
-            this.ctx.strokeRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-            this.ctx.setLineDash([]);
+            e.ctx.setLineDash([4, 2]);
+            e.ctx.strokeRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+            e.ctx.setLineDash([]);
         }
 
         // this.ctx.restore();
@@ -478,35 +545,39 @@ export class Figure extends GraphicObject {
 
         // this.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
         // this.ctx.clip();
+
+
+        // paint everything inside the plot
         this.figureRect = this.getFigureRect();
 
-        this.ctx.rect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
-        this.ctx.clip();
+        //plot content
+        e.ctx.rect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
+        e.ctx.clip();
 
-        this.paintHeatMap();
-        this.paintPlots();
+        this.paintHeatMap(e);
+        this.paintPlots(e);
+
+        // paint all additional graphics objects if necessary
+        super.paint(e);
+        // if (this.dragableLines){
+        //     this.dragableLines.paint(e);
+        // }
         
-        this.ctx.restore();
-
+        e.ctx.restore();
         
         // draw figure rectangle
-        this.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
-        this.drawTicks();
+        e.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
+        this.drawTicks(e);
 
         // this.ctx.restore();
 
         // this.ctx.save();
-        //plot content
 
 
     }
 
-    public drawTicks(){  // r is Figure Rectangle, the frame
-        if (!this.ctx){
-            return;
-        }
-
-        this.ctx.fillStyle = textColor;
+    public drawTicks(e: IPaintEvent){  // r is Figure Rectangle, the frame
+        e.ctx.fillStyle = textColor;
 
         let xticks = this.genMajorTicks(this.range.x, this.range.w);
         let yticks = this.genMajorTicks(this.range.y, this.range.h);
@@ -534,58 +605,58 @@ export class Figure extends GraphicObject {
 
         let r = this.figureRect;
 
-        this.ctx.textAlign = 'center';
-        this.ctx.beginPath();
+        e.ctx.textAlign = 'center';
+        e.ctx.beginPath();
         for (const xtick of xticks) {
             let p = this.mapRange2Canvas({x:xtick, y: 0});
 
             if (this.figureSettings.showTicks.includes('bottom')){
-                this.ctx.moveTo(p.x, r.y + r.h);
-                this.ctx.lineTo(p.x, r.y + r.h + tickSize);
+                e.ctx.moveTo(p.x, r.y + r.h);
+                e.ctx.lineTo(p.x, r.y + r.h + tickSize);
             }
 
             if (this.figureSettings.showTicks.includes('top')){
-                this.ctx.moveTo(p.x, r.y);
-                this.ctx.lineTo(p.x, r.y - tickSize);
+                e.ctx.moveTo(p.x, r.y);
+                e.ctx.lineTo(p.x, r.y - tickSize);
             }
 
             if (this.figureSettings.showTickNumbers.includes('bottom')){
-                this.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y + r.h + tickSize + xtextOffsetBottom);
+                e.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y + r.h + tickSize + xtextOffsetBottom);
             }
 
             if (this.figureSettings.showTickNumbers.includes('top')){
-                this.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y - tickSize - xtextOffsetTop);
+                e.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y - tickSize - xtextOffsetTop);
             }
         }
-        this.ctx.stroke();
+        e.ctx.stroke();
     
         // draw y ticks
 
-        this.ctx.beginPath();
+        e.ctx.beginPath();
         for (const ytick of yticks) {
             let p = this.mapRange2Canvas({x:0, y: ytick});
 
             if (this.figureSettings.showTicks.includes('left')){
-                this.ctx.moveTo(r.x, p.y);
-                this.ctx.lineTo(r.x - tickSize, p.y);
+                e.ctx.moveTo(r.x, p.y);
+                e.ctx.lineTo(r.x - tickSize, p.y);
             }
 
             if (this.figureSettings.showTicks.includes('right')){
-                this.ctx.moveTo(r.x + r.w, p.y);
-                this.ctx.lineTo(r.x + r.w + tickSize, p.y);
+                e.ctx.moveTo(r.x + r.w, p.y);
+                e.ctx.lineTo(r.x + r.w + tickSize, p.y);
             }
 
             if (this.figureSettings.showTickNumbers.includes('left')){
-                this.ctx.textAlign = 'right';
-                this.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x - tickSize - ytextOffset, p.y + 3);
+                e.ctx.textAlign = 'right';
+                e.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x - tickSize - ytextOffset, p.y + 3);
             }
 
             if (this.figureSettings.showTickNumbers.includes('right')){
-                this.ctx.textAlign = 'left';
-                this.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x + r.w + tickSize + ytextOffset, p.y + 3);
+                e.ctx.textAlign = 'left';
+                e.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x + r.w + tickSize + ytextOffset, p.y + 3);
             }
         }
-        this.ctx.stroke();
+        e.ctx.stroke();
     
     }
 
