@@ -149,13 +149,10 @@ export class DraggableLines extends GraphicObject {
 
     mouseDown(e: MouseEvent): void {
         if (e.button === 0) {
-            this.verticalDragging = this.checkBounds(e, Orientation.Vertical);
-            this.horizontalDragging = this.checkBounds(e, Orientation.Horizontal);
+            this.verticalDragging = this.verticalHovering;
+            this.horizontalDragging = this.horizontalHovering;
             this.lastMouseDownPos = {x:e.offsetX, y: e.offsetY};
-            if (this.verticalDragging || this.horizontalDragging) {
-                let f = this.parent as Figure;
-                f.preventMouseEvents(true);
-            }
+            this.lastPosition = {...this.position};
         }
     }
 
@@ -171,8 +168,6 @@ export class DraggableLines extends GraphicObject {
             return;
         }
         let f = this.parent as Figure;
-        let r = f.figureRect;
-   
 
         if (this.horizontalDragging || this.verticalDragging) {
 
@@ -198,26 +193,36 @@ export class DraggableLines extends GraphicObject {
 
         // on change, repaint
         if (this.verticalHovering !== vh) {
-            this.canvas.style.cursor = this.cursors.leftArrow;
-            f.preventMouseEvents(true);
-            f.repaint();
             this.verticalHovering = vh;
-        } else if (this.horizontalHovering !== hh) {
-            this.canvas.style.cursor = this.cursors.leftArrow;
-            f.preventMouseEvents(true);
             f.repaint();
+            // console.log('this.verticalHovering !== vh', vh);
+        } 
+        
+        if (this.horizontalHovering !== hh) {
             this.horizontalHovering = hh;
+            f.repaint();
+            // console.log('this.horizontalHovering !== vh', hh);
         }
 
-        if (this.verticalHovering && this.horizontalHovering) {
+        // TODO prevent only pannig
+        f.preventMouseEvents(this.verticalHovering || this.horizontalHovering);
+
+        if (this.verticalHovering && !this.horizontalHovering) {
+            this.canvas.style.cursor = this.cursors.leftArrow;
+        } else if (!this.verticalHovering && this.horizontalHovering) {
+            this.canvas.style.cursor = this.cursors.topArrow;
+        } else if (this.verticalHovering && this.horizontalHovering) {
             this.canvas.style.cursor = this.cursors.move;
+        }  else {
+            this.canvas.style.cursor = this.cursors.crosshair;
         }
 
-        console.log(this.verticalHovering, this.horizontalHovering);
+        // console.log(this.verticalHovering, this.horizontalHovering);
     }
 
     private strokeHorizontal(e: IPaintEvent) {
         e.ctx.strokeStyle = (this.horizontalHovering) ? 'white' : 'grey';
+        e.ctx.setLineDash([4, 2]);
         let f = this.parent as Figure;
         let p0 = f.mapRange2Canvas({x: 0, y: this.position.y});
         e.ctx.beginPath();
@@ -228,6 +233,7 @@ export class DraggableLines extends GraphicObject {
 
     private strokeVertical(e: IPaintEvent) {
         e.ctx.strokeStyle = (this.verticalHovering) ? 'white' : 'grey';
+        e.ctx.setLineDash([4, 2]);
         let f = this.parent as Figure;
         let p0 = f.mapRange2Canvas({x: this.position.x, y: 0});
         e.ctx.beginPath();
@@ -237,13 +243,12 @@ export class DraggableLines extends GraphicObject {
     }
 
     public paint(e: IPaintEvent): void {
-        console.log('paint dragable lines');
+        // console.log('paint dragable lines');
         e.ctx.save();
 
         // https://stackoverflow.com/questions/39048227/html5-canvas-invert-color-of-pixels
         // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation
         e.ctx.globalCompositeOperation = 'difference';  // calculate the difference of the colors
-
         e.ctx.lineWidth = 1;
 
         if (this.orientation === Orientation.Horizontal) {
@@ -256,8 +261,6 @@ export class DraggableLines extends GraphicObject {
         }
 
         e.ctx.restore();
-
-
     }
 
 
