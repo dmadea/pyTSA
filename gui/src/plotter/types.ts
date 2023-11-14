@@ -149,6 +149,20 @@ export class NumberArray extends Array<number> {
         }
         return minval;
     }
+    
+    public minmax(): [number, number] {
+        var minval = this[0];
+        var maxval = this[0];
+        for (let i = 1; i < this.length; i++) {
+            if (this[i] < minval){
+                minval = this[i];
+            }
+            if (this[i] > maxval){
+                maxval = this[i];
+            }
+        }
+        return [minval, maxval];
+    }
 
     public argMin(): number {
         var minIndex = 0;

@@ -78,15 +78,20 @@ function abc(): void {
 
             if (typeof reader.result === 'string') {
                 console.time('load');
-                let dataset = loadData(reader.result, ',');
+                
+                let ext = file.name.split('.').pop()?.toLowerCase();
 
-                if (dataset){
+                let dataset = loadData(reader.result, (ext === 'csv') ? ',' : '\t');
+
+                if (dataset && scene.fig){
                     // dataset.data.log();
                     // dataset.transpose(); 
                     // dataset.data.log();
 
                     // console.log(dataset);
-                    scene.fig?.plotHeatmap(dataset);
+                    scene.fig.plotHeatmap(dataset);
+                    scene.fig.figureSettings.xAxis.viewBounds = [dataset.x[0], dataset.x[dataset.x.length - 1]];
+                    scene.fig.figureSettings.yAxis.viewBounds = [dataset.y[0], dataset.y[dataset.y.length - 1]];
                 }
                 console.timeEnd('load');
 

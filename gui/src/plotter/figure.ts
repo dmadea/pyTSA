@@ -9,12 +9,14 @@ interface IFigureSettings {
     xAxis: {
         label: string,
         scale: string,  // lin, log, symlog, noscale - scale is determined from the data
-        viewBounds: number[]   // bounds of view or [x0, x1]
+        viewBounds: number[],   // bounds of view or [x0, x1]
+        autoscale: boolean
     },
     yAxis: {
         label: string,
         scale: string,  // lin, log, symlog, noscale
-        viewBounds: number[]   // bounds of view or [x0, x1]
+        viewBounds: number[],   // bounds of view or [x0, x1]
+        autoscale: boolean
     },
     title: string,
     showTicks: string[],        // ['top', 'bottom', 'left', 'right']
@@ -27,7 +29,7 @@ interface ILinePlot {
     x: NumberArray,
     y: NumberArray,
     color: string,
-    ls: string,  // line style
+    ld: number[],  // line dash, exmaple [4, 2], no dash: []
     lw: number,  // line width
     zValue: number
 }
@@ -50,12 +52,14 @@ export class Figure extends GraphicObject {
         xAxis: {
             label: '',
             scale: 'lin', 
-            viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE]
+            viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
+            autoscale: false
         },
         yAxis: {
             label: '',
             scale: 'lin',
-            viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE]
+            viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
+            autoscale: true
         },
         title: '',
         showTicks: ['left', 'right', 'bottom', 'top'],        // ['top', 'bottom', 'left', 'right']
@@ -64,7 +68,7 @@ export class Figure extends GraphicObject {
     }
 
     private linePlots: Array<ILinePlot> = [];
-    private heatmap: IHeatMap | null = null;
+    public heatmap: IHeatMap | null = null;
 
     public xRangeLinks: Figure[] = [];
     public yRangeLinks: Figure[] = [];
@@ -76,7 +80,8 @@ export class Figure extends GraphicObject {
     private scaling: boolean = false;
     private lastCenterPoint: Point;
     public figureRect: Rect;
-    private _preventMouseEvents: boolean = false;
+    private _preventPanning: boolean = false;
+    private _preventScaling: boolean = false;
 
     private plotCanvasRect = false;
 
@@ -187,8 +192,14 @@ export class Figure extends GraphicObject {
         return true;
     }
 
-    public preventMouseEvents(prevent: boolean) {
-        this._preventMouseEvents = prevent;
+    public preventMouseEvents(preventScaling?: boolean, preventPanning?: boolean) {
+        if (preventScaling !== undefined) {
+            this._preventScaling = preventScaling;
+
+        }
+        if (preventPanning !== undefined) {
+            this._preventPanning = preventPanning;
+        }
     }
 
     public mouseDown(e: MouseEvent): void {
@@ -202,13 +213,19 @@ export class Figure extends GraphicObject {
         if (!this.isInsideFigureRect(x, y))
             return;
 
-        if (this._preventMouseEvents) {
+        if (this._preventPanning && !this._preventScaling) {
+            super.mouseDown(e);
+            this.scaling = e.button == 2;
+        } else if (!this._preventPanning && this._preventScaling) {
+            super.mouseDown(e);
+            this.panning = e.button == 0 || e.button == 1;
+        } else if (this._preventPanning && this._preventScaling) {
             super.mouseDown(e);
             return;
+        } else {
+            this.scaling = e.button == 2;
+            this.panning = e.button == 0 || e.button == 1;
         }
-
-        this.scaling = e.button == 2;
-        this.panning = e.button == 0 || e.button == 1;
 
         this.lastMouseDownPos = {x: x, y: y};
         this.lastRange = {...this.range};
@@ -255,16 +272,38 @@ export class Figure extends GraphicObject {
         return retRect;
     }
 
+    public rangeChanged(range: Rect): void {
+        this.figureSettings.xAxis.autoscale = false;
+        this.figureSettings.yAxis.autoscale = false;
+        for (const fig of this.xRangeLinks) {
+            fig.range.x = this.range.x;
+            fig.range.w = this.range.w;
+            fig.repaint();
+        }
+        for (const fig of this.yRangeLinks) {
+            fig.range.y = this.range.y;
+            fig.range.h = this.range.h;
+            fig.repaint();
+        }
+        super.rangeChanged(range);
+        this.repaint();
+    }
+
     public mouseMove(e: MouseEvent): void {
         if (!this.canvas)
             return
 
-        if (this._preventMouseEvents) {
+        if (this._preventPanning || this._preventScaling) {
             super.mouseMove(e);
+        }
+        
+        if (this._preventPanning && this._preventScaling) {
             return;
         }
 
-        if (this.isInsideFigureRect(e.offsetX, e.offsetY))
+        let isInside = this.isInsideFigureRect(e.offsetX, e.offsetY);
+
+        if (isInside)
             this.canvas.style.cursor = this.cursors.crosshair;
 
         let dist: Point = {
@@ -273,6 +312,9 @@ export class Figure extends GraphicObject {
         }
 
         let rangeChanged = false;
+
+        // if (isInside)
+        //     console.log(this.panning, this.scaling);
 
         if (this.panning){
             this.canvas.style.cursor = this.cursors.move;
@@ -310,70 +352,35 @@ export class Figure extends GraphicObject {
         }
 
         if (rangeChanged){
-            for (const fig of this.xRangeLinks) {
-                fig.range.x = this.range.x;
-                fig.range.w = this.range.w;
-                fig.repaint();
-            }
-            for (const fig of this.yRangeLinks) {
-                fig.range.y = this.range.y;
-                fig.range.h = this.range.h;
-                fig.repaint();
-            }
-
-            if (this.draggableLines) {
-                if (this.draggableLines.position.x < this.range.x)
-                    this.draggableLines.position.x = this.range.x;
-
-                if (this.draggableLines.position.y < this.range.y)
-                    this.draggableLines.position.y = this.range.y;
-
-                if (this.draggableLines.position.x > this.range.x + this.range.w)
-                    this.draggableLines.position.x = this.range.x + this.range.w;
-
-                if (this.draggableLines.position.y > this.range.y + this.range.h)
-                    this.draggableLines.position.y = this.range.y + this.range.h;
-
-            }
-
-            this.repaint();
+            this.rangeChanged(this.range);
         }
 
         // for handling hovering
         if (!this.panning && !this.scaling) {
             super.mouseMove(e);
         }
-
     }
 
     mouseUp(e: MouseEvent): void {
-        if (this._preventMouseEvents) {
+        if (this._preventPanning || this._preventScaling) {
             super.mouseUp(e);
-            return;
         }
 
-        switch(e.button) {
-            case 0: 
-                this.panning = false;
-            
-            case 1: 
-                this.panning = false;
+        this.panning = false;
+        this.scaling = false;
 
-            case 2: 
-                this.scaling = false
-        }
-        
         if (this.canvas)
-        this.canvas.style.cursor = this.cursors.crosshair;
+            this.canvas.style.cursor = this.cursors.crosshair;
     }
 
-    public addDraggableLines(orientation: Orientation) {
-        this.draggableLines = new DraggableLines(this, orientation)
-        this.items.push(this.draggableLines);
+    public addDraggableLines(orientation: Orientation): DraggableLines {
+        let line = new DraggableLines(this, orientation)
+        this.items.push(line);
+        return line;
     }
 
-    public plotLine(x: NumberArray, y: NumberArray, color = "black", ls = "-", lw = 1, zValue = 10) {
-        var plot: ILinePlot = {x: x.copy(), y: y.copy(), color, ls, lw, zValue}; 
+    public plotLine(x: NumberArray, y: NumberArray, color = "black", ld: number[] = [], lw = 1, zValue = 10) {
+        var plot: ILinePlot = {x: x.copy(), y: y.copy(), color, ld, lw, zValue}; 
         this.linePlots.push(plot);
         this.repaint();
         return plot;
@@ -439,6 +446,13 @@ export class Figure extends GraphicObject {
 
         this.recalculateHeatMapImage();
 
+        this.range = {
+            x: dataset.x[0],
+            y: dataset.y[0],
+            w: dataset.x[dataset.x.length - 1] - dataset.x[0],
+            h: dataset.y[dataset.y.length - 1] - dataset.y[0]
+        }
+
         this.repaint();
         return this.heatmap;
     }
@@ -496,6 +510,39 @@ export class Figure extends GraphicObject {
         //     e.ctx.stroke();
         // }
 
+        if (this.linePlots.length < 1) {
+            return;
+        }
+
+        // autoscale
+
+        if (this.figureSettings.yAxis.autoscale) {
+            let mins = [];
+            let maxs = [];
+            for (const plot of this.linePlots) {
+                let [min, max] = plot.y.minmax();
+                mins.push(min);
+                maxs.push(max);
+            }
+            let y0 = Math.min(...mins);
+            let y1 = Math.max(...maxs);
+
+            if (!this.heatmap) {
+                this.range.y = y0;
+                this.range.h = y1 - y0;
+            }
+        }
+
+        if (this.figureSettings.xAxis.autoscale) {
+            let x0 = Math.min(...this.linePlots.map(p => p.x[0]));
+            let x1 = Math.min(...this.linePlots.map(p => p.x[p.x.length - 1]));
+
+            if (!this.heatmap) {
+                this.range.x = x0;
+                this.range.w = x1 - x0;
+            }
+        }
+
         e.ctx.save();
 
         // the speed was almost the same as for the above case
@@ -511,6 +558,7 @@ export class Figure extends GraphicObject {
             }
             e.ctx.strokeStyle = plot.color;
             e.ctx.lineWidth = plot.lw;
+            e.ctx.setLineDash(plot.ld);
             e.ctx.stroke();
         }
 
@@ -605,7 +653,9 @@ export class Figure extends GraphicObject {
 
         let r = this.figureRect;
 
-        e.ctx.textAlign = 'center';
+        // e.ctx.font = "10px serif";
+        e.ctx.textAlign = 'center';  // vertical alignment
+        e.ctx.textBaseline = 'middle'; // horizontal alignment
         e.ctx.beginPath();
         for (const xtick of xticks) {
             let p = this.mapRange2Canvas({x:xtick, y: 0});
@@ -648,12 +698,12 @@ export class Figure extends GraphicObject {
 
             if (this.figureSettings.showTickNumbers.includes('left')){
                 e.ctx.textAlign = 'right';
-                e.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x - tickSize - ytextOffset, p.y + 3);
+                e.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x - tickSize - ytextOffset, p.y);
             }
 
             if (this.figureSettings.showTickNumbers.includes('right')){
                 e.ctx.textAlign = 'left';
-                e.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x + r.w + tickSize + ytextOffset, p.y + 3);
+                e.ctx.fillText(`${formatNumber(ytick, yFigures)}`, r.x + r.w + tickSize + ytextOffset, p.y);
             }
         }
         e.ctx.stroke();

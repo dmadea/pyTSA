@@ -55,6 +55,12 @@ export abstract class GraphicObject{
         }
     }
 
+    public rangeChanged(range: Rect) {
+        for (const item of this.items) {
+            item.rangeChanged(range);
+        }
+    }
+
     public repaint() {
         if (this.ctx && this.canvas) {
             let e: IPaintEvent = {canvas: this.canvas, ctx: this.ctx};
@@ -116,11 +122,20 @@ export class DraggableLines extends GraphicObject {
     private lastMouseDownPos: Point;
     private lastPosition: Point;
 
+    public onHoverColor: string = "white";
+    public color: string = "grey";
+
+    public showText: boolean = true;
+    public textPosition: number = 20;  // in pixels from the left/top
+    public textFont: string = "11px sans-serif";  //default is 10px sans-serif
+    public textSignificantFigures: number = 3;
+
     private verticalHovering: boolean = false;
     private horizontalHovering: boolean = false;
 
     private verticalDragging: boolean = false;
     private horizontalDragging: boolean = false;
+    private positionChangedListeners: ((position: Point) => void)[] = [];
 
     constructor(parent: Figure, orientation: Orientation = Orientation.Vertical) {
         super(parent);
@@ -160,7 +175,17 @@ export class DraggableLines extends GraphicObject {
         this.verticalDragging = false;
         this.horizontalDragging = false;
         let f = this.parent as Figure;
-        f.preventMouseEvents(false);
+        f.preventMouseEvents(false, false);
+    }
+
+    private positionChanged() {
+        for (const fun of this.positionChangedListeners) {
+            fun(this.position);
+        }
+    }
+
+    public addPositionChangedListener(callback: (position: Point) => void) {
+        this.positionChangedListeners.push(callback);
     }
 
     public mouseMove(e: MouseEvent): void {
@@ -170,6 +195,7 @@ export class DraggableLines extends GraphicObject {
         let f = this.parent as Figure;
 
         if (this.horizontalDragging || this.verticalDragging) {
+            f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
 
             let dist: Point = {
                 x: e.offsetX - this.lastMouseDownPos.x,
@@ -183,6 +209,8 @@ export class DraggableLines extends GraphicObject {
                 x: (this.verticalDragging) ? this.lastPosition.x + dist.x * xRatio : this.lastPosition.x,
                 y: (this.horizontalDragging) ? this.lastPosition.y - dist.y * yRatio : this.lastPosition.y
             };
+
+            this.positionChanged();
 
             f.repaint();
             return;
@@ -204,8 +232,7 @@ export class DraggableLines extends GraphicObject {
             // console.log('this.horizontalHovering !== vh', hh);
         }
 
-        // TODO prevent only pannig
-        f.preventMouseEvents(this.verticalHovering || this.horizontalHovering);
+        f.preventMouseEvents(undefined, this.verticalHovering || this.horizontalHovering);
 
         if (this.verticalHovering && !this.horizontalHovering) {
             this.canvas.style.cursor = this.cursors.leftArrow;
@@ -220,24 +247,94 @@ export class DraggableLines extends GraphicObject {
         // console.log(this.verticalHovering, this.horizontalHovering);
     }
 
+    public rangeChanged(range: Rect): void {
+        if (this.position.x < range.x) {
+            this.position.x = range.x;
+            this.positionChanged();
+        }
+
+        if (this.position.y < range.y) {
+            this.position.y = range.y;
+            this.positionChanged();
+        }
+
+        if (this.position.x > range.x + range.w) {
+            this.position.x = range.x + range.w;
+            this.positionChanged();
+        }
+
+        if (this.position.y > range.y + range.h) {
+            this.position.y = range.y + range.h;
+            this.positionChanged();
+        }
+    }
+
     private strokeHorizontal(e: IPaintEvent) {
-        e.ctx.strokeStyle = (this.horizontalHovering) ? 'white' : 'grey';
+        e.ctx.strokeStyle = (this.horizontalHovering) ? this.onHoverColor : this.color;
+        // e.ctx.lineWidth = (this.horizontalHovering) ? 2 : 1;
         e.ctx.setLineDash([4, 2]);
         let f = this.parent as Figure;
         let p0 = f.mapRange2Canvas({x: 0, y: this.position.y});
         e.ctx.beginPath();
         e.ctx.moveTo(f.figureRect.x, p0.y);
+
+        if (this.showText) {
+            let xText = f.figureRect.x - this.textPosition + f.figureRect.w;
+
+            e.ctx.fillStyle = this.onHoverColor;
+            e.ctx.textAlign = 'right';  // vertical alignment
+            e.ctx.textBaseline = 'middle'; // horizontal alignment
+            e.ctx.font = this.textFont;
+
+            let text = this.position.y.toPrecision(this.textSignificantFigures);
+            let textSize = e.ctx.measureText(text);
+
+            let offset = 3;
+
+            e.ctx.lineTo(xText - textSize.width - offset, p0.y);
+            e.ctx.fillText(text, xText, p0.y);
+            e.ctx.moveTo(xText + offset, p0.y);
+        }
+
         e.ctx.lineTo(f.figureRect.x + f.figureRect.w, p0.y);
         e.ctx.stroke();
     }
 
     private strokeVertical(e: IPaintEvent) {
-        e.ctx.strokeStyle = (this.verticalHovering) ? 'white' : 'grey';
+        e.ctx.strokeStyle = (this.verticalHovering) ? this.onHoverColor : this.color;
+        // e.ctx.lineWidth = (this.verticalHovering) ? 2 : 1;
+
         e.ctx.setLineDash([4, 2]);
         let f = this.parent as Figure;
         let p0 = f.mapRange2Canvas({x: this.position.x, y: 0});
         e.ctx.beginPath();
         e.ctx.moveTo(p0.x, f.figureRect.y);
+
+        if (this.showText) {
+            let yText = f.figureRect.y + this.textPosition;
+
+            let text = this.position.x.toPrecision(this.textSignificantFigures);
+            let textSize = e.ctx.measureText(text);
+
+            e.ctx.save();
+            e.ctx.translate(p0.x, yText);
+            e.ctx.rotate(-Math.PI / 2);
+            e.ctx.fillText(text, p0.x, yText);
+
+            e.ctx.fillStyle = this.onHoverColor;
+            e.ctx.textAlign = 'right';  // vertical alignment
+            e.ctx.textBaseline = 'middle'; // horizontal alignment
+            e.ctx.font = this.textFont;
+
+            e.ctx.fillText(text, 0, 0);
+            e.ctx.restore();
+
+            let offset = 3;
+
+            e.ctx.lineTo(p0.x, yText  - offset);
+            e.ctx.moveTo(p0.x, yText + textSize.width + offset);
+        }
+
         e.ctx.lineTo(p0.x, f.figureRect.y + f.figureRect.h);
         e.ctx.stroke();
     }

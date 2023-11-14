@@ -65,26 +65,41 @@ export class Scene extends GraphicObject {
         f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([-1, 2, -0.5]), 'green'); 
         f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
 
-        this.fig.plotLine(x, y, 'blue', '-', 1);
-        this.fig.addDraggableLines(DraggableLines.Orientation.Both);
-    
-        // test heatmap
-        // var x = NumberArray.linspace(-1, 1, 100);
-        // var y = NumberArray.linspace(-1, 1, 200);
-        // var m = new Matrix(x.length, y.length);
-        // m.fillRandom();
-        // m.mul(255, false);
-        // console.log(m);
-        // this.fig.plotHeatmap({data: m, x, y});
-
+        this.fig.plotLine(x, y, 'blue', [], 1);
         grid.addItem(f1, 0, 1);
-
+        
         var f2 = new Figure(grid);
+        var linePlot = f2.plotLine(new NumberArray(), new NumberArray());
+        // f2.addDraggableLines(DraggableLines.Orientation.Both);
+        
         this.fig.linkXRange(f2);
-        this.fig.linkYRange(f1);
-
+        // this.fig.linkYRange(f1);
+        
         grid.addItem(f2, 1, 0);
-        grid.gridSettings.widthRatios = NumberArray.fromArray([2, 1]);
+        var lines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);
+        lines.addPositionChangedListener((pos) => {
+            // console.log('position changed', pos);
+            if (this.fig?.heatmap) {
+
+                // get row
+                let idx = this.fig.heatmap.dataset.y.nearestIndex(pos.y);
+                let row = this.fig.heatmap.dataset.data.getRow(idx);
+
+                if (linePlot.x.length !== this.fig.heatmap.dataset.y.length) {
+                    linePlot.x = this.fig.heatmap.dataset.x;
+                }
+
+                linePlot.y = row;
+                f2.repaint();
+
+                // console.log(col);
+
+
+            }            
+
+        });
+
+        grid.gridSettings.widthRatios = NumberArray.fromArray([3, 1]);
         grid.gridSettings.heightRatios = NumberArray.fromArray([2, 1]);
 
         grid.recalculateGrid(false);
