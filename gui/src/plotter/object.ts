@@ -127,7 +127,7 @@ export class DraggableLines extends GraphicObject {
 
     public showText: boolean = true;
     public textPosition: number = 20;  // in pixels from the left/top
-    public textFont: string = "11px sans-serif";  //default is 10px sans-serif
+    public textFont: string = "25px sans-serif";  //default is 10px sans-serif
     public textSignificantFigures: number = 3;
 
     private verticalHovering: boolean = false;
@@ -145,18 +145,18 @@ export class DraggableLines extends GraphicObject {
         this.lastPosition = {...this.position};
     }
 
-    private checkBounds(e: MouseEvent, orientation: Orientation) {
+    private checkBounds(x: number, y: number, orientation: Orientation) {
         let f = this.parent as Figure;
         let pos = f.mapRange2Canvas(this.position);
 
-        let offset = 7;  // px
+        let offset = 10;  // px
 
         if ((this.orientation === Orientation.Vertical || this.orientation === Orientation.Both ) && orientation === Orientation.Vertical) {
-            return e.offsetX >= pos.x - offset && e.offsetX <= pos.x + offset;
+            return x >= pos.x - offset && x <= pos.x + offset;
         }
 
         if ((this.orientation === Orientation.Horizontal || this.orientation === Orientation.Both ) && orientation === Orientation.Horizontal) {
-            return e.offsetY >= pos.y - offset && e.offsetY <= pos.y + offset;
+            return y >= pos.y - offset && y <= pos.y + offset;
         }
 
         return false;
@@ -164,9 +164,10 @@ export class DraggableLines extends GraphicObject {
 
     mouseDown(e: MouseEvent): void {
         if (e.button === 0) {
+            let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
             this.verticalDragging = this.verticalHovering;
             this.horizontalDragging = this.horizontalHovering;
-            this.lastMouseDownPos = {x:e.offsetX, y: e.offsetY};
+            this.lastMouseDownPos = {x, y};
             this.lastPosition = {...this.position};
         }
     }
@@ -194,12 +195,14 @@ export class DraggableLines extends GraphicObject {
         }
         let f = this.parent as Figure;
 
+        let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
+
         if (this.horizontalDragging || this.verticalDragging) {
             f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
 
             let dist: Point = {
-                x: e.offsetX - this.lastMouseDownPos.x,
-                y: e.offsetY - this.lastMouseDownPos.y
+                x: x - this.lastMouseDownPos.x,
+                y: y - this.lastMouseDownPos.y
             }
 
             let xRatio = f.range.w / f.figureRect.w;
@@ -216,8 +219,8 @@ export class DraggableLines extends GraphicObject {
             return;
         }
 
-        let vh = this.checkBounds(e, Orientation.Vertical);
-        let hh = this.checkBounds(e, Orientation.Horizontal);
+        let vh = this.checkBounds(x, y, Orientation.Vertical);
+        let hh = this.checkBounds(x, y, Orientation.Horizontal);
 
         // on change, repaint
         if (this.verticalHovering !== vh) {
@@ -272,7 +275,6 @@ export class DraggableLines extends GraphicObject {
     private strokeHorizontal(e: IPaintEvent) {
         e.ctx.strokeStyle = (this.horizontalHovering) ? this.onHoverColor : this.color;
         // e.ctx.lineWidth = (this.horizontalHovering) ? 2 : 1;
-        e.ctx.setLineDash([4, 2]);
         let f = this.parent as Figure;
         let p0 = f.mapRange2Canvas({x: 0, y: this.position.y});
         e.ctx.beginPath();
@@ -289,7 +291,7 @@ export class DraggableLines extends GraphicObject {
             let text = this.position.y.toPrecision(this.textSignificantFigures);
             let textSize = e.ctx.measureText(text);
 
-            let offset = 3;
+            let offset = 6;
 
             e.ctx.lineTo(xText - textSize.width - offset, p0.y);
             e.ctx.fillText(text, xText, p0.y);
@@ -303,8 +305,6 @@ export class DraggableLines extends GraphicObject {
     private strokeVertical(e: IPaintEvent) {
         e.ctx.strokeStyle = (this.verticalHovering) ? this.onHoverColor : this.color;
         // e.ctx.lineWidth = (this.verticalHovering) ? 2 : 1;
-
-        e.ctx.setLineDash([4, 2]);
         let f = this.parent as Figure;
         let p0 = f.mapRange2Canvas({x: this.position.x, y: 0});
         e.ctx.beginPath();
@@ -329,7 +329,7 @@ export class DraggableLines extends GraphicObject {
             e.ctx.fillText(text, 0, 0);
             e.ctx.restore();
 
-            let offset = 3;
+            let offset = 6;
 
             e.ctx.lineTo(p0.x, yText  - offset);
             e.ctx.moveTo(p0.x, yText + textSize.width + offset);
@@ -346,7 +346,10 @@ export class DraggableLines extends GraphicObject {
         // https://stackoverflow.com/questions/39048227/html5-canvas-invert-color-of-pixels
         // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation
         e.ctx.globalCompositeOperation = 'difference';  // calculate the difference of the colors
-        e.ctx.lineWidth = 1;
+        
+        // let pr = window.devicePixelRatio;
+        e.ctx.lineWidth = 2;
+        e.ctx.setLineDash([10, 6]);
 
         if (this.orientation === Orientation.Horizontal) {
             this.strokeHorizontal(e);

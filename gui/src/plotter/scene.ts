@@ -36,8 +36,11 @@ export class Scene extends GraphicObject {
             }
 
             if (this.canvas){
-                this.canvas.width = this.canvas.clientWidth;
-                this.canvas.height = this.canvas.clientHeight;
+
+                this.canvas.width = this.canvas.clientWidth * window.devicePixelRatio;
+                this.canvas.height = this.canvas.clientHeight * window.devicePixelRatio;
+                // console.log(window.devicePixelRatio, this.canvas.width, this.canvas.height);
+
                 this.resize();
             }
           });
@@ -62,17 +65,21 @@ export class Scene extends GraphicObject {
 
         var f1 = new Figure(grid);
         var [x, y]  = genTestData(5);
-        f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([-1, 2, -0.5]), 'green'); 
-        f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
+        // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([-1, 2, -0.5]), 'green'); 
+        // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
 
         this.fig.plotLine(x, y, 'blue', [], 1);
         grid.addItem(f1, 0, 1);
         
         var f2 = new Figure(grid);
         var linePlot = f2.plotLine(new NumberArray(), new NumberArray());
+        var linePlotCol = f1.plotLine(new NumberArray(), new NumberArray());
+
         // f2.addDraggableLines(DraggableLines.Orientation.Both);
         
         this.fig.linkXRange(f2);
+        this.fig.linkYXRange(f1);
+
         // this.fig.linkYRange(f1);
         
         grid.addItem(f2, 1, 0);
@@ -82,16 +89,22 @@ export class Scene extends GraphicObject {
             if (this.fig?.heatmap) {
 
                 // get row
-                let idx = this.fig.heatmap.dataset.y.nearestIndex(pos.y);
-                let row = this.fig.heatmap.dataset.data.getRow(idx);
+                let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.y);
+                let row = this.fig.heatmap.dataset.data.getRow(idxy);
+                let idxx = this.fig.heatmap.dataset.x.nearestIndex(pos.x);
+                let col = this.fig.heatmap.dataset.data.getCol(idxx);
 
                 if (linePlot.x.length !== this.fig.heatmap.dataset.y.length) {
                     linePlot.x = this.fig.heatmap.dataset.x;
                 }
 
                 linePlot.y = row;
+                
+                linePlotCol.x = this.fig.heatmap.dataset.y;
+                linePlotCol.y = col;
+                
+                f1.repaint();
                 f2.repaint();
-
                 // console.log(col);
 
 
@@ -99,7 +112,7 @@ export class Scene extends GraphicObject {
 
         });
 
-        grid.gridSettings.widthRatios = NumberArray.fromArray([3, 1]);
+        grid.gridSettings.widthRatios = NumberArray.fromArray([1, 1]);
         grid.gridSettings.heightRatios = NumberArray.fromArray([2, 1]);
 
         grid.recalculateGrid(false);

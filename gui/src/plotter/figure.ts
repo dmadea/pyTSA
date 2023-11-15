@@ -72,6 +72,8 @@ export class Figure extends GraphicObject {
 
     public xRangeLinks: Figure[] = [];
     public yRangeLinks: Figure[] = [];
+    public xyRangeLinks: Figure[] = [];
+    public yxRangeLinks: Figure[] = [];
 
     private lastMouseDownPos: Point;
     private lastRange: Rect;
@@ -94,10 +96,10 @@ export class Figure extends GraphicObject {
         super(parent, canvasRect, margin) ;
 
         this.margin = {
-            left: 60,
-            right: 60,
-            top: 30,
-            bottom: 30
+            left: 100,
+            right: 100,
+            top: 60,
+            bottom: 60
         };
         this.range = {x: -1, y: -1, w: 2, h: 2};
         this.steps = NumberArray.fromArray([1, 2, 2.5, 5]);
@@ -150,6 +152,24 @@ export class Figure extends GraphicObject {
 
         figure.yRangeLinks.push(this);
         this.yRangeLinks.push(figure);
+    }
+
+    public linkXYRange(figure: Figure) {
+        if (figure === this) {
+            return;
+        }
+
+        figure.yxRangeLinks.push(this);
+        this.xyRangeLinks.push(figure);
+    }
+
+    public linkYXRange(figure: Figure) {
+        if (figure === this) {
+            return;
+        }
+
+        figure.xyRangeLinks.push(this);
+        this.yxRangeLinks.push(figure);
     }
 
     public mapRange2CanvasArr(xvals: NumberArray, yvals: NumberArray): [NumberArray, NumberArray]{
@@ -206,7 +226,7 @@ export class Figure extends GraphicObject {
         if (!this.canvas)
             return;
 
-        let [x, y] = [e.offsetX, e.offsetY];
+        let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
         this.figureRect = this.getFigureRect();
 
         // we are outside of figure frame
@@ -285,6 +305,16 @@ export class Figure extends GraphicObject {
             fig.range.h = this.range.h;
             fig.repaint();
         }
+        for (const fig of this.xyRangeLinks) {
+            fig.range.y = this.range.x;
+            fig.range.h = this.range.w;
+            fig.repaint();
+        }
+        for (const fig of this.yxRangeLinks) {
+            fig.range.x = this.range.y;
+            fig.range.w = this.range.h;
+            fig.repaint();
+        }
         super.rangeChanged(range);
         this.repaint();
     }
@@ -293,10 +323,12 @@ export class Figure extends GraphicObject {
         if (!this.canvas)
             return
 
+        let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
+
         if (this._preventPanning || this._preventScaling) {
             super.mouseMove(e);
         }
-        
+
         if (this._preventPanning && this._preventScaling) {
             return;
         }
@@ -307,8 +339,8 @@ export class Figure extends GraphicObject {
             this.canvas.style.cursor = this.cursors.crosshair;
 
         let dist: Point = {
-            x: e.offsetX - this.lastMouseDownPos.x,
-            y: e.offsetY - this.lastMouseDownPos.y
+            x: x - this.lastMouseDownPos.x,
+            y: y - this.lastMouseDownPos.y
         }
 
         let rangeChanged = false;
@@ -486,7 +518,7 @@ export class Figure extends GraphicObject {
         0, 0, this.heatmap.iData.width, this.heatmap.iData.height,
         p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
         
-        console.log('Heatmap paint');
+        // console.log('Heatmap paint');
 
     }
 
@@ -614,6 +646,7 @@ export class Figure extends GraphicObject {
         e.ctx.restore();
         
         // draw figure rectangle
+        e.ctx.lineWidth = 3;
         e.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
         this.drawTicks(e);
 
@@ -626,6 +659,8 @@ export class Figure extends GraphicObject {
 
     public drawTicks(e: IPaintEvent){  // r is Figure Rectangle, the frame
         e.ctx.fillStyle = textColor;
+
+        let pr = window.devicePixelRatio;
 
         let xticks = this.genMajorTicks(this.range.x, this.range.w);
         let yticks = this.genMajorTicks(this.range.y, this.range.h);
@@ -643,17 +678,16 @@ export class Figure extends GraphicObject {
         if (this.figureSettings.axisAlignment === 'vertical'){
             [xticks, yticks] = [yticks, xticks];  // swap the axes
         }
-    
-        let tickSize = 8;
-        let xtextOffsetBottom = 10;
-        let xtextOffsetTop = 5;
-        let ytextOffset = 10;
+
+        let tickSize = 20;
+        let ytextOffset = 16;
+        // let ytextOffset = 10;
 
         // draw x ticks
 
         let r = this.figureRect;
 
-        // e.ctx.font = "10px serif";
+        e.ctx.font = "25px sans-serif";
         e.ctx.textAlign = 'center';  // vertical alignment
         e.ctx.textBaseline = 'middle'; // horizontal alignment
         e.ctx.beginPath();
@@ -671,11 +705,11 @@ export class Figure extends GraphicObject {
             }
 
             if (this.figureSettings.showTickNumbers.includes('bottom')){
-                e.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y + r.h + tickSize + xtextOffsetBottom);
+                e.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y + r.h + tickSize + ytextOffset);
             }
 
             if (this.figureSettings.showTickNumbers.includes('top')){
-                e.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y - tickSize - xtextOffsetTop);
+                e.ctx.fillText(`${formatNumber(xtick, xFigures)}`, p.x, r.y - tickSize - ytextOffset);
             }
         }
         e.ctx.stroke();
