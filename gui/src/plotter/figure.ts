@@ -10,13 +10,15 @@ interface IFigureSettings {
         label: string,
         scale: string,  // lin, log, symlog, noscale - scale is determined from the data
         viewBounds: number[],   // bounds of view or [x0, x1]
-        autoscale: boolean
+        autoscale: boolean,
+        inverted: boolean
     },
     yAxis: {
         label: string,
         scale: string,  // lin, log, symlog, noscale
         viewBounds: number[],   // bounds of view or [x0, x1]
-        autoscale: boolean
+        autoscale: boolean,
+        inverted: boolean
     },
     title: string,
     showTicks: string[],        // ['top', 'bottom', 'left', 'right']
@@ -34,11 +36,119 @@ interface ILinePlot {
     zValue: number
 }
 
-interface IHeatMap {
-    dataset: Dataset,
-    colormap: IColorMap,
-    iData: ImageData,
-    imageBitmap: ImageBitmap | null
+export class HeatMap {
+
+    public dataset: Dataset;
+    public colormap: IColorMap;
+    private offScreenCanvas: OffscreenCanvas;
+    private offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
+    private imageData: ImageData;
+    public imageBitmap: ImageBitmap;
+    public zRange: [number | null, number | null] = [null, null];  // min, max
+    private figure: Figure;
+    public xRegular: boolean; // regular spacing of x data
+    public yRegular: boolean; // regular spacing of y data
+
+
+    constructor(figure: Figure, dataset: Dataset, colormap: IColorMap = Colormap.symgrad) {
+        let matrix = dataset.data;
+        if (matrix.ncols !== dataset.x.length || matrix.nrows !== dataset.y.length) {
+            throw TypeError("Dimensions are not aligned with x and y arrays.");
+        }
+
+        this.dataset = dataset;
+        this.colormap = colormap;
+        this.figure = figure;
+        this.xRegular = HeatMap.isRegularlySpaced(this.dataset.x);
+        this.yRegular = HeatMap.isRegularlySpaced(this.dataset.y);
+
+        // console.log(this.xRegular, this.yRegular);
+
+        // https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas
+        this.offScreenCanvas = new OffscreenCanvas(dataset.x.length, dataset.y.length);
+        this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
+
+        if(!this.offScreenCanvasCtx) {
+            throw TypeError("OffScreenCanvas context is null.");
+        }
+
+        this.imageData = new ImageData(dataset.x.length, dataset.y.length);
+        this.imageBitmap = this.offScreenCanvas.transferToImageBitmap(); // just to trick compiler
+        this.recalculateHeatMapImage();
+    }
+
+    static isRegularlySpaced(arr: NumberArray): boolean {
+        // from numpy https://github.com/numpy/numpy/blob/v1.26.0/numpy/core/numeric.py#L2249-L2371
+        var isclose = (a: number, b: number, rtol: number = 1e-1) => {
+            return Math.abs(a - b) <= rtol * Math.abs(b);
+        }
+
+        let diff = (arr[arr.length - 1] - arr[0]) / (arr.length - 1);
+        for (let i = 0; i < arr.length - 1; i++) {
+            if (!isclose(arr[i + 1] - arr[i], diff)) {
+                console.log(arr[i + 1] - arr[i], diff, i);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public width(): number {
+        return this.imageData.width;
+    }
+
+    public height(): number {
+        return this.imageData.height;
+    }
+
+    public recalculateHeatMapImage(){
+        if (!this.offScreenCanvasCtx) {
+            return;
+        }
+
+        let m = this.dataset.data;
+
+        let zlim0 = (this.zRange[0] === null) ? m.min() : this.zRange[0];
+        let zlim1 = (this.zRange[1] === null) ? m.max() : this.zRange[1];
+        let limdiff = zlim1 - zlim0;
+
+        // let extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
+
+        // let zmin = - extreme;
+        // let zmax = + extreme;
+        // let diff = zmax - zmin; 
+
+        let w = this.imageData.width;
+        let h = this.imageData.height;
+
+        // C-contiguous buffer
+        for(let row = 0; row < h; row++) {
+            for(let col = 0; col < w; col++) {
+                let pos = (row * w + col) * 4;        // position in buffer based on x and y
+                
+                // y axis is inverted in default because of different coordinate system
+                let rowIdx = this.figure.figureSettings.yAxis.inverted ? row : h - row - 1;
+                let colIdx = this.figure.figureSettings.xAxis.inverted ? w - col - 1 : col;
+
+                let z = m.get(rowIdx, colIdx);
+                // console.log('row', row, 'col', col, z, m.isCContiguous);
+
+                let zScaled = (z - zlim0) / limdiff; 
+                // interpolate the rgba values
+                // console.log(zScaled);
+
+                let rgba = Colormap.getColor(zScaled, this.colormap);
+
+                this.imageData.data[pos] = rgba[0];              // some R value [0, 255]
+                this.imageData.data[pos+1] = rgba[1];              // some G value
+                this.imageData.data[pos+2] = rgba[2];              // some B value
+                this.imageData.data[pos+3] = rgba[3];                  // set alpha channel
+            }
+        }
+
+        this.offScreenCanvasCtx.putImageData(this.imageData, 0, 0);
+        this.imageBitmap = this.offScreenCanvas.transferToImageBitmap();
+    }
 }
 
 export class Figure extends GraphicObject {
@@ -53,13 +163,15 @@ export class Figure extends GraphicObject {
             label: '',
             scale: 'lin', 
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
-            autoscale: false
+            autoscale: false,
+            inverted: false
         },
         yAxis: {
             label: '',
             scale: 'lin',
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
-            autoscale: true
+            autoscale: true,
+            inverted: false
         },
         title: '',
         showTicks: ['left', 'right', 'bottom', 'top'],        // ['top', 'bottom', 'left', 'right']
@@ -68,7 +180,7 @@ export class Figure extends GraphicObject {
     }
 
     private linePlots: Array<ILinePlot> = [];
-    public heatmap: IHeatMap | null = null;
+    public heatmap: HeatMap | null = null;
 
     public xRangeLinks: Figure[] = [];
     public yRangeLinks: Figure[] = [];
@@ -86,9 +198,6 @@ export class Figure extends GraphicObject {
     private _preventScaling: boolean = false;
 
     private plotCanvasRect = false;
-
-    private offScreenCanvas: OffscreenCanvas;
-    private offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null = null;
 
     public draggableLines: DraggableLines | null = null;
 
@@ -110,7 +219,6 @@ export class Figure extends GraphicObject {
         this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
         this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
         this.lastCenterPoint = {x: 0, y: 0};
-        this.offScreenCanvas = new OffscreenCanvas(10, 10);
     }
 
     public mapCanvas2Range(p: Point): Point{
@@ -418,65 +526,12 @@ export class Figure extends GraphicObject {
         return plot;
     }
 
-    private recalculateHeatMapImage(){
-        if (!this.heatmap || !this.offScreenCanvas || !this.offScreenCanvasCtx) {
-            return;
-        }
+    public plotHeatmap(dataset: Dataset, colormap: IColorMap = Colormap.seismic ): HeatMap {
+        this.heatmap = new HeatMap(this, dataset, colormap);
+        // this.heatmap.zRange = [-0.02, 0.02];
+        // this.heatmap.recalculateHeatMapImage();
 
-        let iData = this.heatmap.iData;
-        let m = this.heatmap.dataset.data;
-
-        let extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
-
-        let zmin = - extreme;
-        let zmax = + extreme;
-        let diff = zmax - zmin; 
-
-        // C-contiguous buffer
-        for(let row = 0; row < iData.height; row++) {
-            for(let col = 0; col < iData.width; col++) {
-                let pos = (row * iData.width + col) * 4;        // position in buffer based on x and y
-                
-                let z = m.get(iData.height - row - 1, col);  // inverted y axis
-                // console.log('row', row, 'col', col, z, m.isCContiguous);
-
-                let zScaled = (z - zmin) / diff; 
-                // interpolate the rgba values
-                // console.log(zScaled);
-
-                let rgba = Colormap.getColor(zScaled, this.heatmap.colormap);
-
-                iData.data[pos] = rgba[0];              // some R value [0, 255]
-                iData.data[pos+1] = rgba[1];              // some G value
-                iData.data[pos+2] = rgba[2];              // some B value
-                iData.data[pos+3] = rgba[3];                  // set alpha channel
-            }
-        }
-
-        this.offScreenCanvasCtx.putImageData(iData, 0, 0);
-        this.heatmap.imageBitmap = this.offScreenCanvas.transferToImageBitmap();
-        // console.log('off screen canvas redrawn');
-    }
-
-    public plotHeatmap(dataset: Dataset, colormap: IColorMap = Colormap.symgrad ): IHeatMap | null {
-        let data = dataset.data;
-
-        if (data.ncols !== dataset.x.length || data.nrows !== dataset.y.length) {
-            throw TypeError("Dimensions are not aligned with x and y arrays.");
-        }
-        
-        // https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas
-        this.offScreenCanvas = new OffscreenCanvas(dataset.x.length, dataset.y.length);
-        this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
-        
-        if(!this.offScreenCanvasCtx) {
-            return null;
-        }
-        
-        const iData = new ImageData(dataset.x.length, dataset.y.length);
-        this.heatmap = {dataset, colormap, iData, imageBitmap: null};
-
-        this.recalculateHeatMapImage();
+        // set range to heatmap
 
         this.range = {
             x: dataset.x[0],
@@ -515,7 +570,7 @@ export class Figure extends GraphicObject {
 
 
         e.ctx.drawImage(this.heatmap.imageBitmap, 
-        0, 0, this.heatmap.iData.width, this.heatmap.iData.height,
+        0, 0, this.heatmap.width(), this.heatmap.height(),
         p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
         
         // console.log('Heatmap paint');
@@ -548,6 +603,10 @@ export class Figure extends GraphicObject {
 
         // autoscale
 
+        let fy = 0.1;  // autoscale margins
+        let fx = 0.05;  // autoscale margins
+
+
         if (this.figureSettings.yAxis.autoscale) {
             let mins = [];
             let maxs = [];
@@ -559,9 +618,11 @@ export class Figure extends GraphicObject {
             let y0 = Math.min(...mins);
             let y1 = Math.max(...maxs);
 
+            let diff = y1 - y0;
+
             if (!this.heatmap) {
-                this.range.y = y0;
-                this.range.h = y1 - y0;
+                this.range.y = y0 - fy * diff;
+                this.range.h = diff * (1 + 2 * fy);
             }
         }
 
@@ -569,9 +630,11 @@ export class Figure extends GraphicObject {
             let x0 = Math.min(...this.linePlots.map(p => p.x[0]));
             let x1 = Math.min(...this.linePlots.map(p => p.x[p.x.length - 1]));
 
+            let diff = x1 - x0;
+
             if (!this.heatmap) {
-                this.range.x = x0;
-                this.range.w = x1 - x0;
+                this.range.x = x0 - fx * diff;
+                this.range.w = diff * (1 + 2 * fx);
             }
         }
 
