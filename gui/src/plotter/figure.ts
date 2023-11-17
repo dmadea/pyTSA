@@ -4,6 +4,7 @@ import { Rect, NumberArray, Point, Margin, Matrix } from "./types";
 import { backgroundColor, fontSizeLabels, fontSizeNumbers, frameColor, textColor } from "./settings";
 import { Dataset, formatNumber } from "./utils";
 import { Colormap, IColorMap } from "./colormap";
+import { HeatMap } from "./heatmap";
 
 interface IFigureSettings {
     xAxis: {
@@ -36,127 +37,7 @@ interface ILinePlot {
     zValue: number
 }
 
-export class HeatMap {
-
-    public dataset: Dataset;
-    public colormap: IColorMap;
-    private offScreenCanvas: OffscreenCanvas;
-    private offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
-    private imageData: ImageData;
-    public imageBitmap: ImageBitmap;
-    public zRange: [number | null, number | null] = [null, null];  // min, max
-    private figure: Figure;
-    public xRegular: boolean; // regular spacing of x data
-    public yRegular: boolean; // regular spacing of y data
-
-
-    constructor(figure: Figure, dataset: Dataset, colormap: IColorMap = Colormap.symgrad) {
-        let matrix = dataset.data;
-        if (matrix.ncols !== dataset.x.length || matrix.nrows !== dataset.y.length) {
-            throw TypeError("Dimensions are not aligned with x and y arrays.");
-        }
-
-        this.dataset = dataset;
-        this.colormap = colormap;
-        this.figure = figure;
-        this.xRegular = HeatMap.isRegularlySpaced(this.dataset.x);
-        this.yRegular = HeatMap.isRegularlySpaced(this.dataset.y);
-
-        // console.log(this.xRegular, this.yRegular);
-
-        // https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas
-        this.offScreenCanvas = new OffscreenCanvas(dataset.x.length, dataset.y.length);
-        this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
-
-        if(!this.offScreenCanvasCtx) {
-            throw TypeError("OffScreenCanvas context is null.");
-        }
-
-        this.imageData = new ImageData(dataset.x.length, dataset.y.length);
-        this.imageBitmap = this.offScreenCanvas.transferToImageBitmap(); // just to trick compiler
-        this.recalculateHeatMapImage();
-    }
-
-    static isRegularlySpaced(arr: NumberArray): boolean {
-        // from numpy https://github.com/numpy/numpy/blob/v1.26.0/numpy/core/numeric.py#L2249-L2371
-        var isclose = (a: number, b: number, rtol: number = 1e-1) => {
-            return Math.abs(a - b) <= rtol * Math.abs(b);
-        }
-
-        let diff = (arr[arr.length - 1] - arr[0]) / (arr.length - 1);
-        for (let i = 0; i < arr.length - 1; i++) {
-            if (!isclose(arr[i + 1] - arr[i], diff)) {
-                console.log(arr[i + 1] - arr[i], diff, i);
-                return false;
-            }
-        }
-        return true;
-    }
-
-    public width(): number {
-        return this.imageData.width;
-    }
-
-    public height(): number {
-        return this.imageData.height;
-    }
-
-    public recalculateHeatMapImage(){
-        if (!this.offScreenCanvasCtx) {
-            return;
-        }
-
-        let m = this.dataset.data;
-
-        let zlim0 = (this.zRange[0] === null) ? m.min() : this.zRange[0];
-        let zlim1 = (this.zRange[1] === null) ? m.max() : this.zRange[1];
-        let limdiff = zlim1 - zlim0;
-
-        // let extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
-
-        // let zmin = - extreme;
-        // let zmax = + extreme;
-        // let diff = zmax - zmin; 
-
-        let w = this.imageData.width;
-        let h = this.imageData.height;
-
-        // C-contiguous buffer
-        for(let row = 0; row < h; row++) {
-            for(let col = 0; col < w; col++) {
-                let pos = (row * w + col) * 4;        // position in buffer based on x and y
-                
-                // y axis is inverted in default because of different coordinate system
-                let rowIdx = this.figure.figureSettings.yAxis.inverted ? row : h - row - 1;
-                let colIdx = this.figure.figureSettings.xAxis.inverted ? w - col - 1 : col;
-
-                let z = m.get(rowIdx, colIdx);
-                // console.log('row', row, 'col', col, z, m.isCContiguous);
-
-                let zScaled = (z - zlim0) / limdiff; 
-                // interpolate the rgba values
-                // console.log(zScaled);
-
-                let rgba = Colormap.getColor(zScaled, this.colormap);
-
-                this.imageData.data[pos] = rgba[0];              // some R value [0, 255]
-                this.imageData.data[pos+1] = rgba[1];              // some G value
-                this.imageData.data[pos+2] = rgba[2];              // some B value
-                this.imageData.data[pos+3] = rgba[3];                  // set alpha channel
-            }
-        }
-
-        this.offScreenCanvasCtx.putImageData(this.imageData, 0, 0);
-        this.imageBitmap = this.offScreenCanvas.transferToImageBitmap();
-    }
-}
-
 export class Figure extends GraphicObject {
-
-    public range: Rect;
-    public steps: NumberArray; 
-    public prefferedNBins = 5;
-    // public display
 
     public figureSettings: IFigureSettings = {
         xAxis: {
@@ -164,7 +45,7 @@ export class Figure extends GraphicObject {
             scale: 'lin', 
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
             autoscale: false,
-            inverted: false
+            inverted: false 
         },
         yAxis: {
             label: '',
@@ -178,28 +59,33 @@ export class Figure extends GraphicObject {
         showTickNumbers: ['left', 'right', 'bottom', 'top'],  // ['top', 'bottom', 'left', 'right']
         axisAlignment: 'horizontal',   // could be vertical
     }
-
-    private linePlots: Array<ILinePlot> = [];
+    
+    public range: Rect;
+    public steps: NumberArray; 
+    public prefferedNBins = 5;
     public heatmap: HeatMap | null = null;
-
+    
     public xRangeLinks: Figure[] = [];
     public yRangeLinks: Figure[] = [];
     public xyRangeLinks: Figure[] = [];
     public yxRangeLinks: Figure[] = [];
+    public figureRect: Rect;
 
+    // private fields
+    
     private lastMouseDownPos: Point;
     private lastRange: Rect;
+    private linePlots: Array<ILinePlot> = [];
 
     private panning: boolean = false;
     private scaling: boolean = false;
     private lastCenterPoint: Point;
-    public figureRect: Rect;
     private _preventPanning: boolean = false;
     private _preventScaling: boolean = false;
 
     private plotCanvasRect = false;
-
-    public draggableLines: DraggableLines | null = null;
+    
+    // public draggableLines: DraggableLines | null = null;
 
     constructor(parent: GraphicObject, canvasRect?: Rect, margin?: Margin) {
         super(parent, canvasRect, margin) ;
@@ -216,8 +102,8 @@ export class Figure extends GraphicObject {
         this.lastRange = {...this.range};
         this.figureRect = this.getFigureRect();
 
-        this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
-        this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
+        // this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
+        // this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
         this.lastCenterPoint = {x: 0, y: 0};
     }
 
@@ -226,9 +112,12 @@ export class Figure extends GraphicObject {
         let xScaled = (p.x - r.x) / r.w;
         let yScaled = (p.y - r.y) / r.h;
 
+        xScaled = this.figureSettings.xAxis.inverted ? 1 - xScaled : xScaled;
+        yScaled = this.figureSettings.yAxis.inverted ? yScaled : 1 - yScaled;  // y axis is inverted in default
+
         return {
             x: this.range.x + xScaled * this.range.w,
-            y: this.range.y + (1 - yScaled) * this.range.h // inverted y axis
+            y: this.range.y + yScaled * this.range.h // inverted y axis
         }
     }
 
@@ -238,9 +127,12 @@ export class Figure extends GraphicObject {
         let xScaled = (p.x - this.range.x) / this.range.w;
         let yScaled = (p.y - this.range.y) / this.range.h;
 
+        xScaled = this.figureSettings.xAxis.inverted ? 1 - xScaled : xScaled;
+        yScaled = this.figureSettings.yAxis.inverted ? yScaled : 1 - yScaled;  // y axis is inverted in default
+
         return {
             x: r.x + xScaled * r.w,
-            y: r.y + (1 - yScaled) * r.h  // inverted y axis
+            y: r.y + yScaled * r.h  // inverted y axis
         }
     }
 
@@ -462,9 +354,12 @@ export class Figure extends GraphicObject {
             let xRatio = this.lastRange.w / this.figureRect.w;
             let yRatio = this.lastRange.h / this.figureRect.h;
 
+            let xSign = this.figureSettings.xAxis.inverted ? 1 : -1;
+            let ySign = this.figureSettings.yAxis.inverted ? -1 : 1;
+
             let newRect: Rect = {
-                x: this.lastRange.x - dist.x * xRatio, 
-                y: this.lastRange.y + dist.y * yRatio,
+                x: this.lastRange.x + xSign * dist.x * xRatio, 
+                y: this.lastRange.y + ySign * dist.y * yRatio,
                 w: this.lastRange.w,
                 h: this.lastRange.h
             };

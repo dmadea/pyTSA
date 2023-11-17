@@ -208,9 +208,12 @@ export class DraggableLines extends GraphicObject {
             let xRatio = f.range.w / f.figureRect.w;
             let yRatio = f.range.h / f.figureRect.h;
 
+            let xSign = f.figureSettings.xAxis.inverted ? -1 : 1;
+            let ySign = f.figureSettings.yAxis.inverted ? 1 : -1;
+
             this.position = {
-                x: (this.verticalDragging) ? this.lastPosition.x + dist.x * xRatio : this.lastPosition.x,
-                y: (this.horizontalDragging) ? this.lastPosition.y - dist.y * yRatio : this.lastPosition.y
+                x: (this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
+                y: (this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
             };
 
             this.positionChanged();

@@ -36,6 +36,17 @@ export class NumberArray extends Array<number> {
         Object.assign(arr, array);
         return arr;
     }
+    
+    static diff(array: number[] | NumberArray): NumberArray {
+        if (array.length < 2) {
+            throw TypeError("Array has to have at least 2 elements.");
+        }
+        let arr = new NumberArray(array.length -1);
+        for (let i = 0; i < array.length - 1; i++) {
+            arr[i] = array[i + 1] - array[i];
+        }
+        return arr;
+    }
 
     constructor(arrayLength?: number){
         if (arrayLength){
