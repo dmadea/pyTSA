@@ -90,8 +90,8 @@ function abc(): void {
 
                     // console.log(dataset);
                     scene.fig.plotHeatmap(dataset);
-                    scene.fig.figureSettings.xAxis.viewBounds = [dataset.x[0], dataset.x[dataset.x.length - 1]];
-                    scene.fig.figureSettings.yAxis.viewBounds = [dataset.y[0], dataset.y[dataset.y.length - 1]];
+                    // scene.fig.figureSettings.xAxis.viewBounds = [dataset.x[0], dataset.x[dataset.x.length - 1]];
+                    // scene.fig.figureSettings.yAxis.viewBounds = [dataset.y[0], dataset.y[dataset.y.length - 1]];
                 }
                 console.timeEnd('load');
 

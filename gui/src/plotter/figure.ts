@@ -9,14 +9,14 @@ import { HeatMap } from "./heatmap";
 interface IFigureSettings {
     xAxis: {
         label: string,
-        scale: string,  // lin, log, symlog, noscale - scale is determined from the data
+        scale: string | NumberArray,  // lin, log, symlog, numberarray - scale is determined from the data
         viewBounds: number[],   // bounds of view or [x0, x1]
         autoscale: boolean,
         inverted: boolean
     },
     yAxis: {
         label: string,
-        scale: string,  // lin, log, symlog, noscale
+        scale: string | NumberArray,  // lin, log, symlog, data
         viewBounds: number[],   // bounds of view or [x0, x1]
         autoscale: boolean,
         inverted: boolean
@@ -60,7 +60,6 @@ export class Figure extends GraphicObject {
         axisAlignment: 'horizontal',   // could be vertical
     }
     
-    public range: Rect;
     public steps: NumberArray; 
     public prefferedNBins = 5;
     public heatmap: HeatMap | null = null;
@@ -70,9 +69,11 @@ export class Figure extends GraphicObject {
     public xyRangeLinks: Figure[] = [];
     public yxRangeLinks: Figure[] = [];
     public figureRect: Rect;
-
+    
     // private fields
     
+    private _range: Rect;  // in case of scale of data, the range will be just indexes of data it is bound to
+
     private lastMouseDownPos: Point;
     private lastRange: Rect;
     private linePlots: Array<ILinePlot> = [];
@@ -96,15 +97,46 @@ export class Figure extends GraphicObject {
             top: 60,
             bottom: 60
         };
-        this.range = {x: -1, y: -1, w: 2, h: 2};
+        this._range = {x: -1, y: -1, w: 2, h: 2};
         this.steps = NumberArray.fromArray([1, 2, 2.5, 5]);
         this.lastMouseDownPos = {x: 0, y: 0};
-        this.lastRange = {...this.range};
+        this.lastRange = {...this._range};
         this.figureRect = this.getFigureRect();
 
         // this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
         // this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
         this.lastCenterPoint = {x: 0, y: 0};
+    }
+
+    get range() {
+        let x, y, w, h;
+
+        if (this.figureSettings.xAxis.scale instanceof NumberArray) {
+            let x0Idx = (this._range.x < 0) ? 0 : Math.floor(this._range.x);
+            x = this.figureSettings.xAxis.scale[x0Idx];
+            let x1Idx = (x0Idx + this._range.w > this.figureSettings.xAxis.scale.length - 1) ? this.figureSettings.xAxis.scale.length - 1 : Math.floor(x0Idx + this._range.w);
+            w = this.figureSettings.xAxis.scale[x1Idx] - x;
+        } else {
+            x = this._range.x;
+            w = this._range.w;
+        }
+
+        if (this.figureSettings.yAxis.scale instanceof NumberArray) {
+            let y0Idx = (this._range.y < 0) ? 0 : Math.floor(this._range.y);
+            y = this.figureSettings.yAxis.scale[y0Idx];    
+            let y1Idx = (y0Idx + this._range.h > this.figureSettings.yAxis.scale.length - 1) ? this.figureSettings.yAxis.scale.length - 1 : Math.floor(y0Idx + this._range.h);
+            h = this.figureSettings.yAxis.scale[y1Idx] - y;
+        } else {
+            y = this._range.y;
+            h = this._range.h;
+        }
+
+        let rng: Rect = {x, y, w, h};
+        return rng;
+    }
+
+    set range(newRange: Rect) {
+        this._range = newRange;
     }
 
     public mapCanvas2Range(p: Point): Point{
@@ -116,16 +148,16 @@ export class Figure extends GraphicObject {
         yScaled = this.figureSettings.yAxis.inverted ? yScaled : 1 - yScaled;  // y axis is inverted in default
 
         return {
-            x: this.range.x + xScaled * this.range.w,
-            y: this.range.y + yScaled * this.range.h // inverted y axis
+            x: this._range.x + xScaled * this._range.w,
+            y: this._range.y + yScaled * this._range.h // inverted y axis
         }
     }
 
     public mapRange2Canvas(p: Point): Point{
         // rewrite for vertical-aligned axis
         let r = this.figureRect;
-        let xScaled = (p.x - this.range.x) / this.range.w;
-        let yScaled = (p.y - this.range.y) / this.range.h;
+        let xScaled = (p.x - this._range.x) / this._range.w;
+        let yScaled = (p.y - this._range.y) / this._range.h;
 
         xScaled = this.figureSettings.xAxis.inverted ? 1 - xScaled : xScaled;
         yScaled = this.figureSettings.yAxis.inverted ? yScaled : 1 - yScaled;  // y axis is inverted in default
@@ -181,8 +213,8 @@ export class Figure extends GraphicObject {
         let r = this.figureRect;
 
         for (let i = 0; i < xvals.length; i++) {
-            let xScaled = (xvals[i] - this.range.x) / this.range.w;
-            let yScaled = (yvals[i] - this.range.y) / this.range.h;
+            let xScaled = (xvals[i] - this._range.x) / this._range.w;
+            let yScaled = (yvals[i] - this._range.y) / this._range.h;
 
             newX[i] = r.x + xScaled * r.w;
             newY[i] = r.y + (1 - yScaled) * r.h;
@@ -248,7 +280,7 @@ export class Figure extends GraphicObject {
         }
 
         this.lastMouseDownPos = {x: x, y: y};
-        this.lastRange = {...this.range};
+        this.lastRange = {...this._range};
         
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
 
@@ -296,25 +328,26 @@ export class Figure extends GraphicObject {
         this.figureSettings.xAxis.autoscale = false;
         this.figureSettings.yAxis.autoscale = false;
         for (const fig of this.xRangeLinks) {
-            fig.range.x = this.range.x;
-            fig.range.w = this.range.w;
+            fig._range.x = this._range.x;
+            fig._range.w = this._range.w;
             fig.repaint();
         }
         for (const fig of this.yRangeLinks) {
-            fig.range.y = this.range.y;
-            fig.range.h = this.range.h;
+            fig._range.y = this._range.y;
+            fig._range.h = this._range.h;
             fig.repaint();
         }
         for (const fig of this.xyRangeLinks) {
-            fig.range.y = this.range.x;
-            fig.range.h = this.range.w;
+            fig._range.y = this._range.x;
+            fig._range.h = this._range.w;
             fig.repaint();
         }
         for (const fig of this.yxRangeLinks) {
-            fig.range.x = this.range.y;
-            fig.range.w = this.range.h;
+            fig._range.x = this._range.y;
+            fig._range.w = this._range.h;
             fig.repaint();
         }
+        console.log(this.range);
         super.rangeChanged(range);
         this.repaint();
     }
@@ -364,7 +397,7 @@ export class Figure extends GraphicObject {
                 h: this.lastRange.h
             };
 
-            this.range = this.getBoundedRange(newRect, true);
+            this._range = this.getBoundedRange(newRect, true);
             rangeChanged = true;
         }
         // analogous as in pyqtgraph
@@ -382,12 +415,12 @@ export class Figure extends GraphicObject {
                 h: this.lastRange.h * yZoom
             };
 
-            this.range = this.getBoundedRange(newRect, false);
+            this._range = this.getBoundedRange(newRect, false);
             rangeChanged = true;
         }
 
         if (rangeChanged){
-            this.rangeChanged(this.range);
+            this.rangeChanged(this._range);
         }
 
         // for handling hovering
@@ -423,17 +456,44 @@ export class Figure extends GraphicObject {
 
     public plotHeatmap(dataset: Dataset, colormap: IColorMap = Colormap.seismic ): HeatMap {
         this.heatmap = new HeatMap(this, dataset, colormap);
+
+        let x, y, h, w;
+
+        // x axis
+
+        if (!this.heatmap.isXRegular) {
+            this.figureSettings.xAxis.scale = dataset.x;
+            x = 0;
+            w = dataset.x.length - 1;
+            // this.figureSettings.xAxis.viewBounds = [x, w];
+        } else {
+            x = dataset.x[0];
+            w = dataset.x[dataset.x.length - 1] - x;
+            // this.figureSettings.xAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
+            this.figureSettings.xAxis.scale = 'lin';
+
+        }
+
+        // y axis
+
+        if (!this.heatmap.isYRegular) {
+            this.figureSettings.yAxis.scale = dataset.y;
+            y = 0;
+            h = dataset.y.length - 1;
+            // this.figureSettings.yAxis.viewBounds = [y, h];
+        } else {
+            y = dataset.y[0];
+            h = dataset.y[dataset.y.length - 1] - y;
+            this.figureSettings.yAxis.scale = 'lin';
+            // this.figureSettings.yAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
+        }
+
         // this.heatmap.zRange = [-0.02, 0.02];
         // this.heatmap.recalculateHeatMapImage();
 
         // set range to heatmap
 
-        this.range = {
-            x: dataset.x[0],
-            y: dataset.y[0],
-            w: dataset.x[dataset.x.length - 1] - dataset.x[0],
-            h: dataset.y[dataset.y.length - 1] - dataset.y[0]
-        }
+        this._range = {x, y, w, h };
 
         this.repaint();
         return this.heatmap;
@@ -456,18 +516,27 @@ export class Figure extends GraphicObject {
         let x = this.heatmap.dataset.x;
         let y = this.heatmap.dataset.y;
 
+        // if the axis is not regular, the image will spread from 0 to x.length, the same for y
+        let x0 = this.heatmap.isXRegular ? x[0] : 0;
+        let y0 = this.heatmap.isYRegular ? y[0] : 0;
+
+        let x1 = this.heatmap.isXRegular ? x[x.length - 1] : x.length - 1;
+        let y1 = this.heatmap.isYRegular ? y[y.length - 1] : y.length - 1;
+
         // for evenly spaced data
-        let xdiff = x[1] - x[0];
-        let ydiff = y[1] - y[0];
+        let xdiff = (x1 - x0) / (x.length - 1);
+        let ydiff = (y1 - y0) / (y.length - 1);
 
-        let p0 = this.mapRange2Canvas({x: x[0] - xdiff / 2, y: y[0] - ydiff / 2});
-        let p1 = this.mapRange2Canvas({x: x[x.length - 1] + xdiff / 2, y: y[y.length - 1] + ydiff / 2});
+        // console.log(x0, y0, w, h);
+        // console.log(this.heatmap.isXRegular, this.heatmap.isYRegular);
 
+        let p0 = this.mapRange2Canvas({x: x0 - xdiff / 2, y: y0 - ydiff / 2});
+        let p1 = this.mapRange2Canvas({x: x1 + xdiff / 2, y: y1 + ydiff / 2});
 
         e.ctx.drawImage(this.heatmap.imageBitmap, 
         0, 0, this.heatmap.width(), this.heatmap.height(),
         p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
-        
+
         // console.log('Heatmap paint');
 
     }
@@ -516,8 +585,8 @@ export class Figure extends GraphicObject {
             let diff = y1 - y0;
 
             if (!this.heatmap) {
-                this.range.y = y0 - fy * diff;
-                this.range.h = diff * (1 + 2 * fy);
+                this._range.y = y0 - fy * diff;
+                this._range.h = diff * (1 + 2 * fy);
             }
         }
 
@@ -528,8 +597,8 @@ export class Figure extends GraphicObject {
             let diff = x1 - x0;
 
             if (!this.heatmap) {
-                this.range.x = x0 - fx * diff;
-                this.range.w = diff * (1 + 2 * fx);
+                this._range.x = x0 - fx * diff;
+                this._range.w = diff * (1 + 2 * fx);
             }
         }
 
@@ -620,8 +689,8 @@ export class Figure extends GraphicObject {
 
         let pr = window.devicePixelRatio;
 
-        let xticks = this.genMajorTicks(this.range.x, this.range.w);
-        let yticks = this.genMajorTicks(this.range.y, this.range.h);
+        let xticks = this.genMajorTicks(this._range.x, this._range.w);
+        let yticks = this.genMajorTicks(this._range.y, this._range.h);
 
         // estimate the number of significant figures to be plotted
         let xdiff = xticks[1] - xticks[0];
