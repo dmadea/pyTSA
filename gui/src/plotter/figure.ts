@@ -42,14 +42,14 @@ export class Figure extends GraphicObject {
     public figureSettings: IFigureSettings = {
         xAxis: {
             label: '',
-            scale: 'log', 
+            scale: 'lin', 
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
-            autoscale: true,
+            autoscale: false,
             inverted: false 
         },
         yAxis: {
             label: '',
-            scale: 'log',
+            scale: 'lin',
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
             autoscale: true,
             inverted: false
@@ -91,7 +91,7 @@ export class Figure extends GraphicObject {
         super(parent, canvasRect, margin) ;
 
         this.margin = {
-            left: 100,
+            left: 150,
             right: 100,
             top: 60,
             bottom: 60
@@ -458,10 +458,12 @@ export class Figure extends GraphicObject {
         return plot;
     }
 
-    public plotHeatmap(dataset: Dataset, colormap: IColorMap = Colormap.seismic ): HeatMap {
+    public plotHeatmap(dataset: Dataset, colormap: IColorMap = Colormap.symgrad ): HeatMap {
         this.heatmap = new HeatMap(this, dataset, colormap);
 
         let x, y, h, w;
+
+        let xdiff, ydiff, xOffset, yOffset;
 
         // x axis
 
@@ -469,10 +471,14 @@ export class Figure extends GraphicObject {
             this.figureSettings.xAxis.scale = dataset.x;
             x = 0;
             w = dataset.x.length - 1;
+            xdiff = 1;
+            xOffset = 0;
             // this.figureSettings.xAxis.viewBounds = [x, w];
         } else {
             x = dataset.x[0];
             w = dataset.x[dataset.x.length - 1] - x;
+            xdiff = w / (dataset.x.length - 1);
+            xOffset = x;
             // this.figureSettings.xAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
             this.figureSettings.xAxis.scale = 'lin';
 
@@ -484,13 +490,19 @@ export class Figure extends GraphicObject {
             this.figureSettings.yAxis.scale = dataset.y;
             y = 0;
             h = dataset.y.length - 1;
+            ydiff = 1;
+            yOffset = 0;
             // this.figureSettings.yAxis.viewBounds = [y, h];
         } else {
             y = dataset.y[0];
             h = dataset.y[dataset.y.length - 1] - y;
             this.figureSettings.yAxis.scale = 'lin';
+            ydiff = h / (dataset.y.length - 1);
+            yOffset = y;
             // this.figureSettings.yAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
         }
+
+
 
         // this.heatmap.zRange = [-0.02, 0.02];
         // this.heatmap.recalculateHeatMapImage();
@@ -560,8 +572,8 @@ export class Figure extends GraphicObject {
                 mins.push(min);
                 maxs.push(max);
             }
-            let y0 = this.invTransform(Math.min(...mins), this.figureSettings.yAxis.scale);
-            let y1 = this.invTransform(Math.max(...maxs), this.figureSettings.yAxis.scale);
+            let y0 = this.invTransform(Math.min(...mins), 'y');
+            let y1 = this.invTransform(Math.max(...maxs), 'y');
 
             let diff = y1 - y0;
 
@@ -572,8 +584,8 @@ export class Figure extends GraphicObject {
         }
 
         if (this.figureSettings.xAxis.autoscale) {
-            let x0 = this.invTransform(Math.min(...this.linePlots.map(p => p.x[0])), this.figureSettings.xAxis.scale);
-            let x1 = this.invTransform(Math.min(...this.linePlots.map(p => p.x[p.x.length - 1])), this.figureSettings.xAxis.scale);
+            let x0 = this.invTransform(Math.min(...this.linePlots.map(p => p.x[0])), 'x');
+            let x1 = this.invTransform(Math.min(...this.linePlots.map(p => p.x[p.x.length - 1])), 'x');
 
             let diff = x1 - x0;
 
@@ -585,7 +597,8 @@ export class Figure extends GraphicObject {
     }
 
     // transforms from dummy axis value to real value
-    private transform(num: number, axisScale: string | NumberArray) {
+    public transform(num: number, axis: string) {
+        let axisScale = (axis === 'x') ? this.figureSettings.xAxis.scale : this.figureSettings.yAxis.scale
         switch (axisScale) {
             case 'lin': {
                 return num;
@@ -605,7 +618,8 @@ export class Figure extends GraphicObject {
     }
 
     // transforms from real data to dummy axis value
-    private invTransform(num: number, axisScale: string | NumberArray) {
+    public invTransform(num: number, axis: string) {
+        let axisScale = (axis === 'x') ? this.figureSettings.xAxis.scale : this.figureSettings.yAxis.scale
         switch (axisScale) {
             case 'lin': {
                 return num;
@@ -626,25 +640,6 @@ export class Figure extends GraphicObject {
 
 
     private paintPlots(e: IPaintEvent) {
-        // console.time('paintPlots');
-
-        // for (const plot of this.linePlots) {
-
-        //     // transform the data to canvas coordinates
-        //     let [x, y] = this.mapRange2CanvasArr(plot.x, plot.y);
-
-        //     e.ctx.beginPath();
-        //     e.ctx.moveTo(x[0], y[0]);
-
-        //     for (let i = 1; i < plot.x.length; i++) {
-        //         e.ctx.lineTo(x[i], y[i]);
-        //     }
-        //     // this.ctx.closePath();  // will do another line from the end point to starting point
-        //     e.ctx.strokeStyle = plot.color;
-        //     e.ctx.lineWidth = plot.lw;
-        //     e.ctx.stroke();
-        // }
-
         if (this.linePlots.length < 1) {
             return;
         }
@@ -652,10 +647,6 @@ export class Figure extends GraphicObject {
         this.autoscale();
 
         e.ctx.save();
-
-        let xScale = this.figureSettings.xAxis.scale;
-        let yScale = this.figureSettings.yAxis.scale;
-
 
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
@@ -668,14 +659,14 @@ export class Figure extends GraphicObject {
                 usei = true;
                 x0 = 0;
             } else {
-                x0 = this.invTransform(plot.x[0], xScale);
+                x0 = this.invTransform(plot.x[0], 'x');
             }
 
-            let p0 = this.mapRange2Canvas({x: x0, y: this.invTransform(plot.y[0], yScale)});
+            let p0 = this.mapRange2Canvas({x: x0, y: this.invTransform(plot.y[0], 'y')});
             e.ctx.moveTo(p0.x, p0.y);
 
             for (let i = 1; i < plot.x.length; i++) {
-                let p = this.mapRange2Canvas({x: (usei) ? i : this.invTransform(plot.x[i], xScale), y: this.invTransform(plot.y[i], yScale)});
+                let p = this.mapRange2Canvas({x: (usei) ? i : this.invTransform(plot.x[i], 'x'), y: this.invTransform(plot.y[i], 'y')});
                 e.ctx.lineTo(p.x, p.y);
             }
             e.ctx.strokeStyle = plot.color;

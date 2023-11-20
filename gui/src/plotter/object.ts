@@ -1,4 +1,4 @@
-import { Rect, Margin, Point } from "./types";
+import { Rect, Margin, Point, NumberArray } from "./types";
 import { Figure } from "./figure";
 
 export interface IPaintEvent {
@@ -113,6 +113,18 @@ export enum Orientation {
     Both
 }
 
+export interface IPosition {
+    internalPosition: Point,
+    realPosition: Point
+}
+
+interface IStickGrid {
+    xdiff: number, 
+    xOffset: number, 
+    ydiff: number,
+     yOffset: number
+}
+
 export class DraggableLines extends GraphicObject {
 
     static readonly Orientation: typeof Orientation = Orientation;
@@ -124,6 +136,8 @@ export class DraggableLines extends GraphicObject {
 
     public onHoverColor: string = "white";
     public color: string = "grey";
+    public stickToData: boolean = true; // change position event is fired only when the position belongs to another data point
+    public stickGrid: IStickGrid | null = null; // internal position stick grid
 
     public showText: boolean = true;
     public textPosition: number = 20;  // in pixels from the left/top
@@ -135,14 +149,16 @@ export class DraggableLines extends GraphicObject {
 
     private verticalDragging: boolean = false;
     private horizontalDragging: boolean = false;
-    private positionChangedListeners: ((position: Point) => void)[] = [];
+    private positionChangedListeners: ((position: IPosition) => void)[] = [];
+    
 
     constructor(parent: Figure, orientation: Orientation = Orientation.Vertical) {
         super(parent);
         this.orientation = orientation;
-        this.position = {x: parent.range.x, y: parent.range.y};
+        this.position = {x: parent.getInternalRange().x, y: parent.getInternalRange().y};
         this.lastMouseDownPos = {x: 0, y: 0};
         this.lastPosition = {...this.position};
+        // this.setStickGrid(10, 3, 10, 4);
     }
 
     private checkBounds(x: number, y: number, orientation: Orientation) {
@@ -160,6 +176,10 @@ export class DraggableLines extends GraphicObject {
         }
 
         return false;
+    }
+
+    public setStickGrid(xdiff: number, xOffset: number, ydiff: number, yOffset: number) {
+        this.stickGrid = {xdiff, xOffset, ydiff, yOffset};
     }
 
     mouseDown(e: MouseEvent): void {
@@ -181,11 +201,17 @@ export class DraggableLines extends GraphicObject {
 
     private positionChanged() {
         for (const fun of this.positionChangedListeners) {
-            fun(this.position);
+            let f = this.parent as Figure;
+            let pos: IPosition = {
+                internalPosition: this.position,
+                realPosition: {x: f.transform(this.position.x, 'x'), y: f.transform(this.position.y, 'y')}
+            };
+
+            fun(pos);
         }
     }
 
-    public addPositionChangedListener(callback: (position: Point) => void) {
+    public addPositionChangedListener(callback: (pos: IPosition) => void) {
         this.positionChangedListeners.push(callback);
     }
 
@@ -211,14 +237,31 @@ export class DraggableLines extends GraphicObject {
             let xSign = f.figureSettings.xAxis.inverted ? -1 : 1;
             let ySign = f.figureSettings.yAxis.inverted ? 1 : -1;
 
-            this.position = {
+            let pos = {
                 x: (this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
                 y: (this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
-            };
+            }
 
-            this.positionChanged();
+            if (this.stickGrid && this.stickToData) {
 
-            f.repaint();
+                let xnum = Math.round((pos.x - this.stickGrid.xOffset) / this.stickGrid.xdiff);
+                let ynum = Math.round((pos.y - this.stickGrid.yOffset) / this.stickGrid.ydiff);
+
+                let newPos = {
+                    x: xnum * this.stickGrid.xdiff + this.stickGrid.xOffset,
+                    y: ynum * this.stickGrid.ydiff + this.stickGrid.yOffset
+                }
+
+                if (newPos.x !== this.position.x || newPos.y !== this.position.y) {
+                    this.position = newPos;
+                    this.positionChanged();
+                    f.repaint();
+                }
+            } else {
+                this.position = pos;
+                this.positionChanged();
+                f.repaint();
+            }
             return;
         }
 
@@ -229,13 +272,11 @@ export class DraggableLines extends GraphicObject {
         if (this.verticalHovering !== vh) {
             this.verticalHovering = vh;
             f.repaint();
-            // console.log('this.verticalHovering !== vh', vh);
         } 
         
         if (this.horizontalHovering !== hh) {
             this.horizontalHovering = hh;
             f.repaint();
-            // console.log('this.horizontalHovering !== vh', hh);
         }
 
         f.preventMouseEvents(undefined, this.verticalHovering || this.horizontalHovering);
@@ -291,7 +332,9 @@ export class DraggableLines extends GraphicObject {
             e.ctx.textBaseline = 'middle'; // horizontal alignment
             e.ctx.font = this.textFont;
 
-            let text = this.position.y.toPrecision(this.textSignificantFigures);
+            let num = f.transform(this.position.y, 'y');
+
+            let text = num.toPrecision(this.textSignificantFigures);
             let textSize = e.ctx.measureText(text);
 
             let offset = 6;
@@ -316,7 +359,9 @@ export class DraggableLines extends GraphicObject {
         if (this.showText) {
             let yText = f.figureRect.y + this.textPosition;
 
-            let text = this.position.x.toPrecision(this.textSignificantFigures);
+            let num = f.transform(this.position.x, 'x');
+
+            let text = num.toPrecision(this.textSignificantFigures);
             let textSize = e.ctx.measureText(text);
 
             e.ctx.save();

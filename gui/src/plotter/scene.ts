@@ -12,6 +12,7 @@ export class Scene extends GraphicObject {
 
     private canvasResizeObserver: ResizeObserver;
     public fig: Figure | null = null;
+    public dLines: DraggableLines | null = null;
 
     constructor(canvas: HTMLCanvasElement) {
         super(null);
@@ -64,7 +65,7 @@ export class Scene extends GraphicObject {
         grid.addItem(this.fig, 0, 0);
 
         var f1 = new Figure(grid);
-        let n = 1000;
+        let n = 10;
         var x = NumberArray.logspace(-1, 3, n, true);
         var y = NumberArray.random(-1, 3, n, true);
         console.log(x, y);
@@ -80,23 +81,24 @@ export class Scene extends GraphicObject {
 
         // f2.addDraggableLines(DraggableLines.Orientation.Both);
         
-        // this.fig.linkXRange(f2);
-        // this.fig.linkYXRange(f1);
+        this.fig.linkXRange(f2);
+        this.fig.linkYXRange(f1);
 
         // this.fig.linkYRange(f1);
         
         grid.addItem(f2, 1, 0);
-        var lines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);
-        lines.addPositionChangedListener((pos) => {
+        this.dLines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);
+        this.dLines.addPositionChangedListener((pos) => {
             // console.log('position changed', pos);
             if (this.fig?.heatmap) {
 
-                f2.figureSettings.xAxis.scale = this.fig.heatmap.dataset.x;
+                f2.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
 
                 // get row
-                let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.y);
+                let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.y);
                 let row = this.fig.heatmap.dataset.data.getRow(idxy);
-                let idxx = this.fig.heatmap.dataset.x.nearestIndex(pos.x);
+
+                let idxx = this.fig.heatmap.dataset.x.nearestIndex(pos.realPosition.x);
                 let col = this.fig.heatmap.dataset.data.getCol(idxx);
 
                 if (linePlot.x.length !== this.fig.heatmap.dataset.y.length) {

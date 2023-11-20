@@ -90,7 +90,32 @@ function abc(): void {
                     // dataset.data.log();
 
                     // console.log(dataset);
-                    scene.fig.plotHeatmap(dataset);
+                    let heatmap = scene.fig.plotHeatmap(dataset);
+
+                    let xdiff, ydiff, xOffset, yOffset;
+                    
+                    if (!heatmap.isXRegular) {
+                        xdiff = 1;
+                        xOffset = 0;
+                    } else {
+                        xdiff = (dataset.x[dataset.x.length - 1] - dataset.x[0]) / (dataset.x.length - 1);
+                        xOffset = dataset.x[0];
+                    }
+            
+                    // y axis
+            
+                    if (!heatmap.isYRegular) {
+                        ydiff = 1;
+                        yOffset = 0;
+                    } else {
+                        ydiff = (dataset.y[dataset.y.length - 1] - dataset.y[0]) / (dataset.y.length - 1);
+                        yOffset = dataset.y[0];
+                    }
+
+                    scene.dLines?.setStickGrid(xdiff, xOffset, ydiff, yOffset);
+
+
+
                     // scene.fig.figureSettings.xAxis.viewBounds = [dataset.x[0], dataset.x[dataset.x.length - 1]];
                     // scene.fig.figureSettings.yAxis.viewBounds = [dataset.y[0], dataset.y[dataset.y.length - 1]];
                 }
