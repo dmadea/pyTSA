@@ -82,6 +82,7 @@ function abc(): void {
                 let ext = file.name.split('.').pop()?.toLowerCase();
 
                 let dataset = loadData(reader.result, (ext === 'csv') ? ',' : '\t');
+                // dataset?.transpose();
 
                 if (dataset && scene.fig){
                     // dataset.data.log();

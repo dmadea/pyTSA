@@ -31,6 +31,12 @@ export class Dataset {
 
 export function formatNumber(num: number, sigFigures: number): string {
 
+    if (num === undefined || Number.isNaN(num)) {
+        return "";
+    }
+
+    sigFigures = (sigFigures === undefined || Number.isNaN(sigFigures)) ? 3 : sigFigures;
+
     var scale = 10 ** Math.trunc(Math.log10(Math.abs(num)));
     // console.log(scale)
 

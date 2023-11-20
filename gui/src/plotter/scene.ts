@@ -64,7 +64,10 @@ export class Scene extends GraphicObject {
         grid.addItem(this.fig, 0, 0);
 
         var f1 = new Figure(grid);
-        var [x, y]  = genTestData(5);
+        let n = 1000;
+        var x = NumberArray.logspace(-1, 3, n, true);
+        var y = NumberArray.random(-1, 3, n, true);
+        console.log(x, y);
         // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([-1, 2, -0.5]), 'green'); 
         // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
 
@@ -77,8 +80,8 @@ export class Scene extends GraphicObject {
 
         // f2.addDraggableLines(DraggableLines.Orientation.Both);
         
-        this.fig.linkXRange(f2);
-        this.fig.linkYXRange(f1);
+        // this.fig.linkXRange(f2);
+        // this.fig.linkYXRange(f1);
 
         // this.fig.linkYRange(f1);
         
@@ -87,6 +90,8 @@ export class Scene extends GraphicObject {
         lines.addPositionChangedListener((pos) => {
             // console.log('position changed', pos);
             if (this.fig?.heatmap) {
+
+                f2.figureSettings.xAxis.scale = this.fig.heatmap.dataset.x;
 
                 // get row
                 let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.y);

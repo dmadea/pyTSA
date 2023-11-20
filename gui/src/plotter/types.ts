@@ -48,14 +48,6 @@ export class NumberArray extends Array<number> {
         return arr;
     }
 
-    constructor(arrayLength?: number){
-        if (arrayLength){
-            super(arrayLength);
-        } else {
-            super();
-        }
-    }
-
     static linspace(start: number, end: number, n: number, endpoint: boolean = false): NumberArray {
         if (n < 2) {
             throw TypeError("At least 2 points are required.");
@@ -68,6 +60,38 @@ export class NumberArray extends Array<number> {
         }
         return arr;
     }
+
+    static logspace(start: number, end: number, n: number, endpoint: boolean = false): NumberArray {
+        if (n < 2) {
+            throw TypeError("At least 2 points are required.");
+        }
+        let nn = (endpoint) ? n - 1 : n;
+        let diff = (end - start) / nn;
+        let arr = new NumberArray(n);
+        for (let i = 0; i < n; i++) {
+            arr[i] = 10 ** (start + i * diff);
+        }
+        return arr;
+    }
+
+    static random(min: number, max: number, n: number, log?: boolean): NumberArray {
+        let diff = max - min;
+        
+        let arr = new NumberArray(n);
+        for (let i = 0; i < n; i++) {
+            arr[i] = (log) ? 10 ** (Math.random() * diff + min) : Math.random() * diff + min;
+        }
+        return arr;
+    }
+
+    constructor(arrayLength?: number){
+        if (arrayLength){
+            super(arrayLength);
+        } else {
+            super();
+        }
+    }
+
 
     // handcrafted function, combination of argmin and abs. value calculation
     // in one cycle
