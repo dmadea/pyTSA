@@ -167,6 +167,10 @@ export class DraggableLines extends GraphicObject {
 
         let offset = 10;  // px
 
+        // if (f.figureSettings.axisAlignment === 'vertical') {
+        //     [x, y] = [y, x];
+        // }
+
         if ((this.orientation === Orientation.Vertical || this.orientation === Orientation.Both ) && orientation === Orientation.Vertical) {
             return x >= pos.x - offset && x <= pos.x + offset;
         }
@@ -223,6 +227,8 @@ export class DraggableLines extends GraphicObject {
 
         let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
 
+        let va = f.figureSettings.axisAlignment === 'vertical';
+
         if (this.horizontalDragging || this.verticalDragging) {
             f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
 
@@ -231,15 +237,27 @@ export class DraggableLines extends GraphicObject {
                 y: y - this.lastMouseDownPos.y
             }
 
-            let xRatio = f.getInternalRange().w / f.figureRect.w;
-            let yRatio = f.getInternalRange().h / f.figureRect.h;
+            if (va) {
+                dist = {x: dist.y, y: dist.x};
+            }
+
+            let w = f.figureRect.w;
+            let h = f.figureRect.h;
 
             let xSign = f.figureSettings.xAxis.inverted ? -1 : 1;
             let ySign = f.figureSettings.yAxis.inverted ? 1 : -1;
 
+            if (va) {
+                [w, h] = [h, w];
+                xSign *= -1;
+            }
+
+            let xRatio = f.getInternalRange().w / w;
+            let yRatio = f.getInternalRange().h / h;
+
             let pos = {
-                x: (this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
-                y: (this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
+                x: ((va) ? this.horizontalDragging : this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
+                y: ((va) ? this.verticalDragging : this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
             }
 
             if (this.stickGrid && this.stickToData) {
@@ -320,7 +338,8 @@ export class DraggableLines extends GraphicObject {
         e.ctx.strokeStyle = (this.horizontalHovering) ? this.onHoverColor : this.color;
         // e.ctx.lineWidth = (this.horizontalHovering) ? 2 : 1;
         let f = this.parent as Figure;
-        let p0 = f.mapRange2Canvas({x: 0, y: this.position.y});
+        let va = f.figureSettings.axisAlignment === 'vertical';
+        let p0 = f.mapRange2Canvas((va) ? {x: this.position.x, y: 0} : {x: 0, y: this.position.y});
         e.ctx.beginPath();
         e.ctx.moveTo(f.figureRect.x, p0.y);
 
@@ -332,7 +351,7 @@ export class DraggableLines extends GraphicObject {
             e.ctx.textBaseline = 'middle'; // horizontal alignment
             e.ctx.font = this.textFont;
 
-            let num = f.transform(this.position.y, 'y');
+            let num = f.transform((va) ? this.position.x : this.position.y, 'y');
 
             let text = num.toPrecision(this.textSignificantFigures);
             let textSize = e.ctx.measureText(text);
@@ -352,14 +371,15 @@ export class DraggableLines extends GraphicObject {
         e.ctx.strokeStyle = (this.verticalHovering) ? this.onHoverColor : this.color;
         // e.ctx.lineWidth = (this.verticalHovering) ? 2 : 1;
         let f = this.parent as Figure;
-        let p0 = f.mapRange2Canvas({x: this.position.x, y: 0});
+        let va = f.figureSettings.axisAlignment === 'vertical';
+        let p0 = f.mapRange2Canvas((va) ? {x: 0, y: this.position.y} : {x: this.position.x, y: 0});
         e.ctx.beginPath();
         e.ctx.moveTo(p0.x, f.figureRect.y);
 
         if (this.showText) {
             let yText = f.figureRect.y + this.textPosition;
 
-            let num = f.transform(this.position.x, 'x');
+            let num = f.transform((va) ? this.position.y : this.position.x, 'x');
 
             let text = num.toPrecision(this.textSignificantFigures);
             let textSize = e.ctx.measureText(text);

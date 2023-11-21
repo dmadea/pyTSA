@@ -58,13 +58,17 @@ export class Scene extends GraphicObject {
         var grid = new Grid(this, {...this.canvasRect});
         this.items.push(grid);
         this.fig = new Figure(grid);
-        this.fig.figureSettings.axisAlignment = 'vertical';
+        // this.fig.figureSettings.axisAlignment = 'vertical';
+        this.fig.figureSettings.yAxis.inverted = true;
         
         // f.plot(x, y, 'red', '-', 1);
 
         grid.addItem(this.fig, 0, 0);
 
-        var f1 = new Figure(grid);
+        var f1y = new Figure(grid);
+        f1y.figureSettings.axisAlignment = 'vertical';
+        f1y.figureSettings.xAxis.inverted = true;
+
         let n = 1000;
         var x = NumberArray.linspace(-1, 3, n, true);
         var y = NumberArray.random(-1, 3, n, false);
@@ -73,26 +77,27 @@ export class Scene extends GraphicObject {
         // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
 
         this.fig.plotLine(x, y, 'blue', [], 1);
-        grid.addItem(f1, 0, 1);
+        grid.addItem(f1y, 0, 1);
         
-        var f2 = new Figure(grid);
-        var linePlot = f2.plotLine(new NumberArray(), new NumberArray());
-        var linePlotCol = f1.plotLine(new NumberArray(), new NumberArray());
+        var f2x = new Figure(grid);
+        var linePlot = f2x.plotLine(new NumberArray(), new NumberArray());
+        var linePlotCol = f1y.plotLine(new NumberArray(), new NumberArray());
 
         // f2.addDraggableLines(DraggableLines.Orientation.Both);
         
-        this.fig.linkXRange(f2);
-        this.fig.linkYXRange(f1);
+        this.fig.linkXRange(f2x);
+        this.fig.linkYXRange(f1y);
 
         // this.fig.linkYRange(f1);
         
-        grid.addItem(f2, 1, 0);
+        grid.addItem(f2x, 1, 0);
         this.dLines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);
         this.dLines.addPositionChangedListener((pos) => {
             // console.log('position changed', pos);
             if (this.fig?.heatmap) {
 
-                f2.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
+                f2x.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
+                f1y.figureSettings.xAxis.scale = this.fig.figureSettings.yAxis.scale;
 
                 // get row
                 let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.y);
@@ -110,8 +115,8 @@ export class Scene extends GraphicObject {
                 linePlotCol.x = this.fig.heatmap.dataset.y;
                 linePlotCol.y = col;
                 
-                f1.repaint();
-                f2.repaint();
+                f1y.repaint();
+                f2x.repaint();
                 // console.log(col);
 
 
@@ -119,7 +124,7 @@ export class Scene extends GraphicObject {
 
         });
 
-        grid.gridSettings.widthRatios = NumberArray.fromArray([1, 1]);
+        grid.gridSettings.widthRatios = NumberArray.fromArray([2, 1]);
         grid.gridSettings.heightRatios = NumberArray.fromArray([2, 1]);
 
         grid.recalculateGrid(false);

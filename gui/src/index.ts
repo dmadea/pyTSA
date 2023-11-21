@@ -86,7 +86,7 @@ function abc(): void {
 
                 if (dataset && scene.fig){
                     // dataset.data.log();
-                    // dataset.transpose(); 
+                    dataset.transpose(); 
                     // dataset.data.log();
 
                     // console.log(dataset);

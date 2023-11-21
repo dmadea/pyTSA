@@ -51,7 +51,7 @@ export class Figure extends GraphicObject {
             label: '',
             scale: 'lin',
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
-            autoscale: false,
+            autoscale: true,
             inverted: false
         },
         title: '',
@@ -145,21 +145,22 @@ export class Figure extends GraphicObject {
 
     public mapCanvas2Range(p: Point): Point{
         let r = this.figureRect;
-        let xScaled = (p.x - r.x) / r.w;
-        let yScaled = (p.y - r.y) / r.h;
-
-        xScaled = this.figureSettings.xAxis.inverted ? 1 - xScaled : xScaled;
-        yScaled = this.figureSettings.yAxis.inverted ? yScaled : 1 - yScaled;  // y axis is inverted in default
+        let xrel = (p.x - r.x) / r.w;
+        let yrel = (p.y - r.y) / r.h;
 
         if (this.figureSettings.axisAlignment === 'vertical') {
+            xrel = this.figureSettings.yAxis.inverted ? xrel : 1 - xrel;
+            yrel = this.figureSettings.xAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
             return {
-                x: this._range.x + yScaled * this._range.w,
-                y: this._range.y + xScaled * this._range.h
+                x: this._range.x + yrel * this._range.w,
+                y: this._range.y + xrel * this._range.h
             }
         } else {
+            xrel = this.figureSettings.xAxis.inverted ? 1 - xrel : xrel;
+            yrel = this.figureSettings.yAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
             return {
-                x: this._range.x + xScaled * this._range.w,
-                y: this._range.y + yScaled * this._range.h
+                x: this._range.x + xrel * this._range.w,
+                y: this._range.y + yrel * this._range.h
             }
         }
     }
@@ -167,21 +168,21 @@ export class Figure extends GraphicObject {
     public mapRange2Canvas(p: Point): Point{
         // rewrite for vertical-aligned axis
         let r = this.figureRect;
-        let xScaled = (p.x - this._range.x) / this._range.w;
-        let yScaled = (p.y - this._range.y) / this._range.h;
+        let xrel = (p.x - this._range.x) / this._range.w;
+        let yrel = (p.y - this._range.y) / this._range.h;
 
-        xScaled = this.figureSettings.xAxis.inverted ? 1 - xScaled : xScaled;
-        yScaled = this.figureSettings.yAxis.inverted ? yScaled : 1 - yScaled;  // y axis is inverted in default
+        xrel = this.figureSettings.xAxis.inverted ? 1 - xrel : xrel;
+        yrel = this.figureSettings.yAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
 
         if (this.figureSettings.axisAlignment === 'vertical') {
             return {
-                x: r.x + yScaled * r.w,
-                y: r.y + xScaled * r.h
+                x: r.x + yrel * r.w,
+                y: r.y + (1 - xrel) * r.h
             }
         } else {
             return {
-                x: r.x + xScaled * r.w,
-                y: r.y + yScaled * r.h 
+                x: r.x + xrel * r.w,
+                y: r.y + yrel * r.h 
             }
         }
 
@@ -302,6 +303,7 @@ export class Figure extends GraphicObject {
         this.lastRange = {...this._range};
         
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
+        // console.log(this.lastCenterPoint);
 
         if (this.panning || this.scaling) {
             this.canvas.style.cursor = this.cursors.move;
@@ -411,15 +413,17 @@ export class Figure extends GraphicObject {
 
             let w = this.figureRect.w;
             let h = this.figureRect.h;
+            
+            let xSign = this.figureSettings.xAxis.inverted ? 1 : -1;
+            let ySign = this.figureSettings.yAxis.inverted ? -1 : 1;
+
             if (va) {
                 [w, h] = [h, w];
+                xSign *= -1;
             }
 
             let xRatio = this.lastRange.w / w;
             let yRatio = this.lastRange.h / h;
-
-            let xSign = this.figureSettings.xAxis.inverted ? 1 : -1;
-            let ySign = this.figureSettings.yAxis.inverted ? -1 : 1;
 
             let newRect: Rect = {
                 x: this.lastRange.x + xSign * dist.x * xRatio, 
@@ -715,6 +719,8 @@ export class Figure extends GraphicObject {
     paint(e: IPaintEvent): void {
         // plot rectangle
 
+        // console.time('paint');
+
         e.ctx.save();
 
         // clip to canvas rectangle
@@ -760,6 +766,7 @@ export class Figure extends GraphicObject {
         e.ctx.lineWidth = 3;
         e.ctx.strokeRect(this.figureRect.x, this.figureRect.y, this.figureRect.w, this.figureRect.h);
         this.drawTicks(e);
+        // console.timeEnd('paint');
 
         // this.ctx.restore();
 
