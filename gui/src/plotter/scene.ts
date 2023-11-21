@@ -58,16 +58,16 @@ export class Scene extends GraphicObject {
         var grid = new Grid(this, {...this.canvasRect});
         this.items.push(grid);
         this.fig = new Figure(grid);
-        this.fig.figureSettings.axisAlignment = 'horizontal';
+        this.fig.figureSettings.axisAlignment = 'vertical';
         
         // f.plot(x, y, 'red', '-', 1);
 
         grid.addItem(this.fig, 0, 0);
 
         var f1 = new Figure(grid);
-        let n = 10;
-        var x = NumberArray.logspace(-1, 3, n, true);
-        var y = NumberArray.random(-1, 3, n, true);
+        let n = 1000;
+        var x = NumberArray.linspace(-1, 3, n, true);
+        var y = NumberArray.random(-1, 3, n, false);
         console.log(x, y);
         // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([-1, 2, -0.5]), 'green'); 
         // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 

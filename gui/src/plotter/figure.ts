@@ -51,7 +51,7 @@ export class Figure extends GraphicObject {
             label: '',
             scale: 'lin',
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
-            autoscale: true,
+            autoscale: false,
             inverted: false
         },
         title: '',
@@ -151,9 +151,16 @@ export class Figure extends GraphicObject {
         xScaled = this.figureSettings.xAxis.inverted ? 1 - xScaled : xScaled;
         yScaled = this.figureSettings.yAxis.inverted ? yScaled : 1 - yScaled;  // y axis is inverted in default
 
-        return {
-            x: this._range.x + xScaled * this._range.w,
-            y: this._range.y + yScaled * this._range.h
+        if (this.figureSettings.axisAlignment === 'vertical') {
+            return {
+                x: this._range.x + yScaled * this._range.w,
+                y: this._range.y + xScaled * this._range.h
+            }
+        } else {
+            return {
+                x: this._range.x + xScaled * this._range.w,
+                y: this._range.y + yScaled * this._range.h
+            }
         }
     }
 
@@ -166,10 +173,18 @@ export class Figure extends GraphicObject {
         xScaled = this.figureSettings.xAxis.inverted ? 1 - xScaled : xScaled;
         yScaled = this.figureSettings.yAxis.inverted ? yScaled : 1 - yScaled;  // y axis is inverted in default
 
-        return {
-            x: r.x + xScaled * r.w,
-            y: r.y + yScaled * r.h 
+        if (this.figureSettings.axisAlignment === 'vertical') {
+            return {
+                x: r.x + yScaled * r.w,
+                y: r.y + xScaled * r.h
+            }
+        } else {
+            return {
+                x: r.x + xScaled * r.w,
+                y: r.y + yScaled * r.h 
+            }
         }
+
     }
 
     public linkXRange(figure: Figure) {
@@ -362,6 +377,8 @@ export class Figure extends GraphicObject {
 
         let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
 
+        let va = this.figureSettings.axisAlignment === 'vertical';
+        
         if (this._preventPanning || this._preventScaling) {
             super.mouseMove(e);
         }
@@ -380,6 +397,10 @@ export class Figure extends GraphicObject {
             y: y - this.lastMouseDownPos.y
         }
 
+        if (va) {
+            dist = {x: dist.y, y: dist.x};
+        }
+
         let rangeChanged = false;
 
         // if (isInside)
@@ -388,8 +409,14 @@ export class Figure extends GraphicObject {
         if (this.panning){
             this.canvas.style.cursor = this.cursors.move;
 
-            let xRatio = this.lastRange.w / this.figureRect.w;
-            let yRatio = this.lastRange.h / this.figureRect.h;
+            let w = this.figureRect.w;
+            let h = this.figureRect.h;
+            if (va) {
+                [w, h] = [h, w];
+            }
+
+            let xRatio = this.lastRange.w / w;
+            let yRatio = this.lastRange.h / h;
 
             let xSign = this.figureSettings.xAxis.inverted ? 1 : -1;
             let ySign = this.figureSettings.yAxis.inverted ? -1 : 1;
@@ -411,6 +438,11 @@ export class Figure extends GraphicObject {
 
             let xZoom = 1.01 ** dist.x;
             let yZoom = 1.01 ** dist.y;
+
+            if (va) {
+                xZoom = 1 / xZoom;
+                yZoom = 1 / yZoom;
+            }
 
             let newRect: Rect = {
                 x: this.lastCenterPoint.x - (this.lastCenterPoint.x - this.lastRange.x) / xZoom, 
@@ -463,7 +495,7 @@ export class Figure extends GraphicObject {
 
         let x, y, h, w;
 
-        let xdiff, ydiff, xOffset, yOffset;
+        // let xdiff, ydiff, xOffset, yOffset;
 
         // x axis
 
@@ -471,14 +503,14 @@ export class Figure extends GraphicObject {
             this.figureSettings.xAxis.scale = dataset.x;
             x = 0;
             w = dataset.x.length - 1;
-            xdiff = 1;
-            xOffset = 0;
+            // xdiff = 1;
+            // xOffset = 0;
             // this.figureSettings.xAxis.viewBounds = [x, w];
         } else {
             x = dataset.x[0];
             w = dataset.x[dataset.x.length - 1] - x;
-            xdiff = w / (dataset.x.length - 1);
-            xOffset = x;
+            // xdiff = w / (dataset.x.length - 1);
+            // xOffset = x;
             // this.figureSettings.xAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
             this.figureSettings.xAxis.scale = 'lin';
 
@@ -490,15 +522,15 @@ export class Figure extends GraphicObject {
             this.figureSettings.yAxis.scale = dataset.y;
             y = 0;
             h = dataset.y.length - 1;
-            ydiff = 1;
-            yOffset = 0;
+            // ydiff = 1;
+            // yOffset = 0;
             // this.figureSettings.yAxis.viewBounds = [y, h];
         } else {
             y = dataset.y[0];
             h = dataset.y[dataset.y.length - 1] - y;
             this.figureSettings.yAxis.scale = 'lin';
-            ydiff = h / (dataset.y.length - 1);
-            yOffset = y;
+            // ydiff = h / (dataset.y.length - 1);
+            // yOffset = y;
             // this.figureSettings.yAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
         }
 
@@ -738,6 +770,7 @@ export class Figure extends GraphicObject {
 
     public drawTicks(e: IPaintEvent){  // r is Figure Rectangle, the frame
         e.ctx.fillStyle = textColor;
+        let va = this.figureSettings.axisAlignment === 'vertical';
 
         // let pr = window.devicePixelRatio;
 
@@ -762,9 +795,10 @@ export class Figure extends GraphicObject {
             yFigures = 2;
         }
 
-        if (this.figureSettings.axisAlignment === 'vertical'){
+        if (va){
             [xticks, yticks] = [yticks, xticks];  // swap the axes
             [xticksVals, yticksVals] = [yticksVals, xticksVals];  // swap the axes
+            [xFigures, yFigures] = [yFigures, xFigures];
         }
 
         let tickSize = 20;
@@ -779,7 +813,7 @@ export class Figure extends GraphicObject {
         e.ctx.textBaseline = 'middle'; // horizontal alignment
         e.ctx.beginPath();
         for (let i = 0; i < xticks.length; i++) {
-            let p = this.mapRange2Canvas({x:xticks[i], y: 0});
+            let p = this.mapRange2Canvas((va) ? {x: 0, y: xticks[i]} : {x: xticks[i], y: 0});
     
             if (this.figureSettings.showTicks.includes('bottom')){
                 e.ctx.moveTo(p.x, r.y + r.h);
@@ -805,7 +839,7 @@ export class Figure extends GraphicObject {
 
         e.ctx.beginPath();
         for (let i = 0; i < yticks.length; i++) {
-            let p = this.mapRange2Canvas({x:0, y: yticks[i]});
+            let p = this.mapRange2Canvas((va) ? {x:yticks[i], y: 0} : {x:0, y: yticks[i]});
 
             if (this.figureSettings.showTicks.includes('left')){
                 e.ctx.moveTo(r.x, p.y);
@@ -838,16 +872,21 @@ export class Figure extends GraphicObject {
 
         let coor, size, scaleType, prefferedNBins;
         const f = 0.005;
+        let w = this.figureRect.w;
+        let h = this.figureRect.h;
+        if (this.figureSettings.axisAlignment == 'vertical') {
+            [w, h] = [h, w];
+        }
         if (axis === 'x') {
             coor = this._range.x;
             size = this._range.w;
             scaleType = this.figureSettings.xAxis.scale;
-            prefferedNBins = Math.max(Math.round(this.figureRect.w * f), 2);
+            prefferedNBins = Math.max(Math.round(w * f), 2);
         } else {
             coor = this._range.y;
             size = this._range.h;
             scaleType = this.figureSettings.yAxis.scale;
-            prefferedNBins = Math.max(Math.round(this.figureRect.h * f), 2);
+            prefferedNBins = Math.max(Math.round(h * f), 2);
         }
 
         switch (scaleType) {
