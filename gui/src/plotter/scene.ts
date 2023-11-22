@@ -60,6 +60,7 @@ export class Scene extends GraphicObject {
         this.fig = new Figure(grid);
         // this.fig.figureSettings.axisAlignment = 'vertical';
         this.fig.figureSettings.yAxis.inverted = true;
+        this.fig.figureSettings.showTickNumbers = ['top', 'left', 'right'];
         
         // f.plot(x, y, 'red', '-', 1);
 

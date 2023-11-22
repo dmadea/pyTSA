@@ -1,10 +1,9 @@
 import { Scene } from "./plotter/scene";
 import { Matrix, NumberArray } from "./plotter/types";
 import { Dataset, loadData } from "./plotter/utils";
+import { Splitter } from "./splitter";
 // import styles from "./styles.css";
 var styles = require("./styles.css");
-
-
 
 
 
@@ -34,6 +33,10 @@ function benchmark() {
 }
 
 function abc(): void {
+
+    var leftPane = document.querySelector(".left") as HTMLDivElement;
+    var splitbar = document.querySelector(".splitbar") as HTMLDivElement;
+    var splitter = new Splitter(leftPane, splitbar);
 
     // window.addEventListener("load", () => {
         
@@ -130,21 +133,9 @@ function abc(): void {
 
             reader.readAsBinaryString(file);
         }
-          
-          
-
-        // var fname = 'file:///Users/dominikmadea/Library/CloudStorage/OneDrive-OIST/Projects/Test%20files/Femto/2023_08_07_3Z_MeOH_387_01-avrg.txt'
-        // // loadData();
-
-
     });
 
-    // for (let i = 0; i < 100; i++) {
-    //     benchmark();
-        
-    // }
 
-    // scene.plotRect();
 }
 
 abc()

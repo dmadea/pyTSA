@@ -305,7 +305,9 @@ export class Figure extends GraphicObject {
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
         // console.log(this.lastCenterPoint);
 
-        if (this.panning || this.scaling) {
+        if (this.panning) {
+            this.canvas.style.cursor = this.cursors.grabbing;
+        } else if (this.scaling) {
             this.canvas.style.cursor = this.cursors.move;
         } else {
             super.mouseDown(e);
@@ -391,8 +393,8 @@ export class Figure extends GraphicObject {
 
         let isInside = this.isInsideFigureRect(e.offsetX, e.offsetY);
 
-        if (isInside)
-            this.canvas.style.cursor = this.cursors.crosshair;
+        // if (isInside)
+        //     this.canvas.style.cursor = this.cursors.default;
 
         let dist: Point = {
             x: x - this.lastMouseDownPos.x,
@@ -409,7 +411,7 @@ export class Figure extends GraphicObject {
         //     console.log(this.panning, this.scaling);
 
         if (this.panning){
-            this.canvas.style.cursor = this.cursors.move;
+            // this.canvas.style.cursor = this.cursors.grabbing;
 
             let w = this.figureRect.w;
             let h = this.figureRect.h;
@@ -438,7 +440,7 @@ export class Figure extends GraphicObject {
         // analogous as in pyqtgraph
         // https://github.com/pyqtgraph/pyqtgraph/blob/7ab6fa3d2fb6832b624541b58eefc52c0dfb4b08/pyqtgraph/widgets/GraphicsView.py
         if (this.scaling){
-            this.canvas.style.cursor = this.cursors.move;
+            // this.canvas.style.cursor = this.cursors.move;
 
             let xZoom = 1.01 ** dist.x;
             let yZoom = 1.01 ** dist.y;
@@ -808,8 +810,8 @@ export class Figure extends GraphicObject {
             [xFigures, yFigures] = [yFigures, xFigures];
         }
 
-        let tickSize = 20;
-        let ytextOffset = 16;
+        let tickSize = 15;
+        let ytextOffset = 20;
 
         // draw x ticks
 
@@ -823,21 +825,24 @@ export class Figure extends GraphicObject {
             let p = this.mapRange2Canvas((va) ? {x: 0, y: xticks[i]} : {x: xticks[i], y: 0});
     
             if (this.figureSettings.showTicks.includes('bottom')){
-                e.ctx.moveTo(p.x, r.y + r.h);
-                e.ctx.lineTo(p.x, r.y + r.h + tickSize);
+                e.ctx.moveTo(p.x, r.y + r.h - tickSize);
+                e.ctx.lineTo(p.x, r.y + r.h);
             }
     
             if (this.figureSettings.showTicks.includes('top')){
                 e.ctx.moveTo(p.x, r.y);
-                e.ctx.lineTo(p.x, r.y - tickSize);
+                e.ctx.lineTo(p.x, r.y + tickSize);
             }
     
             if (this.figureSettings.showTickNumbers.includes('bottom')){
-                e.ctx.fillText(`${formatNumber(xticksVals[i], xFigures)}`, p.x, r.y + r.h + tickSize + ytextOffset);
+                let text = `${formatNumber(xticksVals[i], xFigures)}`;
+                let textMeasure = e.ctx.measureText(text);
+                // textMeasure.
+                e.ctx.fillText(text, p.x, r.y + r.h + ytextOffset);
             }
     
             if (this.figureSettings.showTickNumbers.includes('top')){
-                e.ctx.fillText(`${formatNumber(xticksVals[i], xFigures)}`, p.x, r.y - tickSize - ytextOffset);
+                e.ctx.fillText(`${formatNumber(xticksVals[i], xFigures)}`, p.x, r.y - ytextOffset);
             }
         }
         e.ctx.stroke();
@@ -850,22 +855,22 @@ export class Figure extends GraphicObject {
 
             if (this.figureSettings.showTicks.includes('left')){
                 e.ctx.moveTo(r.x, p.y);
-                e.ctx.lineTo(r.x - tickSize, p.y);
+                e.ctx.lineTo(r.x + tickSize, p.y);
             }
 
             if (this.figureSettings.showTicks.includes('right')){
                 e.ctx.moveTo(r.x + r.w, p.y);
-                e.ctx.lineTo(r.x + r.w + tickSize, p.y);
+                e.ctx.lineTo(r.x + r.w - tickSize, p.y);
             }
 
             if (this.figureSettings.showTickNumbers.includes('left')){
                 e.ctx.textAlign = 'right';
-                e.ctx.fillText(`${formatNumber(yticksVals[i], yFigures)}`, r.x - tickSize - ytextOffset, p.y);
+                e.ctx.fillText(`${formatNumber(yticksVals[i], yFigures)}`, r.x - ytextOffset, p.y);
             }
 
             if (this.figureSettings.showTickNumbers.includes('right')){
                 e.ctx.textAlign = 'left';
-                e.ctx.fillText(`${formatNumber(yticksVals[i], yFigures)}`, r.x + r.w + tickSize + ytextOffset, p.y);
+                e.ctx.fillText(`${formatNumber(yticksVals[i], yFigures)}`, r.x + r.w + ytextOffset, p.y);
             }
         }
         e.ctx.stroke();

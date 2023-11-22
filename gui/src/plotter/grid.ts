@@ -17,8 +17,8 @@ export class Grid extends GraphicObject {
 
     private positions: IPosition[];
     public gridSettings: IGridSettings = {
-        horizontalSpace: 0.02,  // from 0 - 1, how much overall width one space will take
-        verticalSpace: 0.02,
+        horizontalSpace: 0.000,  // from 0 - 1, how much overall width one space will take
+        verticalSpace: 0.000,
         widthRatios: null,
         heightRatios: null
     };

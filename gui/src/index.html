@@ -4,14 +4,19 @@
 </header>
 <body>
     <!-- width="2000" height="1000" -->
-    <div>This is simple test to get data from a backend</div>
-    <div>This is simple test to get data asdsd asd asd asd from a backend</div>
-    <div id="container">
-        <canvas id="canvas" ></canvas>  
+    <!-- <div>This is simple test to get data from a backend</div>
+    <div>This is simple test to get data asdsd asd asd asd from a backend</div> -->
+    <div class="container">
+        <div class="left">
+            <div><span>Choose input file: </span><span id="time-container"></span></div>
+            <input type="file" id="openFile">
+            <button id="btnTest">Test</button>
+            <div id="result-container"></div>
+        </div>
+        <div class="splitbar"></div>
+        <div class="right">
+            <canvas class="canvas" id="canvas" ></canvas>  
+        </div>
     </div>
-    <div><span>Last update: </span><span id="time-container"></span></div>
-    <input type="file" id="openFile">
-    <button id="btnTest">Test buttong</button>
-    <div id="result-container"></div>
 </body>
 </html> 

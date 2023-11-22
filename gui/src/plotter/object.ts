@@ -16,13 +16,19 @@ export abstract class GraphicObject{
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
     public margin: Margin;    // margin from canvasRect in absolute values: [left, right, top, bottom] 
 
+    // https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
     public cursors = {
         default: 'default',
         move: 'move',
+        grab: 'grab',
+        grabbing: 'grabbing',
         pointer: 'pointer',
         crosshair: 'crosshair',
         leftArrow: 'w-resize',
-        topArrow: 'n-resize'
+        topArrow: 'n-resize',
+        verticalResize: 'ew-resize',
+        horizontalResize: 'ns-resize'
+
     }
 
     constructor(parent: GraphicObject | null = null,
@@ -300,9 +306,9 @@ export class DraggableLines extends GraphicObject {
         f.preventMouseEvents(undefined, this.verticalHovering || this.horizontalHovering);
 
         if (this.verticalHovering && !this.horizontalHovering) {
-            this.canvas.style.cursor = this.cursors.leftArrow;
+            this.canvas.style.cursor = this.cursors.verticalResize;
         } else if (!this.verticalHovering && this.horizontalHovering) {
-            this.canvas.style.cursor = this.cursors.topArrow;
+            this.canvas.style.cursor = this.cursors.horizontalResize;
         } else if (this.verticalHovering && this.horizontalHovering) {
             this.canvas.style.cursor = this.cursors.move;
         }  else {
