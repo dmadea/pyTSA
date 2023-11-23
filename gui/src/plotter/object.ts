@@ -1,9 +1,16 @@
 import { Rect, Margin, Point, NumberArray } from "./types";
 import { Figure } from "./figure";
+import { formatNumber } from "./utils";
 
 export interface IPaintEvent {
     canvas: HTMLCanvasElement,
     ctx: CanvasRenderingContext2D
+}
+
+export interface IMouseEvent {
+    e: MouseEvent,
+    x: number,  // canvas x coordinate scaled by display ratio
+    y: number  // canvas y coordinate scaled by display ratio
 }
 
 export abstract class GraphicObject{
@@ -15,6 +22,7 @@ export abstract class GraphicObject{
 
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
     public margin: Margin;    // margin from canvasRect in absolute values: [left, right, top, bottom] 
+    public effRect: Rect // canvas rectangle minus margins
 
     // https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
     public cursors = {
@@ -39,6 +47,8 @@ export abstract class GraphicObject{
         this.margin = margin;
         this.canvas = null;
         this.ctx  = null;
+        this.effRect = {...this.canvasRect};
+        this.calcEffectiveRect();
         // assign canvas and ctx to children objects
         if (this.parent){
             if (this.parent.canvas !== null || this.parent.ctx !== null){
@@ -53,10 +63,33 @@ export abstract class GraphicObject{
             }
         }
         this.items = [];
+        
+    }
+
+    public calcEffectiveRect(){
+        let x = this.canvasRect.x + this.margin.left;
+        let y = this.canvasRect.y + this.margin.top;
+        this.effRect = {
+            x: x,
+            y: y,
+            w: this.canvasRect.w - this.margin.right - this.margin.left,
+            h: this.canvasRect.h - this.margin.bottom - this.margin.top
+        }
+    }
+
+    public isInsideEffRect(x: number, y: number): boolean
+    {
+        // we are outside of figure frame
+        if (x < this.effRect.x || x > this.effRect.x + this.effRect.w || 
+            y < this.effRect.y || y > this.effRect.y + this.effRect.h) {
+            return false;
+        }
+        return true;
     }
 
     public paint(e: IPaintEvent): void {
         for (const item of this.items) {
+            item.calcEffectiveRect();
             item.paint(e);
         }
     }
@@ -87,26 +120,31 @@ export abstract class GraphicObject{
 
     }
 
-    mouseDown(e: MouseEvent) {
+    mouseDown(e: IMouseEvent) {
         for (const item of this.items) {
-            item.mouseDown(e);
+            item.calcEffectiveRect();
+            if (item.isInsideEffRect(e.x, e.y)) {
+                item.mouseDown(e);
+            }
         }
     }
 
-    mouseUp(e: MouseEvent) {
+    mouseUp(e: IMouseEvent) {
         for (const item of this.items) {
             item.mouseUp(e);
         }
     }
 
-    mouseMove(e: MouseEvent) {
+    mouseMove(e: IMouseEvent) {
         for (const item of this.items) {
-            item.mouseMove(e);
+            if (item.isInsideEffRect(e.x, e.y)) {
+                item.mouseMove(e);
+            }
         }
     }
 
-    contextMenu(e: MouseEvent) {
-        e.preventDefault();
+    contextMenu(e: IMouseEvent) {
+        e.e.preventDefault();
         for (const item of this.items) {
             item.contextMenu(e);
         }
@@ -156,10 +194,15 @@ export class DraggableLines extends GraphicObject {
     private verticalDragging: boolean = false;
     private horizontalDragging: boolean = false;
     private positionChangedListeners: ((position: IPosition) => void)[] = [];
-    
+
+    private xLinks: DraggableLines[] = [];
+    private yLinks: DraggableLines[] = [];
+    private xyLinks: DraggableLines[] = [];
+    private yxLinks: DraggableLines[] = [];
+
 
     constructor(parent: Figure, orientation: Orientation = Orientation.Vertical) {
-        super(parent);
+        super(parent, {...parent.canvasRect}, {...parent.margin});
         this.orientation = orientation;
         this.position = {x: parent.getInternalRange().x, y: parent.getInternalRange().y};
         this.lastMouseDownPos = {x: 0, y: 0};
@@ -173,10 +216,6 @@ export class DraggableLines extends GraphicObject {
 
         let offset = 10;  // px
 
-        // if (f.figureSettings.axisAlignment === 'vertical') {
-        //     [x, y] = [y, x];
-        // }
-
         if ((this.orientation === Orientation.Vertical || this.orientation === Orientation.Both ) && orientation === Orientation.Vertical) {
             return x >= pos.x - offset && x <= pos.x + offset;
         }
@@ -188,21 +227,56 @@ export class DraggableLines extends GraphicObject {
         return false;
     }
 
+    public linkX(line: DraggableLines) {
+        if (line === this) {
+            return;
+        }
+
+        line.xLinks.push(this);
+        this.xLinks.push(line);
+    }
+
+    public linkY(line: DraggableLines) {
+        if (line === this) {
+            return;
+        }
+
+        line.yLinks.push(this);
+        this.yLinks.push(line);
+    }
+
+    public linkXY(line: DraggableLines) {
+        if (line === this) {
+            return;
+        }
+
+        line.yxLinks.push(this);
+        this.xyLinks.push(line);
+    }
+
+    public linkYX(line: DraggableLines) {
+        if (line === this) {
+            return;
+        }
+
+        line.xyLinks.push(this);
+        this.yxLinks.push(line);
+    }
+
     public setStickGrid(xdiff: number, xOffset: number, ydiff: number, yOffset: number) {
         this.stickGrid = {xdiff, xOffset, ydiff, yOffset};
     }
 
-    mouseDown(e: MouseEvent): void {
-        if (e.button === 0) {
-            let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
+    mouseDown(e: IMouseEvent): void {
+        if (e.e.button === 0) {
             this.verticalDragging = this.verticalHovering;
             this.horizontalDragging = this.horizontalHovering;
-            this.lastMouseDownPos = {x, y};
+            this.lastMouseDownPos = {x: e.x, y: e.y};
             this.lastPosition = {...this.position};
         }
     }
 
-    mouseUp(e: MouseEvent): void {
+    mouseUp(e: IMouseEvent): void {
         this.verticalDragging = false;
         this.horizontalDragging = false;
         let f = this.parent as Figure;
@@ -210,6 +284,23 @@ export class DraggableLines extends GraphicObject {
     }
 
     private positionChanged() {
+        for (const line of this.xLinks) {
+            line.position.x = this.position.x;
+            (line.parent as Figure).repaint();
+        }
+        for (const line of this.yLinks) {
+            line.position.y = this.position.y;
+            (line.parent as Figure).repaint();
+        }
+        for (const line of this.xyLinks) {
+            line.position.y = this.position.x;
+            (line.parent as Figure).repaint();
+        }
+        for (const line of this.yxLinks) {
+            line.position.x = this.position.y;
+            (line.parent as Figure).repaint();
+        }
+
         for (const fun of this.positionChangedListeners) {
             let f = this.parent as Figure;
             let pos: IPosition = {
@@ -225,13 +316,12 @@ export class DraggableLines extends GraphicObject {
         this.positionChangedListeners.push(callback);
     }
 
-    public mouseMove(e: MouseEvent): void {
+    public mouseMove(e: IMouseEvent): void {
         if (!this.canvas) {
             return;
         }
-        let f = this.parent as Figure;
 
-        let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
+        let f = this.parent as Figure;
 
         let va = f.figureSettings.axisAlignment === 'vertical';
 
@@ -239,16 +329,16 @@ export class DraggableLines extends GraphicObject {
             f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
 
             let dist: Point = {
-                x: x - this.lastMouseDownPos.x,
-                y: y - this.lastMouseDownPos.y
+                x: e.x - this.lastMouseDownPos.x,
+                y: e.y - this.lastMouseDownPos.y
             }
 
             if (va) {
                 dist = {x: dist.y, y: dist.x};
             }
 
-            let w = f.figureRect.w;
-            let h = f.figureRect.h;
+            let w = f.effRect.w;
+            let h = f.effRect.h;
 
             let xSign = f.figureSettings.xAxis.inverted ? -1 : 1;
             let ySign = f.figureSettings.yAxis.inverted ? 1 : -1;
@@ -289,8 +379,8 @@ export class DraggableLines extends GraphicObject {
             return;
         }
 
-        let vh = this.checkBounds(x, y, Orientation.Vertical);
-        let hh = this.checkBounds(x, y, Orientation.Horizontal);
+        let vh = this.checkBounds(e.x, e.y, Orientation.Vertical);
+        let hh = this.checkBounds(e.x, e.y, Orientation.Horizontal);
 
         // on change, repaint
         if (this.verticalHovering !== vh) {
@@ -347,19 +437,19 @@ export class DraggableLines extends GraphicObject {
         let va = f.figureSettings.axisAlignment === 'vertical';
         let p0 = f.mapRange2Canvas((va) ? {x: this.position.x, y: 0} : {x: 0, y: this.position.y});
         e.ctx.beginPath();
-        e.ctx.moveTo(f.figureRect.x, p0.y);
+        e.ctx.moveTo(f.effRect.x, p0.y);
 
         if (this.showText) {
-            let xText = f.figureRect.x - this.textPosition + f.figureRect.w;
+            let xText = f.effRect.x - this.textPosition + f.effRect.w;
 
             e.ctx.fillStyle = this.onHoverColor;
             e.ctx.textAlign = 'right';  // vertical alignment
             e.ctx.textBaseline = 'middle'; // horizontal alignment
             e.ctx.font = this.textFont;
 
-            let num = f.transform((va) ? this.position.x : this.position.y, 'y');
+            let num = f.transform((va) ? this.position.x : this.position.y, (va) ? 'x' : 'y');
 
-            let text = num.toPrecision(this.textSignificantFigures);
+            let text = formatNumber(num, 1 + ((va) ? f.xAxisSigFigures : f.yAxisSigFigures));
             let textSize = e.ctx.measureText(text);
 
             let offset = 6;
@@ -369,7 +459,7 @@ export class DraggableLines extends GraphicObject {
             e.ctx.moveTo(xText + offset, p0.y);
         }
 
-        e.ctx.lineTo(f.figureRect.x + f.figureRect.w, p0.y);
+        e.ctx.lineTo(f.effRect.x + f.effRect.w, p0.y);
         e.ctx.stroke();
     }
 
@@ -380,20 +470,20 @@ export class DraggableLines extends GraphicObject {
         let va = f.figureSettings.axisAlignment === 'vertical';
         let p0 = f.mapRange2Canvas((va) ? {x: 0, y: this.position.y} : {x: this.position.x, y: 0});
         e.ctx.beginPath();
-        e.ctx.moveTo(p0.x, f.figureRect.y);
+        e.ctx.moveTo(p0.x, f.effRect.y);
 
         if (this.showText) {
-            let yText = f.figureRect.y + this.textPosition;
+            let yText = f.effRect.y + this.textPosition;
 
-            let num = f.transform((va) ? this.position.y : this.position.x, 'x');
+            let num = f.transform((va) ? this.position.y : this.position.x, (va) ? 'y' : 'x');
 
-            let text = num.toPrecision(this.textSignificantFigures);
+            let text = formatNumber(num, 1 + ((va) ? f.yAxisSigFigures : f.xAxisSigFigures));
             let textSize = e.ctx.measureText(text);
 
             e.ctx.save();
             e.ctx.translate(p0.x, yText);
             e.ctx.rotate(-Math.PI / 2);
-            e.ctx.fillText(text, p0.x, yText);
+            // e.ctx.fillText(text, p0.x, yText);
 
             e.ctx.fillStyle = this.onHoverColor;
             e.ctx.textAlign = 'right';  // vertical alignment
@@ -409,12 +499,11 @@ export class DraggableLines extends GraphicObject {
             e.ctx.moveTo(p0.x, yText + textSize.width + offset);
         }
 
-        e.ctx.lineTo(p0.x, f.figureRect.y + f.figureRect.h);
+        e.ctx.lineTo(p0.x, f.effRect.y + f.effRect.h);
         e.ctx.stroke();
     }
 
     public paint(e: IPaintEvent): void {
-        // console.log('paint dragable lines');
         e.ctx.save();
 
         // https://stackoverflow.com/questions/39048227/html5-canvas-invert-color-of-pixels

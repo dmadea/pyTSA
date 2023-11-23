@@ -28,23 +28,63 @@ export class Dataset {
     }
 }
 
+export function determineSigFigures(num: number): number {
+    if (num === 0) {
+        return 1;
+    }
 
-export function formatNumber(num: number, sigFigures: number): string {
+    const order = Math.floor(Math.log10(Math.abs(num)));
+    const maxFigures = 10;
+    const treshhold = 10 ** (-maxFigures);
+    for (var i = 1; i <= maxFigures; i++) {
+        const multiplier = 10 ** (i - 1 - order);
+        const rNum = Math.round(num * multiplier) / multiplier;
+        const rErr = Math.abs((num - rNum) / num);
+        if (rErr <= treshhold) {
+            break;
+        }
+    }
+    return i;
+}
+
+
+export function formatNumber(num: number, sigFigures?: number): string {
 
     if (num === undefined || Number.isNaN(num)) {
         return "";
     }
 
-    sigFigures = (sigFigures === undefined || Number.isNaN(sigFigures)) ? 3 : sigFigures;
-
-    var scale = 10 ** Math.trunc(Math.log10(Math.abs(num)));
-    // console.log(scale)
-
-    if ((scale < 1e-3 || scale > 1e3) && scale > 0){
-        return num.toExponential(sigFigures < 1 ? 0 : sigFigures - 1);
-    } else {
-        return num.toPrecision(sigFigures);  // TODO change to some default method, because toPrecision will change to exponential format for small signifiacnt values.
+    if (!sigFigures) {
+        sigFigures = determineSigFigures(num);
     }
+
+    // sigFigures = (sigFigures === undefined || Number.isNaN(sigFigures)) ? 3 : sigFigures;
+
+    // // Round the number to the desired significant figures
+    // const roundedNumber: number = Number(num.toFixed(sigFigures));
+
+    // // Convert the rounded number to a string and return
+
+    // Calculate the order of magnitude
+    let order = (num === 0) ? 0 : Math.floor(Math.log10(Math.abs(num)));
+
+    // Calculate the multiplier to get the desired number of significant figures
+    const multiplier = 10 ** (sigFigures - 1 - order);
+
+    // Round the number to the desired significant figures
+    const negative = num < 0;
+    const rNum = (num === 0) ? 0 : Math.round(Math.abs(num) * multiplier) / multiplier;
+
+    order = (rNum === 0) ? 0 : Math.floor(Math.log10(Math.abs(rNum)));
+    let str;
+
+    if ((order < -3 || order > 4) && order !== 0){
+        str = rNum.toExponential(sigFigures < 1 ? 0 : sigFigures - 1);
+    } else {
+        const places = sigFigures - 1 - order;
+        str = rNum.toFixed(Math.max(0, places));
+    }
+    return (negative) ? `\u2212${str}` : str;
 }
 
 export function genTestData(n=100){

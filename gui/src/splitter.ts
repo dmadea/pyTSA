@@ -13,12 +13,15 @@ export class Splitter {
     }
 
     private resizer(e: MouseEvent, pane: HTMLDivElement) {
+
+        if (e.button !== 0) {
+            return;
+        }
         
         let lastX = e.clientX;
         const rect = pane.getBoundingClientRect();
 
         let mousemove = (e: MouseEvent) => {
-
             let distX = lastX - e.clientX;
             pane.style.width = `${rect.width - distX}px`;
         }
