@@ -1037,7 +1037,7 @@ export class Figure extends GraphicObject {
             // console.log('margins are different');
             this.margin = newMargin;
             this.calcEffectiveRect();
-            this.repaint();
+            // this.repaint();
         }
 
     }
