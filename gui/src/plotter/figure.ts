@@ -71,6 +71,7 @@ export class Figure extends GraphicObject {
     private marginLinks: ([Figure, Orientation])[] = [];
     public xAxisSigFigures: number = 2;
     public yAxisSigFigures: number = 2;
+    public font: string = '10 ps sans-serif';
 
     public requiredMargin: Margin;
     
@@ -98,7 +99,7 @@ export class Figure extends GraphicObject {
     
     // public draggableLines: DraggableLines | null = null;
 
-    constructor(parent: GraphicObject, canvasRect?: Rect, margin?: Margin) {
+    constructor(parent?: GraphicObject, canvasRect?: Rect, margin?: Margin) {
         super(parent, canvasRect, margin);
 
         this.margin = {
@@ -130,40 +131,33 @@ export class Figure extends GraphicObject {
     }
 
     get range() {
-        let x, y, w, h;
+        const x = this.transform(this._range.x, 'x');
+        const y = this.transform(this._range.y, 'y');
 
-        if (this.figureSettings.xAxis.scale instanceof NumberArray) {
-            let x0Idx = (this._range.x < 0) ? 0 : Math.floor(this._range.x);
-            x = this.figureSettings.xAxis.scale[x0Idx];
-            let x1Idx = (x0Idx + this._range.w > this.figureSettings.xAxis.scale.length - 1) ? this.figureSettings.xAxis.scale.length - 1 : Math.floor(x0Idx + this._range.w);
-            w = this.figureSettings.xAxis.scale[x1Idx] - x;
-        } else {
-            x = this._range.x;
-            w = this._range.w;
+        return {
+            x,
+            y,
+            w: this.transform(this._range.x + this._range.w, 'x') - x,
+            h: this.transform(this._range.y + this._range.h, 'y') - y,
         }
+    }
 
-        if (this.figureSettings.yAxis.scale instanceof NumberArray) {
-            let y0Idx = (this._range.y < 0) ? 0 : Math.floor(this._range.y);
-            y = this.figureSettings.yAxis.scale[y0Idx];    
-            let y1Idx = (y0Idx + this._range.h > this.figureSettings.yAxis.scale.length - 1) ? this.figureSettings.yAxis.scale.length - 1 : Math.floor(y0Idx + this._range.h);
-            h = this.figureSettings.yAxis.scale[y1Idx] - y;
-        } else {
-            y = this._range.y;
-            h = this._range.h;
+    set range(newRange: Rect) {
+        const x = this.invTransform(newRange.x, 'x');
+        const y = this.invTransform(newRange.y, 'y');
+
+        this._range = {
+            x,
+            y,
+            w: this.invTransform(newRange.x + newRange.w, 'x') - x,
+            h: this.invTransform(newRange.y + newRange.h, 'y') - y,
         }
-
-        let rng: Rect = {x, y, w, h};
-        return rng;
     }
 
     public getInternalRange() {
         return this._range;
     }
 
-    set range(newRange: Rect) {
-        // TODO change
-        this._range = newRange;
-    }
 
     public mapCanvas2Range(p: Point): Point{
         let r = this.effRect;
@@ -324,8 +318,8 @@ export class Figure extends GraphicObject {
         }
 
         if  (this.scaling || this.panning) {
-            let lastPos = {x: e.e.clientX, y: e.e.clientY};
-            let va = this.figureSettings.axisAlignment === 'vertical';
+            const lastPos = {x: e.e.clientX, y: e.e.clientY};
+            const va = this.figureSettings.axisAlignment === 'vertical';
 
             var mousemove = (e: MouseEvent) => {
 
@@ -447,35 +441,53 @@ export class Figure extends GraphicObject {
         this.figureSettings.xAxis.autoscale = false;
         this.figureSettings.yAxis.autoscale = false;
         for (const fig of this.xRangeLinks) {
-            fig._range.x = this._range.x;
-            fig._range.w = this._range.w;
+            if (this.figureSettings.xAxis.scale === fig.figureSettings.xAxis.scale) {
+                fig._range.x = this._range.x;
+                fig._range.w = this._range.w;
+            } else {
+                const r = this.range;
+                const fr = fig.range;
+                fig.range = {x: r.x, y: fr.y, w: r.w, h: fr.h};
+            }
             fig.repaint();
         }
         for (const fig of this.yRangeLinks) {
-            fig._range.y = this._range.y;
-            fig._range.h = this._range.h;
+            if (this.figureSettings.yAxis.scale === fig.figureSettings.yAxis.scale) {
+                fig._range.y = this._range.y;
+                fig._range.h = this._range.h;
+            } else {
+                const r = this.range;
+                const fr = fig.range;
+                fig.range = {x: fr.x, y: r.y, w: fr.w, h: r.h};
+            }
             fig.repaint();
         }
         for (const fig of this.xyRangeLinks) {
-            fig._range.y = this._range.x;
-            fig._range.h = this._range.w;
+            if (this.figureSettings.xAxis.scale === fig.figureSettings.yAxis.scale) {
+                fig._range.y = this._range.x;
+                fig._range.h = this._range.w;
+            } else {
+                const r = this.range;
+                const fr = fig.range;
+                fig.range = {x: fr.x, y: r.x, w: fr.w, h: r.w};
+            }
             fig.repaint();
         }
         for (const fig of this.yxRangeLinks) {
-            fig._range.x = this._range.y;
-            fig._range.w = this._range.h;
+            if (this.figureSettings.yAxis.scale === fig.figureSettings.xAxis.scale) {
+                fig._range.x = this._range.y;
+                fig._range.w = this._range.h;
+            } else {
+                const r = this.range;
+                const fr = fig.range;
+                fig.range = {x: r.y, y: fr.y, w: r.h, h: fr.h};
+            }
             fig.repaint();
         }
         // console.log(this.range);
         super.rangeChanged(range);
         this.repaint();
     }
-
-    // public resize(): void {
-    //     for (const item of this.items) {
-    //         item.canvasRect =
-    //     }
-    // }
 
     public mouseMove(e: IMouseEvent): void {
         if (!this.canvas)
@@ -529,8 +541,8 @@ export class Figure extends GraphicObject {
     }
 
     public addDraggableLines(orientation: Orientation): DraggableLines {
-        let line = new DraggableLines(this, orientation)
-        this.items.push(line);
+        const line = new DraggableLines(this, orientation)
+        this.addItem(line)
         return line;
     }
 
@@ -806,9 +818,11 @@ export class Figure extends GraphicObject {
 
         e.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
         e.ctx.clip();
+
+        const dpr = window.devicePixelRatio;
         
         // draw figure rectangle
-        e.ctx.lineWidth = 3;
+        e.ctx.lineWidth = 1 + Math.round(dpr);
         e.ctx.strokeRect(this.effRect.x, this.effRect.y, this.effRect.w, this.effRect.h);
         this.drawTicks(e);
 
@@ -825,7 +839,8 @@ export class Figure extends GraphicObject {
 
     public drawTicks(e: IPaintEvent){  // r is Figure Rectangle, the frame
         e.ctx.fillStyle = textColor;
-        let va = this.figureSettings.axisAlignment === 'vertical';
+        const dpr = window.devicePixelRatio;
+        const va = this.figureSettings.axisAlignment === 'vertical';
         this.requiredMargin = {left: 0, right: 0, bottom: 0, top: 0};
 
         // let pr = window.devicePixelRatio;
@@ -873,18 +888,25 @@ export class Figure extends GraphicObject {
             [xFigs, yFigs] = [yFigs, xFigs];
         }
 
-        let tickSize = 15;
-        let textOffset = 20;
+        const tickSize = Math.round(5 + 4 * dpr);
+        // const textOffset = 20;
+        const fontSize = Math.round(8 + 9 * dpr);
 
         // draw x ticks
 
-        let r = this.effRect;
+        const r = this.effRect;
 
         let textMaxHeight = 0;
+        this.font = `${fontSize}px sans-serif`;
 
-        e.ctx.font = "25px sans-serif";
+        e.ctx.font = this.font;
         e.ctx.textAlign = 'center';  // vertical alignment
         e.ctx.textBaseline = 'middle'; // horizontal alignment
+
+        const _metrics = e.ctx.measureText("M");
+        let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
+        // console.log(textOffset);
+
         e.ctx.beginPath();
 
         for (let i = 0; i < xticks.length; i++) {
@@ -935,9 +957,8 @@ export class Figure extends GraphicObject {
             this.requiredMargin.bottom += textMaxHeight + textOffset;
         }
                 
-    
         // draw y ticks
-
+        // textOffset /= 2;
         let textMaxWidth = 0;
 
         e.ctx.beginPath();
@@ -964,22 +985,22 @@ export class Figure extends GraphicObject {
 
             if (this.figureSettings.showTickNumbers.includes('left')){
                 e.ctx.textAlign = 'right';
-                e.ctx.fillText(text, r.x - textOffset, p.y);
+                e.ctx.fillText(text, r.x - textOffset / 2, p.y);
             }
 
             if (this.figureSettings.showTickNumbers.includes('right')){
                 e.ctx.textAlign = 'left';
-                e.ctx.fillText(text, r.x + r.w + textOffset, p.y);
+                e.ctx.fillText(text, r.x + r.w + textOffset / 2, p.y);
             }
         }
         e.ctx.stroke();
 
         if (this.figureSettings.showTickNumbers.includes('left')){
-            this.requiredMargin.left += textMaxWidth + textOffset;
+            this.requiredMargin.left += textMaxWidth + textOffset / 2;
         }
 
         if (this.figureSettings.showTickNumbers.includes('right')){
-            this.requiredMargin.right += textMaxWidth + textOffset;
+            this.requiredMargin.right += textMaxWidth + textOffset / 2;
         }
 
         // draw axis labels
@@ -1051,19 +1072,20 @@ export class Figure extends GraphicObject {
         const f = 0.005;
         let w = this.effRect.w;
         let h = this.effRect.h;
-        if (this.figureSettings.axisAlignment == 'vertical') {
+        const va = this.figureSettings.axisAlignment == 'vertical';
+        if (va) {
             [w, h] = [h, w];
         }
         if (axis === 'x') {
             coor = this._range.x;
             size = this._range.w;
             scaleType = this.figureSettings.xAxis.scale;
-            prefferedNBins = Math.max(Math.round(w * f), 2);
+            prefferedNBins = Math.max(Math.round((va ? 1.5 : 1) * w * f), 2);
         } else {
             coor = this._range.y;
             size = this._range.h;
             scaleType = this.figureSettings.yAxis.scale;
-            prefferedNBins = Math.max(Math.round(h * f), 2);
+            prefferedNBins = Math.max(Math.round((va ? 1 : 1.5) * h * f), 2);
         }
 
         switch (scaleType) {

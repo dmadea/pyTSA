@@ -39,10 +39,15 @@ export abstract class GraphicObject{
 
     }
 
-    constructor(parent: GraphicObject | null = null,
+    constructor(parent?: GraphicObject,
         canvasRect: Rect = {x: 0, y: 0, w: 0, h: 0},
         margin: Margin = {left: 0, right: 0, top: 0, bottom: 0}) {
-        this.parent = parent;
+        if (parent) {
+            this.parent = parent;
+            this.setParent(parent);
+        } else {
+            this.parent = null;
+        }
         this.canvasRect = canvasRect;
         this.margin = margin;
         this.canvas = null;
@@ -50,20 +55,25 @@ export abstract class GraphicObject{
         this.effRect = {...this.canvasRect};
         this.calcEffectiveRect();
         // assign canvas and ctx to children objects
-        if (this.parent){
-            if (this.parent.canvas !== null || this.parent.ctx !== null){
-                this.canvas = this.parent.canvas;
-                this.ctx = this.parent.ctx;
-
-                // this.canvas?.addEventListener('mousedown', e => this.mouseDown(e));
-                // this.canvas?.addEventListener('mouseup', e => this.mouseUp(e));
-                // this.canvas?.addEventListener('mousemove', e => this.mouseMove(e));
-                // this.canvas?.addEventListener("contextmenu", e => this.contextMenu(e));
-                // console.log('assignemnt of canvas and ctx')
-            }
-        }
         this.items = [];
         
+    }
+
+    public setParent(parent: GraphicObject | null) {
+        this.parent = parent;
+        if (this.parent) {
+            if (this.parent.canvas !== null && this.parent.ctx !== null){
+                this.canvas = this.parent.canvas;
+                this.ctx = this.parent.ctx;
+            }
+        }
+    }
+
+    public addItem(item: GraphicObject) {
+        if (this.items.indexOf(item) === -1) { 
+            this.items.push(item);
+            item.setParent(this);
+        }
     }
 
     public calcEffectiveRect(){
@@ -116,8 +126,12 @@ export abstract class GraphicObject{
     }
 
     public resize() {
-        this.repaint();
-
+        this.calcEffectiveRect();
+        //set new dimensions also for items
+        for (const item of this.items) {
+            item.canvasRect = {...this.effRect};
+            item.resize();
+        }
     }
 
     mouseDown(e: IMouseEvent) {
@@ -185,7 +199,7 @@ export class DraggableLines extends GraphicObject {
 
     public showText: boolean = true;
     public textPosition: number = 20;  // in pixels from the left/top
-    public textFont: string = "25px sans-serif";  //default is 10px sans-serif
+    // public textFont: string = "25px sans-serif";  //default is 10px sans-serif
     public textSignificantFigures: number = 3;
 
     private verticalHovering: boolean = false;
@@ -268,12 +282,84 @@ export class DraggableLines extends GraphicObject {
     }
 
     mouseDown(e: IMouseEvent): void {
-        if (e.e.button === 0) {
-            this.verticalDragging = this.verticalHovering;
-            this.horizontalDragging = this.horizontalHovering;
-            this.lastMouseDownPos = {x: e.x, y: e.y};
-            this.lastPosition = {...this.position};
+        if (e.e.button !== 0) {
+            return;
         }
+        
+        this.verticalDragging = this.verticalHovering;
+        this.horizontalDragging = this.horizontalHovering;
+        this.lastMouseDownPos = {x: e.x, y: e.y};
+        this.lastPosition = {...this.position};
+
+        if (this.horizontalDragging || this.verticalDragging) {
+            const f = this.parent as Figure;
+            const va = f.figureSettings.axisAlignment === 'vertical';
+            f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
+            const lastPos = {x: e.e.clientX, y: e.e.clientY};
+
+            var mousemove = (e: MouseEvent) => {
+                // console.time('mousemove');
+                let dist: Point = {
+                    x: window.devicePixelRatio * (e.x - lastPos.x),
+                    y: window.devicePixelRatio * (e.y - lastPos.y)
+                }
+    
+                if (va) {
+                    dist = {x: dist.y, y: dist.x};
+                }
+    
+                let w = f.effRect.w;
+                let h = f.effRect.h;
+    
+                let xSign = f.figureSettings.xAxis.inverted ? -1 : 1;
+                let ySign = f.figureSettings.yAxis.inverted ? 1 : -1;
+    
+                if (va) {
+                    [w, h] = [h, w];
+                    xSign *= -1;
+                }
+    
+                let xRatio = f.getInternalRange().w / w;
+                let yRatio = f.getInternalRange().h / h;
+    
+                let pos = {
+                    x: ((va) ? this.horizontalDragging : this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
+                    y: ((va) ? this.verticalDragging : this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
+                }
+    
+                if (this.stickGrid && this.stickToData) {
+    
+                    let xnum = Math.round((pos.x - this.stickGrid.xOffset) / this.stickGrid.xdiff);
+                    let ynum = Math.round((pos.y - this.stickGrid.yOffset) / this.stickGrid.ydiff);
+    
+                    let newPos = {
+                        x: xnum * this.stickGrid.xdiff + this.stickGrid.xOffset,
+                        y: ynum * this.stickGrid.ydiff + this.stickGrid.yOffset
+                    }
+    
+                    if (newPos.x !== this.position.x || newPos.y !== this.position.y) {
+                        this.position = newPos;
+                        this.positionChanged();
+                        f.repaint();
+                    }
+                } else {
+                    this.position = pos;
+                    this.positionChanged();
+                    f.repaint();
+                }
+                // console.timeEnd('mousemove');
+
+            }
+
+            var mouseup = (e: MouseEvent) => {
+                window.removeEventListener('mousemove', mousemove);
+                window.removeEventListener('mouseup', mouseup);
+            }
+
+            window.addEventListener('mousemove', mousemove);
+            window.addEventListener('mouseup', mouseup);
+        }
+
     }
 
     mouseUp(e: IMouseEvent): void {
@@ -321,63 +407,13 @@ export class DraggableLines extends GraphicObject {
             return;
         }
 
-        let f = this.parent as Figure;
-
-        let va = f.figureSettings.axisAlignment === 'vertical';
+        
 
         if (this.horizontalDragging || this.verticalDragging) {
-            f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
-
-            let dist: Point = {
-                x: e.x - this.lastMouseDownPos.x,
-                y: e.y - this.lastMouseDownPos.y
-            }
-
-            if (va) {
-                dist = {x: dist.y, y: dist.x};
-            }
-
-            let w = f.effRect.w;
-            let h = f.effRect.h;
-
-            let xSign = f.figureSettings.xAxis.inverted ? -1 : 1;
-            let ySign = f.figureSettings.yAxis.inverted ? 1 : -1;
-
-            if (va) {
-                [w, h] = [h, w];
-                xSign *= -1;
-            }
-
-            let xRatio = f.getInternalRange().w / w;
-            let yRatio = f.getInternalRange().h / h;
-
-            let pos = {
-                x: ((va) ? this.horizontalDragging : this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
-                y: ((va) ? this.verticalDragging : this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
-            }
-
-            if (this.stickGrid && this.stickToData) {
-
-                let xnum = Math.round((pos.x - this.stickGrid.xOffset) / this.stickGrid.xdiff);
-                let ynum = Math.round((pos.y - this.stickGrid.yOffset) / this.stickGrid.ydiff);
-
-                let newPos = {
-                    x: xnum * this.stickGrid.xdiff + this.stickGrid.xOffset,
-                    y: ynum * this.stickGrid.ydiff + this.stickGrid.yOffset
-                }
-
-                if (newPos.x !== this.position.x || newPos.y !== this.position.y) {
-                    this.position = newPos;
-                    this.positionChanged();
-                    f.repaint();
-                }
-            } else {
-                this.position = pos;
-                this.positionChanged();
-                f.repaint();
-            }
             return;
         }
+
+        let f = this.parent as Figure;
 
         let vh = this.checkBounds(e.x, e.y, Orientation.Vertical);
         let hh = this.checkBounds(e.x, e.y, Orientation.Horizontal);
@@ -445,7 +481,7 @@ export class DraggableLines extends GraphicObject {
             e.ctx.fillStyle = this.onHoverColor;
             e.ctx.textAlign = 'right';  // vertical alignment
             e.ctx.textBaseline = 'middle'; // horizontal alignment
-            e.ctx.font = this.textFont;
+            e.ctx.font = f.font;
 
             let num = f.transform((va) ? this.position.x : this.position.y, (va) ? 'x' : 'y');
 
@@ -488,7 +524,7 @@ export class DraggableLines extends GraphicObject {
             e.ctx.fillStyle = this.onHoverColor;
             e.ctx.textAlign = 'right';  // vertical alignment
             e.ctx.textBaseline = 'middle'; // horizontal alignment
-            e.ctx.font = this.textFont;
+            e.ctx.font = f.font;
 
             e.ctx.fillText(text, 0, 0);
             e.ctx.restore();

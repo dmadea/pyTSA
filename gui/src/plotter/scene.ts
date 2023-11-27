@@ -15,7 +15,7 @@ export class Scene extends GraphicObject {
     public dLines: DraggableLines | null = null;
 
     constructor(canvas: HTMLCanvasElement) {
-        super(null);
+        super();
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
         this.items = [];
@@ -55,67 +55,77 @@ export class Scene extends GraphicObject {
     }
 
     testAddGrid(){
-        var grid = new Grid(this, {...this.canvasRect});
-        this.items.push(grid);
-        this.fig = new Figure(grid);
+        // this.calcEffectiveRect();
+        var grid = new Grid(this, {...this.effRect});
+        this.addItem(grid);
+        // this.items.push(grid);
+
+        this.fig = new Figure();
         // this.fig.figureSettings.axisAlignment = 'vertical';
         this.fig.figureSettings.yAxis.inverted = true;
-        this.fig.figureSettings.showTickNumbers = ['top', 'left'];
+        // this.fig.figureSettings.showTickNumbers = ['top', 'left'];
         this.fig.figureSettings.yAxis.label = 'Time / ps';
-        this.fig.minimalMargin.left = 200;
-
-        
-        // f.plot(x, y, 'red', '-', 1);
+        // this.fig.minimalMargin.left = 200;
 
         grid.addItem(this.fig, 0, 0);
+        
+        var gridInner = new Grid();
+        grid.addItem(gridInner, 0, 1);
+        var f1y = new Figure();
+        // f1y.figureSettings.axisAlignment = 'vertical';
+        // f1y.figureSettings.xAxis.inverted = true;
+        f1y.figureSettings.xAxis.scale = 'log';
 
-        var f1y = new Figure(grid);
-        f1y.figureSettings.axisAlignment = 'vertical';
-        f1y.figureSettings.xAxis.inverted = true;
-        f1y.figureSettings.showTickNumbers = ['top', 'right', 'bottom'];
-        f1y.figureSettings.yAxis.label = 'Amplitude';
+        // f1y.figureSettings.showTickNumbers = ['top', 'right', 'bottom'];
+        // f1y.figureSettings.yAxis.label = 'Amplitude';
+
+        // grid.addItem(f1y, 1, 0);
 
 
         let n = 1000;
         var x = NumberArray.linspace(-1, 3, n, true);
         var y = NumberArray.random(-1, 3, n, false);
-        console.log(x, y);
+        this.fig.plotLine(x, y, 'blue', [], 1);
+        // console.log(x, y);
         // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([-1, 2, -0.5]), 'green'); 
         // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
 
-        this.fig.plotLine(x, y, 'blue', [], 1);
-        grid.addItem(f1y, 0, 1);
         
-        var f2x = new Figure(grid);
+        var f2x = new Figure();
         f2x.figureSettings.xAxis.label = 'Wavelength / nm';
-        f2x.figureSettings.yAxis.label = 'Amplitude';
+        f1y.figureSettings.xAxis.label = 'Time / ps';
 
-        f2x.figureSettings.showTickNumbers = ['left', 'bottom'];
-        f2x.minimalMargin.left = 200;
-
-
+        // f2x.figureSettings.yAxis.label = 'Amplitude';
+        
+        // f2x.figureSettings.showTickNumbers = ['left', 'bottom'];
+        // f2x.minimalMargin.left = 200;
+        
+        
         var linePlot = f2x.plotLine(new NumberArray(), new NumberArray());
         var linePlotCol = f1y.plotLine(new NumberArray(), new NumberArray());
-
+        
         // f2.addDraggableLines(DraggableLines.Orientation.Both);
         
         this.fig.linkXRange(f2x);
         this.fig.linkYXRange(f1y);  
-
-        this.fig.linkMargin(f2x, Orientation.Horizontal);
-        this.fig.linkMargin(f1y, Orientation.Vertical);
-
-
+        
+        // this.fig.linkMargin(f2x, Orientation.Horizontal);
+        // this.fig.linkMargin(f1y, Orientation.Vertical);
+        
+        
         // this.fig.linkYRange(f1);
         
-        grid.addItem(f2x, 1, 0);
+        gridInner.addItem(f1y, 0, 0);
+        gridInner.addItem(f2x, 1, 0);
+        // gridInner.addItem(new Figure(), 0, 0);
+
         this.dLines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);
         this.dLines.addPositionChangedListener((pos) => {
             // console.log('position changed', pos);
             if (this.fig?.heatmap) {
 
-                f2x.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
-                f1y.figureSettings.xAxis.scale = this.fig.figureSettings.yAxis.scale;
+                // f2x.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
+                // f1y.figureSettings.xAxis.scale = this.fig.figureSettings.yAxis.scale;
 
                 // get row
                 let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.y);
@@ -139,7 +149,7 @@ export class Scene extends GraphicObject {
             }            
         });
 
-        var ly = f1y.addDraggableLines(DraggableLines.Orientation.Horizontal);
+        var ly = f1y.addDraggableLines(DraggableLines.Orientation.Vertical);
         var lx = f2x.addDraggableLines(DraggableLines.Orientation.Vertical);
 
         ly.addPositionChangedListener((pos) => {
@@ -168,10 +178,11 @@ export class Scene extends GraphicObject {
         this.dLines.linkX(lx);
         this.dLines.linkYX(ly);
 
-        grid.gridSettings.widthRatios = NumberArray.fromArray([2, 1]);
-        grid.gridSettings.heightRatios = NumberArray.fromArray([2, 1]);
+        // grid.gridSettings.widthRatios = NumberArray.fromArray([2, 1]);
+        // grid.gridSettings.heightRatios = NumberArray.fromArray([2, 1]);
 
-        grid.recalculateGrid(false);
+        // grid.recalculateGrid(false);
+        // gridInner.recalculateGrid(false);
 
         this.repaint()
         // f.redrawHeatmapOffCanvas();
@@ -192,13 +203,8 @@ export class Scene extends GraphicObject {
                 h: this.canvas.height
             }
         }
-        this.calcEffectiveRect();
-        //set new dimensions also for items
-        for (const item of this.items) {
-            item.canvasRect = {...this.effRect};
-            item.resize();
-        }
         super.resize();
+        this.repaint();
     }
 
     public paint(e: IPaintEvent): void {

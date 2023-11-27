@@ -3,7 +3,9 @@ import { NumberArray, Rect} from "./types";
 
 interface IPosition {
     row: number, 
-    col: number
+    col: number,
+    rowSpan: number,
+    colSpan: number
 }
 
 interface IGridSettings {
@@ -23,7 +25,7 @@ export class Grid extends GraphicObject {
         heightRatios: null
     };
 
-    constructor (parent: GraphicObject, canvasRect?: Rect) {
+    constructor (parent?: GraphicObject, canvasRect?: Rect) {
         super(parent, canvasRect);
         this.positions = [];
     }
@@ -38,22 +40,28 @@ export class Grid extends GraphicObject {
     }
 
     public resize(): void {
+        this.calcEffectiveRect();
         this.recalculateGrid(false);
+        for (const item of this.items) {
+            item.resize();
+        }
     }
 
     recalculateGrid(repaint: boolean = true){
         let ncols = Math.max(...this.positions.map(p => (p.col))) + 1;
         let nrows = Math.max(...this.positions.map(p => (p.row))) + 1;
 
+        // console.log('recalculateGrid', this.canvasRect);
+
         // calculate total width and height of components
-        let width = this.canvasRect.w - this.canvasRect.w * (ncols - 1) * this.gridSettings.horizontalSpace;
-        let height = this.canvasRect.h - this.canvasRect.h * (nrows - 1) * this.gridSettings.verticalSpace;
+        let width = this.effRect.w - this.effRect.w * (ncols - 1) * this.gridSettings.horizontalSpace;
+        let height = this.effRect.h - this.effRect.h * (nrows - 1) * this.gridSettings.verticalSpace;
 
         if (this.gridSettings.widthRatios === null || this.gridSettings.widthRatios.length !== ncols){
             this.gridSettings.widthRatios = new NumberArray(ncols).fill(1);  // fill only ones
         }
 
-        if (this.gridSettings.heightRatios === null || this.gridSettings.heightRatios.length !== ncols){
+        if (this.gridSettings.heightRatios === null || this.gridSettings.heightRatios.length !== nrows){
             this.gridSettings.heightRatios = new NumberArray(nrows).fill(1);  // fill only ones
         }
 
@@ -64,22 +72,23 @@ export class Grid extends GraphicObject {
             const item = this.items[i];
             const pos = this.positions[i];
 
-            var x = this.canvasRect.x;
+            var x = this.effRect.x;
 
             for (let j = 0; j < pos.col; j++) {
                 x += width * this.gridSettings.widthRatios[j] / wtotalRatio;
-                x += this.canvasRect.w * this.gridSettings.horizontalSpace;
+                x += this.effRect.w * this.gridSettings.horizontalSpace;
             }
-            var y = this.canvasRect.y;
+            var y = this.effRect.y;
             for (let j = 0; j < pos.row; j++) {
                 y += height * this.gridSettings.heightRatios[j] / htotalRatio;
-                y += this.canvasRect.h * this.gridSettings.verticalSpace;
+                y += this.effRect.h * this.gridSettings.verticalSpace;
             }
 
             item.canvasRect.x = x;
             item.canvasRect.y = y;
             item.canvasRect.w = width * this.gridSettings.widthRatios[pos.col] / wtotalRatio;
             item.canvasRect.h = height * this.gridSettings.heightRatios[pos.row] / htotalRatio;
+            // console.log(item.canvasRect);
         }
 
         //repaint
@@ -87,13 +96,9 @@ export class Grid extends GraphicObject {
             this.repaint();
     }
 
-
-    addItem(item: GraphicObject, row: number = 0, col: number = 0) {
-        this.positions.push({row, col});
-        this.items.push(item);
+    addItem(item: GraphicObject, row: number = 0, col: number = 0, rowSpan: number = 1, colSpan: number = 1) {
+        super.addItem(item);
+        this.positions.push({row, col, rowSpan, colSpan});
         this.recalculateGrid(false);
     }
-
-
-    
 }
