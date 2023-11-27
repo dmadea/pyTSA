@@ -1,5 +1,5 @@
 import { Figure } from "./figure";
-import { Grid } from "./grid";
+import { EmptySpace, Grid } from "./grid";
 import { DraggableLines, GraphicObject, IMouseEvent, IPaintEvent, Orientation } from "./object";
 import { backgroundColor } from "./settings";
 import { NumberArray, Matrix } from "./types";
@@ -65,16 +65,17 @@ export class Scene extends GraphicObject {
         this.fig.figureSettings.yAxis.inverted = true;
         // this.fig.figureSettings.showTickNumbers = ['top', 'left'];
         this.fig.figureSettings.yAxis.label = 'Time / ps';
+        this.fig.figureSettings.xAxis.label = 'Wavelength / nm';
+
         // this.fig.minimalMargin.left = 200;
 
-        grid.addItem(this.fig, 0, 0);
         
-        var gridInner = new Grid();
-        grid.addItem(gridInner, 0, 1);
+        // var gridInner = new Grid();
+        // grid.addItem(gridInner, 0, 1);
         var f1y = new Figure();
         // f1y.figureSettings.axisAlignment = 'vertical';
         // f1y.figureSettings.xAxis.inverted = true;
-        f1y.figureSettings.xAxis.scale = 'log';
+        // f1y.figureSettings.xAxis.scale = 'log';
 
         // f1y.figureSettings.showTickNumbers = ['top', 'right', 'bottom'];
         // f1y.figureSettings.yAxis.label = 'Amplitude';
@@ -114,9 +115,10 @@ export class Scene extends GraphicObject {
         
         
         // this.fig.linkYRange(f1);
-        
-        gridInner.addItem(f1y, 0, 0);
-        gridInner.addItem(f2x, 1, 0);
+        grid.addItem(this.fig, 0, 0, 1, 1);
+        grid.addItem(f1y, 1, 0, 1, 2);
+        grid.addItem(f2x, 2, 0, 1, 2);
+        grid.addItem(new EmptySpace(), 0, 1);
         // gridInner.addItem(new Figure(), 0, 0);
 
         this.dLines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);

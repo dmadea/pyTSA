@@ -226,6 +226,10 @@ export class NumberArray extends Array<number> {
         return this;
     }
 
+    public slice(start?: number | undefined, end?: number | undefined): NumberArray {
+        return NumberArray.fromArray(super.slice(start, end));
+    }
+
     public log() {
         var str = "[";
         for (let i = 0; i < this.length; i++) {

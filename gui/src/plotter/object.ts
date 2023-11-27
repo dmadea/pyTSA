@@ -189,7 +189,7 @@ export class DraggableLines extends GraphicObject {
 
     public orientation: Orientation; // or vertical or both for cross
     public position: Point;
-    private lastMouseDownPos: Point;
+    // private lastMouseDownPos: Point;
     private lastPosition: Point;
 
     public onHoverColor: string = "white";
@@ -218,8 +218,9 @@ export class DraggableLines extends GraphicObject {
     constructor(parent: Figure, orientation: Orientation = Orientation.Vertical) {
         super(parent, {...parent.canvasRect}, {...parent.margin});
         this.orientation = orientation;
-        this.position = {x: parent.getInternalRange().x, y: parent.getInternalRange().y};
-        this.lastMouseDownPos = {x: 0, y: 0};
+        const rng = parent.getInternalRange();
+        this.position = {x: rng.x + rng.w / 2, y: rng.y + rng.h / 2};
+        // this.lastMouseDownPos = {x: 0, y: 0};
         this.lastPosition = {...this.position};
         // this.setStickGrid(10, 3, 10, 4);
     }
@@ -288,7 +289,7 @@ export class DraggableLines extends GraphicObject {
         
         this.verticalDragging = this.verticalHovering;
         this.horizontalDragging = this.horizontalHovering;
-        this.lastMouseDownPos = {x: e.x, y: e.y};
+        // this.lastMouseDownPos = {x: e.x, y: e.y};
         this.lastPosition = {...this.position};
 
         if (this.horizontalDragging || this.verticalDragging) {
@@ -370,21 +371,42 @@ export class DraggableLines extends GraphicObject {
     }
 
     private positionChanged() {
+        const f = this.parent as Figure
         for (const line of this.xLinks) {
-            line.position.x = this.position.x;
-            (line.parent as Figure).repaint();
+            const lf = line.parent as Figure;
+            if (lf.figureSettings.xAxis.scale === f.figureSettings.xAxis.scale) {
+                line.position.x = this.position.x;
+            } else {
+                line.position.x = lf.invTransform(f.transform(this.position.x, 'x'), 'x');
+            }
+            lf.repaint();
         }
         for (const line of this.yLinks) {
-            line.position.y = this.position.y;
-            (line.parent as Figure).repaint();
+            const lf = line.parent as Figure;
+            if (lf.figureSettings.yAxis.scale === f.figureSettings.yAxis.scale) {
+                line.position.y = this.position.y;
+            } else {
+                line.position.y = lf.invTransform(f.transform(this.position.y, 'y'), 'y');
+            }
+            lf.repaint();
         }
         for (const line of this.xyLinks) {
-            line.position.y = this.position.x;
-            (line.parent as Figure).repaint();
+            const lf = line.parent as Figure;
+            if (lf.figureSettings.yAxis.scale === f.figureSettings.xAxis.scale) {
+                line.position.y = this.position.x;
+            } else {
+                line.position.y = lf.invTransform(f.transform(this.position.x, 'x'), 'y');
+            }
+            lf.repaint();
         }
         for (const line of this.yxLinks) {
-            line.position.x = this.position.y;
-            (line.parent as Figure).repaint();
+            const lf = line.parent as Figure;
+            if (lf.figureSettings.xAxis.scale === f.figureSettings.yAxis.scale) {
+                line.position.x = this.position.y;
+            } else {
+                line.position.x = lf.invTransform(f.transform(this.position.y, 'y'), 'x');
+            }
+            lf.repaint();
         }
 
         for (const fun of this.positionChangedListeners) {
@@ -406,8 +428,6 @@ export class DraggableLines extends GraphicObject {
         if (!this.canvas) {
             return;
         }
-
-        
 
         if (this.horizontalDragging || this.verticalDragging) {
             return;

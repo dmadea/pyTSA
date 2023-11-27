@@ -89,7 +89,7 @@ export class Figure extends GraphicObject {
     private _preventPanning: boolean = false;
     private _preventScaling: boolean = false;
 
-    private plotCanvasRect = false;
+    private plotCanvasRect = true;
     public minimalMargin: Margin = { 
         left: 10,
         right: 10,

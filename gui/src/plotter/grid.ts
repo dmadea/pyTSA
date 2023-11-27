@@ -1,5 +1,5 @@
 import { GraphicObject } from "./object";
-import { NumberArray, Rect} from "./types";
+import { Margin, NumberArray, Rect} from "./types";
 
 interface IPosition {
     row: number, 
@@ -19,14 +19,14 @@ export class Grid extends GraphicObject {
 
     private positions: IPosition[];
     public gridSettings: IGridSettings = {
-        horizontalSpace: 0.000,  // from 0 - 1, how much overall width one space will take
-        verticalSpace: 0.000,
+        horizontalSpace: 0.005,  // from 0 - 1, how much overall width one space will take
+        verticalSpace: 0.005,
         widthRatios: null,
         heightRatios: null
     };
 
-    constructor (parent?: GraphicObject, canvasRect?: Rect) {
-        super(parent, canvasRect);
+    constructor (parent?: GraphicObject, canvasRect?: Rect, margin?: Margin) {
+        super(parent, canvasRect, margin);
         this.positions = [];
     }
     
@@ -84,10 +84,13 @@ export class Grid extends GraphicObject {
                 y += this.effRect.h * this.gridSettings.verticalSpace;
             }
 
+            const wRatios = this.gridSettings.widthRatios.slice(pos.col, pos.col + pos.colSpan).sum();
+            const hRatios = this.gridSettings.heightRatios.slice(pos.row, pos.row + pos.rowSpan).sum();
+
             item.canvasRect.x = x;
             item.canvasRect.y = y;
-            item.canvasRect.w = width * this.gridSettings.widthRatios[pos.col] / wtotalRatio;
-            item.canvasRect.h = height * this.gridSettings.heightRatios[pos.row] / htotalRatio;
+            item.canvasRect.w = width * wRatios / wtotalRatio + this.effRect.w * (pos.colSpan - 1) * this.gridSettings.horizontalSpace;
+            item.canvasRect.h = height * hRatios / htotalRatio + this.effRect.h * (pos.rowSpan - 1) * this.gridSettings.verticalSpace;
             // console.log(item.canvasRect);
         }
 
@@ -101,4 +104,8 @@ export class Grid extends GraphicObject {
         this.positions.push({row, col, rowSpan, colSpan});
         this.recalculateGrid(false);
     }
+}
+
+export class EmptySpace extends GraphicObject {
+
 }
