@@ -63,17 +63,11 @@ export class Figure extends GraphicObject {
     public steps: NumberArray; 
     public heatmap: HeatMap | null = null;
     
-    private xRangeLinks: Figure[] = [];
-    private yRangeLinks: Figure[] = [];
-    private xyRangeLinks: Figure[] = [];
-    private yxRangeLinks: Figure[] = [];
-
-    private marginLinks: ([Figure, Orientation])[] = [];
     public xAxisSigFigures: number = 2;
     public yAxisSigFigures: number = 2;
     public font: string = '10 ps sans-serif';
 
-    public requiredMargin: Margin;
+    public requiredMargin: Margin; // last margin required by paining the figure
     
     // private fields
     
@@ -83,11 +77,21 @@ export class Figure extends GraphicObject {
     private lastRange: Rect;
     private linePlots: Array<ILinePlot> = [];
 
+    private xRangeLinks: Figure[] = [];
+    private yRangeLinks: Figure[] = [];
+    private xyRangeLinks: Figure[] = [];
+    private yxRangeLinks: Figure[] = [];
+
+    private marginLinks: ([Figure, Orientation])[] = [];
+
     private panning: boolean = false;
     private scaling: boolean = false;
     private lastCenterPoint: Point;
     private _preventPanning: boolean = false;
     private _preventScaling: boolean = false;
+
+    private offScreenCanvas: OffscreenCanvas;
+    private offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
 
     private plotCanvasRect = true;
     public minimalMargin: Margin = { 
@@ -118,7 +122,29 @@ export class Figure extends GraphicObject {
         // this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
         // this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
         this.lastCenterPoint = {x: 0, y: 0};
+        this.offScreenCanvas = new OffscreenCanvas(this.canvasRect.w, this.canvasRect.h);
+        this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
+        if (this.offScreenCanvasCtx === null) {
+            throw new Error('this.offScreenCanvasCtx === null');
+        }
     }
+
+    // public resize(): void {
+    //     super.resize();
+
+    // }
+
+    public setCanvasRect(cr: Rect): void {
+        super.setCanvasRect(cr);
+        this.offScreenCanvas.width = this.canvasRect.w;
+        this.offScreenCanvas.height = this.canvasRect.h;
+        for (const item of this.items) {
+            item.canvasRect = {...this.canvasRect};
+            // item.margin = {...this.margin};
+        }
+    }
+
+
 
     public setViewBounds(xAxisBounds?: [number, number], yAxisBounds?: [number, number]) {
         if (xAxisBounds) {
@@ -775,10 +801,52 @@ export class Figure extends GraphicObject {
         // console.timeEnd('paintPlots');
     }
 
+    private draw2OffScreenCanvas() {
+        if (!this.offScreenCanvasCtx || !this.canvas) return;
+
+        const w = this.canvasRect.w;
+        const h = this.canvasRect.h;
+
+        this.offScreenCanvasCtx.drawImage(this.canvas, 
+            this.canvasRect.x, this.canvasRect.y, w, h,
+            0, 0, w, h);
+    }
+
+    public repaintItems() {
+        // https://stackoverflow.com/questions/4532166/how-to-capture-a-section-of-a-canvas-to-a-bitmap
+
+        // console.time('repaintItems');
+        if (!this.offScreenCanvasCtx || !this.ctx || !this.offScreenCanvas || !this.canvas) return;
+
+        const w = this.canvasRect.w;
+        const h = this.canvasRect.h;
+
+        const e: IPaintEvent = {canvas: this.canvas, ctx: this.ctx};
+
+        e.ctx.drawImage(this.offScreenCanvas, 
+            0, 0, w, h,
+            this.canvasRect.x, this.canvasRect.y, w, h);
+        
+        this.paintItems(e);
+        // console.timeEnd('repaintItems');
+    }
+
+    private paintItems(e: IPaintEvent) {
+        // paint all additional graphics objects if necessary
+        // update the canvas and margins for other items
+
+        super.paint(e);
+    }
+
     paint(e: IPaintEvent): void {
         // plot rectangle
 
         // console.time('paint');
+
+        for (const item of this.items) {
+            item.canvasRect = {...this.canvasRect};
+            item.margin = {...this.margin};
+        }
 
         e.ctx.save();
 
@@ -804,15 +872,10 @@ export class Figure extends GraphicObject {
         this.paintHeatMap(e);
         this.paintPlots(e);
 
-        // paint all additional graphics objects if necessary
-        // update the canvas and margins for other items
-        for (const item of this.items) {
-            item.canvasRect = {...this.canvasRect};
-            item.margin = {...this.margin};
-        }
-        super.paint(e);
+        this.paintItems(e);
 
         e.ctx.restore();
+        
         
         e.ctx.save();
 
@@ -824,17 +887,17 @@ export class Figure extends GraphicObject {
         // draw figure rectangle
         e.ctx.lineWidth = 1 + Math.round(dpr);
         e.ctx.strokeRect(this.effRect.x, this.effRect.y, this.effRect.w, this.effRect.h);
+
         this.drawTicks(e);
 
+        // backup the figure so that it can be reused later when repainting items
+        
         e.ctx.restore();
+        // this.draw2OffScreenCanvas();
+        
+
 
         // console.timeEnd('paint');
-
-        // this.ctx.restore();
-
-        // this.ctx.save();
-
-
     }
 
     public drawTicks(e: IPaintEvent){  // r is Figure Rectangle, the frame

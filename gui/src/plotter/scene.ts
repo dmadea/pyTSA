@@ -115,10 +115,10 @@ export class Scene extends GraphicObject {
         
         
         // this.fig.linkYRange(f1);
-        grid.addItem(this.fig, 0, 0, 1, 1);
-        grid.addItem(f1y, 1, 0, 1, 2);
-        grid.addItem(f2x, 2, 0, 1, 2);
-        grid.addItem(new EmptySpace(), 0, 1);
+        grid.addItem(this.fig, 0, 0, 2, 1);
+        grid.addItem(f1y, 0, 1, 1, 1);
+        grid.addItem(f2x, 1, 1, 1, 1);
+        // grid.addItem(new EmptySpace(), 0, 1);
         // gridInner.addItem(new Figure(), 0, 0);
 
         this.dLines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);

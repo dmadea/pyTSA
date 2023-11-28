@@ -87,10 +87,17 @@ export class Grid extends GraphicObject {
             const wRatios = this.gridSettings.widthRatios.slice(pos.col, pos.col + pos.colSpan).sum();
             const hRatios = this.gridSettings.heightRatios.slice(pos.row, pos.row + pos.rowSpan).sum();
 
-            item.canvasRect.x = x;
-            item.canvasRect.y = y;
-            item.canvasRect.w = width * wRatios / wtotalRatio + this.effRect.w * (pos.colSpan - 1) * this.gridSettings.horizontalSpace;
-            item.canvasRect.h = height * hRatios / htotalRatio + this.effRect.h * (pos.rowSpan - 1) * this.gridSettings.verticalSpace;
+            item.setCanvasRect({
+                x, 
+                y,
+                w: width * wRatios / wtotalRatio + this.effRect.w * (pos.colSpan - 1) * this.gridSettings.horizontalSpace, 
+                h: height * hRatios / htotalRatio + this.effRect.h * (pos.rowSpan - 1) * this.gridSettings.verticalSpace
+            });
+
+            // item.canvasRect.x = x;
+            // item.canvasRect.y = y;
+            // item.canvasRect.w = ;
+            // item.canvasRect.h = ;
             // console.log(item.canvasRect);
         }
 

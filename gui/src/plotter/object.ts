@@ -112,7 +112,7 @@ export abstract class GraphicObject{
 
     public repaint() {
         if (this.ctx && this.canvas) {
-            let e: IPaintEvent = {canvas: this.canvas, ctx: this.ctx};
+            const e: IPaintEvent = {canvas: this.canvas, ctx: this.ctx};
             this.paint(e);
         }
     }
@@ -123,6 +123,11 @@ export abstract class GraphicObject{
     
     public height() {
         return this.canvas?.height;
+    }
+
+    public setCanvasRect(cr: Rect) {
+        this.canvasRect = cr;
+        this.calcEffectiveRect();
     }
 
     public resize() {
@@ -319,14 +324,19 @@ export class DraggableLines extends GraphicObject {
                     [w, h] = [h, w];
                     xSign *= -1;
                 }
+
+                const rng = f.getInternalRange();
     
-                let xRatio = f.getInternalRange().w / w;
-                let yRatio = f.getInternalRange().h / h;
+                let xRatio = rng.w / w;
+                let yRatio = rng.h / h;
     
                 let pos = {
                     x: ((va) ? this.horizontalDragging : this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
                     y: ((va) ? this.verticalDragging : this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
                 }
+
+                pos.x = Math.max(rng.x, Math.min(pos.x, rng.x + rng.w));
+                pos.y = Math.max(rng.y, Math.min(pos.y, rng.y + rng.h));
     
                 if (this.stickGrid && this.stickToData) {
     
@@ -341,12 +351,12 @@ export class DraggableLines extends GraphicObject {
                     if (newPos.x !== this.position.x || newPos.y !== this.position.y) {
                         this.position = newPos;
                         this.positionChanged();
-                        f.repaint();
+                        f.repaintItems();
                     }
                 } else {
                     this.position = pos;
                     this.positionChanged();
-                    f.repaint();
+                    f.repaintItems();
                 }
                 // console.timeEnd('mousemove');
 
@@ -379,7 +389,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.x = lf.invTransform(f.transform(this.position.x, 'x'), 'x');
             }
-            lf.repaint();
+            lf.repaintItems();
         }
         for (const line of this.yLinks) {
             const lf = line.parent as Figure;
@@ -388,7 +398,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.y = lf.invTransform(f.transform(this.position.y, 'y'), 'y');
             }
-            lf.repaint();
+            lf.repaintItems();
         }
         for (const line of this.xyLinks) {
             const lf = line.parent as Figure;
@@ -397,7 +407,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.y = lf.invTransform(f.transform(this.position.x, 'x'), 'y');
             }
-            lf.repaint();
+            lf.repaintItems();
         }
         for (const line of this.yxLinks) {
             const lf = line.parent as Figure;
@@ -406,7 +416,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.x = lf.invTransform(f.transform(this.position.y, 'y'), 'x');
             }
-            lf.repaint();
+            lf.repaintItems();
         }
 
         for (const fun of this.positionChangedListeners) {
@@ -441,12 +451,12 @@ export class DraggableLines extends GraphicObject {
         // on change, repaint
         if (this.verticalHovering !== vh) {
             this.verticalHovering = vh;
-            f.repaint();
+            f.repaintItems();
         } 
         
         if (this.horizontalHovering !== hh) {
             this.horizontalHovering = hh;
-            f.repaint();
+            f.repaintItems();
         }
 
         f.preventMouseEvents(undefined, this.verticalHovering || this.horizontalHovering);
