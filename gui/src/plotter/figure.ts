@@ -12,14 +12,18 @@ interface IFigureSettings {
         scale: string | NumberArray,  // lin, log, symlog, numberarray - scale is determined from the data
         viewBounds: number[],   // bounds of view or [x0, x1]
         autoscale: boolean,
-        inverted: boolean
+        inverted: boolean,
+        symlogLinthresh: number, // Defines the range (-x, x), within which the plot is linear.
+        symlogLinscale: number  // number of decades to use for each half of the linear range
     },
     yAxis: {
         label: string,
         scale: string | NumberArray,  // lin, log, symlog, data
         viewBounds: number[],   // bounds of view or [x0, x1]
         autoscale: boolean,
-        inverted: boolean
+        inverted: boolean,
+        symlogLinthresh: number, // Defines the range (-x, x), within which the plot is linear.
+        symlogLinscale: number  // number of decades to use for each half of the linear range
     },
     title: string,
     showTicks: string[],        // ['top', 'bottom', 'left', 'right']
@@ -45,14 +49,18 @@ export class Figure extends GraphicObject {
             scale: 'lin', 
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
             autoscale: false,
-            inverted: false 
+            inverted: false,
+            symlogLinthresh: 1,
+            symlogLinscale: 1
         },
         yAxis: {
             label: '',
             scale: 'lin',
             viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
             autoscale: true,
-            inverted: false
+            inverted: false,
+            symlogLinthresh: 1,
+            symlogLinscale: 1
         },
         title: '',
         showTicks: ['left', 'right', 'bottom', 'top'],        // ['top', 'bottom', 'left', 'right']
@@ -719,8 +727,8 @@ export class Figure extends GraphicObject {
 
     // transforms from dummy axis value to real value
     public transform(num: number, axis: string) {
-        let axisScale = (axis === 'x') ? this.figureSettings.xAxis.scale : this.figureSettings.yAxis.scale
-        switch (axisScale) {
+        const ax = (axis === 'x') ? this.figureSettings.xAxis : this.figureSettings.yAxis
+        switch (ax.scale) {
             case 'lin': {
                 return num;
             }
@@ -728,20 +736,29 @@ export class Figure extends GraphicObject {
                 return 10 ** num;
             }                
             case 'symlog': {
-                throw new Error('Not implemented');
+                const linthresh = ax.symlogLinscale;
+                const linscale = ax.symlogLinscale;
+
+                // linear scale
+                if (Math.abs(num) <= linthresh) {
+                    return num;
+                } else {
+                    const sign = num >= 0 ? 1 : -1;
+                    return sign * 10 ** (Math.abs(num) / linthresh + Math.log10(linthresh) - 1);
+                }
             }
             default: // for data bound scale
-                if (!(axisScale instanceof NumberArray)) {
+                if (!(ax.scale instanceof NumberArray)) {
                     throw new Error("Not implemented");
                 }
-                return axisScale[Math.min(axisScale.length - 1, Math.max(0, Math.round(num)))];
+                return ax.scale[Math.min(ax.scale.length - 1, Math.max(0, Math.round(num)))];
         }
     }
 
     // transforms from real data to dummy axis value
     public invTransform(num: number, axis: string) {
-        let axisScale = (axis === 'x') ? this.figureSettings.xAxis.scale : this.figureSettings.yAxis.scale
-        switch (axisScale) {
+        const ax = (axis === 'x') ? this.figureSettings.xAxis : this.figureSettings.yAxis
+        switch (ax.scale) {
             case 'lin': {
                 return num;
             }
@@ -749,13 +766,22 @@ export class Figure extends GraphicObject {
                 return Math.log10(num);
             }                
             case 'symlog': {
-                throw new Error('Not implemented');
+                const linthresh = ax.symlogLinscale;
+                const linscale = ax.symlogLinscale;
+
+                // linear scale
+                if (Math.abs(num) <= linthresh) {
+                    return num;
+                } else {
+                    const sign = num >= 0 ? 1 : -1;
+                    return sign * linthresh * (1 + Math.log10(Math.abs(num) / linthresh))
+                }
             }
             default: // for data bound scale
-                if (!(axisScale instanceof NumberArray)) {
+                if (!(ax.scale instanceof NumberArray)) {
                     throw new Error("Not implemented");
                 }
-                return axisScale.nearestIndex(num);
+                return ax.scale.nearestIndex(num);
         }
     }
 
@@ -872,15 +898,15 @@ export class Figure extends GraphicObject {
         this.paintHeatMap(e);
         this.paintPlots(e);
 
-        this.paintItems(e);
+        
 
         e.ctx.restore();
         
         
         e.ctx.save();
 
-        e.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        e.ctx.clip();
+        // e.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // e.ctx.clip();
 
         const dpr = window.devicePixelRatio;
         
@@ -893,7 +919,9 @@ export class Figure extends GraphicObject {
         // backup the figure so that it can be reused later when repainting items
         
         e.ctx.restore();
-        // this.draw2OffScreenCanvas();
+        this.draw2OffScreenCanvas();
+
+        this.paintItems(e);
         
 
 
@@ -929,6 +957,14 @@ export class Figure extends GraphicObject {
 
         if (this.figureSettings.yAxis.scale === 'log') {
             this.yAxisSigFigures = 1;
+        }
+
+        if (this.figureSettings.xAxis.scale === 'symlog') {
+            this.xAxisSigFigures = 3;
+        }
+
+        if (this.figureSettings.yAxis.scale === 'symlog') {
+            this.yAxisSigFigures = 3;
         }
 
         let xFigs = this.xAxisSigFigures;
@@ -1195,7 +1231,30 @@ export class Figure extends GraphicObject {
                 return [ticks, ticksValues];
             }
             case 'symlog': {
-                throw new Error("Not implemented");
+                const scale = 10 ** Math.trunc(Math.log10(Math.abs(size)));
+        
+                const extStepsScaled = NumberArray.fromArray([
+                    ...NumberArray.mul(this.steps, 0.01 * scale), 
+                    ...NumberArray.mul(this.steps, 0.1 * scale), 
+                    ...NumberArray.mul(this.steps, scale)]);
+            
+                const rawStep = size / prefferedNBins;
+            
+                //find the nearest value in the array
+                const step = extStepsScaled.nearestValue(rawStep);
+                const bestMin = Math.ceil(coor / step) * step;
+            
+                const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
+                const ticks = new NumberArray(nticks);
+                const ticksValues = new NumberArray(nticks);
+            
+                // generate ticks
+                for (let i = 0; i < nticks; i++) {
+                    ticks[i] = bestMin + step * i;
+                    ticksValues[i] = this.transform(ticks[i], axis)
+                }
+        
+                return [ticks, ticksValues];
 
             }
             default: {  

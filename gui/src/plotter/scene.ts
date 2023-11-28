@@ -75,7 +75,9 @@ export class Scene extends GraphicObject {
         var f1y = new Figure();
         // f1y.figureSettings.axisAlignment = 'vertical';
         // f1y.figureSettings.xAxis.inverted = true;
-        // f1y.figureSettings.xAxis.scale = 'log';
+        f1y.figureSettings.xAxis.scale = 'symlog';
+        f1y.figureSettings.xAxis.symlogLinscale = 3;
+
 
         // f1y.figureSettings.showTickNumbers = ['top', 'right', 'bottom'];
         // f1y.figureSettings.yAxis.label = 'Amplitude';
