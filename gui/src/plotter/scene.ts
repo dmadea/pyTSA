@@ -1,4 +1,4 @@
-import { DraggableLines } from "./draggableLines";
+import { DraggableLines, Orientation } from "./draggableLines";
 import { Figure } from "./figure";
 import { EmptySpace, Grid } from "./grid";
 import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
@@ -62,11 +62,14 @@ export class Scene extends GraphicObject {
         // this.items.push(grid);
 
         this.fig = new Figure();
-        // this.fig.axisAlignment = 'vertical';
+        // this.fig.axisAlignment = Orientation.Horizontal;
         this.fig.yAxis.inverted = true;
         // this.fig.showTickNumbers = ['top', 'left'];
         this.fig.yAxis.label = 'Time / ps';
         this.fig.xAxis.label = 'Wavelength / nm';
+        // this.fig.xAxis.scale = 'symlog';
+        // this.fig.yAxis.scale = 'symlog';
+
 
         // this.fig.minimalMargin.left = 200;
 
@@ -76,8 +79,8 @@ export class Scene extends GraphicObject {
         var f1y = new Figure();
         // f1y.axisAlignment = 'vertical';
         // f1y.xAxis.inverted = true;
-        f1y.xAxis.scale = 'symlog';
-        f1y.xAxis.symlogLinthresh = 1;
+        f1y.xAxis.scale = 'log';
+        f1y.xAxis.symlogLinthresh = 2.5;
         f1y.xAxis.symlogLinscale = 2;
         f1y.xAxis.autoscale = false;
 
@@ -134,7 +137,7 @@ export class Scene extends GraphicObject {
             if (this.fig?.heatmap) {
 
                 // f2x.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
-                // f1y.figureSettings.xAxis.scale = this.fig.figureSettings.yAxis.scale;
+                f1y.xAxis.scale = this.fig.yAxis.scale;
 
                 // get row
                 let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.y);

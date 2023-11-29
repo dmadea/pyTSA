@@ -215,13 +215,16 @@ export class DraggableLines extends GraphicObject {
     }
 
     private positionChanged() {
-        const f = this.parent as Figure
+        const f = this.parent as Figure;
+        const xT = f.xAxis.getTransform();
+        const yT = f.yAxis.getTransform();
+
         for (const line of this.xLinks) {
             const lf = line.parent as Figure;
             if (lf.xAxis.scale === f.xAxis.scale) {
                 line.position.x = this.position.x;
             } else {
-                line.position.x = lf.xAxis.invTransform(f.xAxis.transform(this.position.x));
+                line.position.x = lf.xAxis.getInverseTransform()(xT(this.position.x));
             }
             lf.repaintItems();
         }
@@ -230,7 +233,7 @@ export class DraggableLines extends GraphicObject {
             if (lf.yAxis.scale === f.yAxis.scale) {
                 line.position.y = this.position.y;
             } else {
-                line.position.y = lf.yAxis.invTransform(f.yAxis.transform(this.position.y));
+                line.position.y = lf.yAxis.getInverseTransform()(yT(this.position.y));
             }
             lf.repaintItems();
         }
@@ -239,7 +242,7 @@ export class DraggableLines extends GraphicObject {
             if (lf.yAxis.scale === f.xAxis.scale) {
                 line.position.y = this.position.x;
             } else {
-                line.position.y = lf.yAxis.invTransform(f.xAxis.transform(this.position.x));
+                line.position.y = lf.yAxis.getInverseTransform()(xT(this.position.x));
             }
             lf.repaintItems();
         }
@@ -248,16 +251,15 @@ export class DraggableLines extends GraphicObject {
             if (lf.xAxis.scale === f.yAxis.scale) {
                 line.position.x = this.position.y;
             } else {
-                line.position.x = lf.xAxis.invTransform(f.yAxis.transform(this.position.y));
+                line.position.x = lf.xAxis.getInverseTransform()(yT(this.position.y));
             }
             lf.repaintItems();
         }
 
         for (const fun of this.positionChangedListeners) {
-            let f = this.parent as Figure;
             let pos: IPosition = {
                 internalPosition: this.position,
-                realPosition: {x: f.xAxis.transform(this.position.x), y: f.yAxis.transform(this.position.y)}
+                realPosition: {x: xT(this.position.x), y: yT(this.position.y)}
             };
 
             fun(pos);
@@ -347,7 +349,7 @@ export class DraggableLines extends GraphicObject {
             e.ctx.textBaseline = 'middle'; // horizontal alignment
             e.ctx.font = f.tickValuesFont;
 
-            let num = (va) ? f.xAxis.transform(this.position.x) : f.yAxis.transform(this.position.y);
+            let num = (va) ? f.xAxis.getTransform()(this.position.x) : f.yAxis.getTransform()(this.position.y);
 
             let text = formatNumber(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
             let textSize = e.ctx.measureText(text);
@@ -375,7 +377,7 @@ export class DraggableLines extends GraphicObject {
         if (this.showText) {
             let yText = f.effRect.y + this.textPosition;
 
-            let num = (va) ? f.yAxis.transform(this.position.y) : f.xAxis.transform(this.position.x);
+            let num = (va) ? f.yAxis.getTransform()(this.position.y) : f.xAxis.getTransform()(this.position.x);
 
             let text = formatNumber(num, 1 + ((va) ? f.yAxis.displayedSignificantFigures : f.xAxis.displayedSignificantFigures));
             let textSize = e.ctx.measureText(text);

@@ -65,60 +65,72 @@ export class Axis {
     }
 
     // transforms from dummy axis value to real value
-    public transform(num: number) {
+    public getTransform(): (num: number) => number {
         switch (this.scale) {
             case 'lin': {
-                return num;
+                return (num: number) => num;
             }
             case 'log': {
-                return 10 ** num;
+                return (num: number) => 10 ** num;
             }                
             case 'symlog': {
                 const linthresh = this.symlogLinthresh;
                 const linscale = this.symlogLinscale;
 
-                // linear scale
-                if (Math.abs(num) <= linthresh) {
-                    return num;
-                } else { // log scale
-                    const sign = num >= 0 ? 1 : -1;
-                    return sign * 10 ** (linscale * Math.abs(num) / linthresh + Math.log10(linthresh) - 1);
-                }
+                return (num: number) => {
+                    // linear scale
+                    if (Math.abs(num) <= linthresh) {
+                        return num;
+                    } else { // log scale
+                        const sign = num >= 0 ? 1 : -1;
+                        return sign * linthresh * 10 ** (linscale * (Math.abs(num) / linthresh - 1));
+                    }
+                };
             }
             default: // for data bound scale
-                if (!(this.scale instanceof NumberArray)) {
+                const scale = this.scale;
+                if (!(scale instanceof NumberArray)) {
                     throw new Error("Not implemented");
                 }
-                return this.scale[Math.min(this.scale.length - 1, Math.max(0, Math.round(num)))];
+
+                return (num: number) =>  {
+                    return scale[Math.min(this.scale.length - 1, Math.max(0, Math.round(num)))];
+                };
         }
     }
 
     // transforms from real data to dummy axis value
-    public invTransform(num: number) {
+    public getInverseTransform(): (num: number) => number {
         switch (this.scale) {
             case 'lin': {
-                return num;
+                return (num: number) => num;
             }
             case 'log': {
-                return Math.log10(num);
+                return (num: number) => Math.log10(num);
             }                
             case 'symlog': {
                 const linthresh = this.symlogLinthresh;
                 const linscale = this.symlogLinscale;
 
-                // linear scale
-                if (Math.abs(num) <= linthresh) {
-                    return num;
-                } else {
-                    const sign = num >= 0 ? 1 : -1;
-                    return sign * linthresh * (1 + Math.log10(Math.abs(num) / linthresh)) / linscale;
-                }
+                return (num: number) => {
+                    // linear scale
+                    if (Math.abs(num) <= linthresh) {
+                        return num;
+                    } else {
+                        const sign = num >= 0 ? 1 : -1;
+                        return sign * linthresh * (1 + Math.log10(Math.abs(num) / linthresh) / linscale);
+                    }
+                };
             }
             default: // for data bound scale
-                if (!(this.scale instanceof NumberArray)) {
+                const scale = this.scale;
+                if (!(scale instanceof NumberArray)) {
                     throw new Error("Not implemented");
                 }
-                return this.scale.nearestIndex(num);
+
+                return (num: number) =>  {
+                    return scale.nearestIndex(num);
+                };    
         }
     }
 }
@@ -252,35 +264,43 @@ export class Figure extends GraphicObject {
 
     public setViewBounds(xAxisBounds?: [number, number], yAxisBounds?: [number, number]) {
         if (xAxisBounds) {
-            this.xAxis.viewBounds = [this.xAxis.invTransform(xAxisBounds[0]), this.xAxis.invTransform(xAxisBounds[1])];
+            const xIT = this.xAxis.getInverseTransform();
+            this.xAxis.viewBounds = [xIT(xAxisBounds[0]), xIT(xAxisBounds[1])];
         }
 
         if (yAxisBounds) {
-            this.yAxis.viewBounds = [this.yAxis.invTransform(yAxisBounds[0]), this.yAxis.invTransform(yAxisBounds[1])];
+            const yIT = this.yAxis.getInverseTransform();
+            this.yAxis.viewBounds = [yIT(yAxisBounds[0]), yIT(yAxisBounds[1])];
         }
     }
 
     get range() {
-        const x = this.xAxis.transform(this._range.x);
-        const y = this.yAxis.transform(this._range.y);
+        const xT = this.xAxis.getTransform();
+        const yT = this.yAxis.getTransform();
+
+        const x = xT(this._range.x);
+        const y = yT(this._range.y);
 
         return {
             x,
             y,
-            w: this.xAxis.transform(this._range.x + this._range.w) - x,
-            h: this.yAxis.transform(this._range.y + this._range.h) - y,
+            w: xT(this._range.x + this._range.w) - x,
+            h: yT(this._range.y + this._range.h) - y,
         }
     }
 
     set range(newRange: Rect) {
-        const x = this.xAxis.invTransform(newRange.x);
-        const y = this.yAxis.invTransform(newRange.y);
+        const xIT = this.xAxis.getInverseTransform();
+        const yIT = this.yAxis.getInverseTransform();
+
+        const x = xIT(newRange.x);
+        const y = yIT(newRange.y);
 
         this._range = {
             x,
             y,
-            w: this.xAxis.invTransform(newRange.x + newRange.w) - x,
-            h: this.yAxis.invTransform(newRange.y + newRange.h) - y,
+            w: xIT(newRange.x + newRange.w) - x,
+            h: yIT(newRange.y + newRange.h) - y,
         }
     }
 
@@ -790,6 +810,7 @@ export class Figure extends GraphicObject {
 
         // TODO include heatmap ranges
         if (this.yAxis.autoscale) {
+            const yIT = this.yAxis.getInverseTransform();
             let mins = [];
             let maxs = [];
             for (const plot of this.linePlots) {
@@ -797,8 +818,8 @@ export class Figure extends GraphicObject {
                 mins.push(min);
                 maxs.push(max);
             }
-            let y0 = this.yAxis.invTransform(Math.min(...mins));
-            let y1 = this.yAxis.invTransform(Math.max(...maxs));
+            let y0 = yIT(Math.min(...mins));
+            let y1 = yIT(Math.max(...maxs));
 
             let diff = y1 - y0;
 
@@ -809,8 +830,9 @@ export class Figure extends GraphicObject {
         }
 
         if (this.xAxis.autoscale) {
-            let x0 = this.xAxis.invTransform(Math.min(...this.linePlots.map(p => p.x[0])));
-            let x1 = this.xAxis.invTransform(Math.min(...this.linePlots.map(p => p.x[p.x.length - 1])));
+            const xIT = this.xAxis.getInverseTransform();
+            let x0 = xIT(Math.min(...this.linePlots.map(p => p.x[0])));
+            let x1 = xIT(Math.min(...this.linePlots.map(p => p.x[p.x.length - 1])));
 
             let diff = x1 - x0;
 
@@ -822,7 +844,6 @@ export class Figure extends GraphicObject {
     }
 
 
-
     private paintPlots(e: IPaintEvent) {
         if (this.linePlots.length < 1) {
             return;
@@ -832,25 +853,28 @@ export class Figure extends GraphicObject {
 
         e.ctx.save();
 
+        const yIT = this.yAxis.getInverseTransform();
+        const xIT = this.xAxis.getInverseTransform();
+
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
 
             e.ctx.beginPath();
 
-            let usei = false; // in case the scale is determined by data
+            let xDataScale = false; // in case the scale is determined by data
             let x0;
             if (this.xAxis.scale instanceof NumberArray && plot.x.length === this.xAxis.scale.length) {
-                usei = true;
+                xDataScale = true;
                 x0 = 0;
             } else {
-                x0 = this.xAxis.invTransform(plot.x[0]);
+                x0 = xIT(plot.x[0]);
             }
 
-            let p0 = this.mapRange2Canvas({x: x0, y: this.yAxis.invTransform(plot.y[0])});
+            let p0 = this.mapRange2Canvas({x: x0, y: yIT(plot.y[0])});
             e.ctx.moveTo(p0.x, p0.y);
 
             for (let i = 1; i < plot.x.length; i++) {
-                let p = this.mapRange2Canvas({x: (usei) ? i : this.xAxis.invTransform(plot.x[i]), y: this.yAxis.invTransform(plot.y[i])});
+                let p = this.mapRange2Canvas({x: (xDataScale) ? i : xIT(plot.x[i]), y: yIT(plot.y[i])});
                 e.ctx.lineTo(p.x, p.y);
             }
             e.ctx.strokeStyle = plot.color;
@@ -956,6 +980,7 @@ export class Figure extends GraphicObject {
         // backup the figure so that it can be reused later when repainting items
         
         e.ctx.restore();
+
         this.draw2OffScreenCanvas();
 
         this.paintItems(e);
@@ -973,8 +998,8 @@ export class Figure extends GraphicObject {
 
         // let pr = window.devicePixelRatio;
 
-        let [xticks, xticksVals] = this.genMajorTicks('x');
-        let [yticks, yticksVals] = this.genMajorTicks('y');
+        let [xticks, xticksVals, xMinors] = this.getTicks('x');
+        let [yticks, yticksVals, yMinors] = this.getTicks('y');
 
         if (this.xAxis.scale instanceof NumberArray) {
             this.xAxis.displayedSignificantFigures = 4;
@@ -1025,6 +1050,7 @@ export class Figure extends GraphicObject {
         }
 
         const tickSize = Math.round(5 + 4 * dpr);
+        const minorTickSize = Math.round(2 + 2 * dpr);
         // const textOffset = 20;
         const fontSize = Math.round(8 + 9 * dpr);
 
@@ -1074,6 +1100,26 @@ export class Figure extends GraphicObject {
             }
         }
         e.ctx.stroke();
+
+        // draw x minor ticks
+        e.ctx.save();
+        e.ctx.lineWidth = 1;
+
+        for (let i = 0; i < xMinors.length; i++) {
+            let p = this.mapRange2Canvas((va) ? {x: 0, y: xMinors[i]} : {x: xMinors[i], y: 0});
+    
+            if (this.showTicks.includes('bottom')){
+                e.ctx.moveTo(p.x, r.y + r.h - minorTickSize);
+                e.ctx.lineTo(p.x, r.y + r.h);
+            }
+    
+            if (this.showTicks.includes('top')){
+                e.ctx.moveTo(p.x, r.y);
+                e.ctx.lineTo(p.x, r.y + minorTickSize);
+            }
+        }
+        e.ctx.stroke();
+        e.ctx.restore();
 
         if (this.showTickNumbers.includes('bottom')){
             this.requiredMargin.bottom += textMaxHeight + textOffset;
@@ -1130,6 +1176,26 @@ export class Figure extends GraphicObject {
             }
         }
         e.ctx.stroke();
+
+        // draw y minor ticks
+        e.ctx.save();
+        e.ctx.lineWidth = 1;
+
+        for (let i = 0; i < yMinors.length; i++) {
+            let p = this.mapRange2Canvas((va) ? {x:yMinors[i], y: 0} : {x:0, y: yMinors[i]});
+
+            if (this.showTicks.includes('left')){
+                e.ctx.moveTo(r.x, p.y);
+                e.ctx.lineTo(r.x + minorTickSize, p.y);
+            }
+
+            if (this.showTicks.includes('right')){
+                e.ctx.moveTo(r.x + r.w, p.y);
+                e.ctx.lineTo(r.x + r.w - minorTickSize, p.y);
+            }
+        }
+        e.ctx.stroke();
+        e.ctx.restore();
 
         if (this.showTickNumbers.includes('left')){
             this.requiredMargin.left += textMaxWidth + textOffset / 2;
@@ -1201,11 +1267,13 @@ export class Figure extends GraphicObject {
 
     // returns tuple of arrays, first is the x tick position on dummy linear axis
     // and second is actuall value of the tick
-    genMajorTicks(axis: string): [NumberArray, NumberArray]{
+    // returns major ticks, major ticks values and minor ticks
+    getTicks(axis: string): [NumberArray, NumberArray, NumberArray]{
         // calculate scale
 
-        let coor, size, scaleType, prefferedNBins, ax;
+        let coor, size, scaleType, prefMajorBins, prefMinorBins, ax;
         const f = 0.005;
+        const fMinor = 0.05;
         let w = this.effRect.w;
         let h = this.effRect.h;
         const va = this.axisAlignment == Orientation.Vertical;
@@ -1216,12 +1284,14 @@ export class Figure extends GraphicObject {
             ax = this.xAxis;
             coor = this._range.x;
             size = this._range.w;
-            prefferedNBins = Math.max(Math.round((va ? 1.5 : 1) * w * f), 2);
+            prefMajorBins = Math.max(Math.round((va ? 1.5 : 1) * w * f), 2);
+            prefMinorBins = Math.round(w * fMinor);
         } else {
             ax = this.yAxis;
             coor = this._range.y;
             size = this._range.h;
-            prefferedNBins = Math.max(Math.round((va ? 1 : 1.5) * h * f), 2);
+            prefMajorBins = Math.max(Math.round((va ? 1 : 1.5) * h * f), 2);
+            prefMinorBins = Math.round(h * fMinor);
         }
         scaleType = ax.scale;
 
@@ -1234,7 +1304,7 @@ export class Figure extends GraphicObject {
                     ...NumberArray.mul(this.steps, 0.1 * scale), 
                     ...NumberArray.mul(this.steps, scale)]);
             
-                const rawStep = size / prefferedNBins;
+                const rawStep = size / prefMajorBins;
             
                 //find the nearest value in the array
                 const step = extStepsScaled.nearestValue(rawStep);
@@ -1247,26 +1317,32 @@ export class Figure extends GraphicObject {
                 for (let i = 0; i < nticks; i++) {
                     ticks[i] = bestMin + step * i;
                 }
+
+                const minorTicks = NumberArray.linspace(-1, 1, 20);
         
-                return [ticks, ticks];
+                return [ticks, ticks, minorTicks];
             }
             case 'log': {
-                let fillMinors = size * 11 <= prefferedNBins * 2;
+                let fillMinors = size * 11 <= prefMajorBins * 2;
+
+                const step = Math.max(1, Math.round(size / prefMajorBins));
 
                 // make major ticks
-                const bestMin = Math.ceil(coor);
+                const bestMin = Math.ceil(coor / step) * step;
                 const nticks = 1 + (coor + size - bestMin) >> 0; // integer division
-                const ticks = new NumberArray(nticks);
-                const ticksValues = new NumberArray(nticks);
+                const majorTicks = new NumberArray(nticks);
+                const majorTicksValues = new NumberArray(nticks);
             
                 // generate ticks
                 for (let i = 0; i < nticks; i++) {
-                    ticks[i] = bestMin + i;
-                    ticksValues[i] = 10 ** ticks[i];
+                    majorTicks[i] = bestMin + step * i;
+                    majorTicksValues[i] = 10 ** majorTicks[i];
                 }
                 // console.log(fillMinors, ticks, ticksValues);
+
+                const minorTicks = new NumberArray();
                 
-                return [ticks, ticksValues];
+                return [majorTicks, majorTicksValues, minorTicks];
             }
             case 'symlog': {
                 const scale = 10 ** Math.trunc(Math.log10(Math.abs(size)));
@@ -1276,7 +1352,7 @@ export class Figure extends GraphicObject {
                     ...NumberArray.mul(this.steps, 0.1 * scale), 
                     ...NumberArray.mul(this.steps, scale)]);
             
-                const rawStep = size / prefferedNBins;
+                const rawStep = size / prefMajorBins;
             
                 //find the nearest value in the array
                 const step = extStepsScaled.nearestValue(rawStep);
@@ -1285,14 +1361,18 @@ export class Figure extends GraphicObject {
                 const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
                 const ticks = new NumberArray(nticks);
                 const ticksValues = new NumberArray(nticks);
+
+                var T = ax.getTransform()
             
                 // generate ticks
                 for (let i = 0; i < nticks; i++) {
                     ticks[i] = bestMin + step * i;
-                    ticksValues[i] = ax.transform(ticks[i])
+                    ticksValues[i] = T(ticks[i])
                 }
+
+                const minorTicks = new NumberArray();
         
-                return [ticks, ticksValues];
+                return [ticks, ticksValues, minorTicks];
 
             }
             default: {  
@@ -1301,20 +1381,34 @@ export class Figure extends GraphicObject {
                 }
                 // data bound
 
-                const step = Math.max(1, Math.round(size / prefferedNBins));
+                const step = Math.max(1, Math.round(size / prefMajorBins));
+                const minorStep = Math.max(1, Math.round(size / prefMinorBins));
+
                 const bestMin = Math.ceil(coor / step) * step;
+                const bestMinMinor = Math.ceil(coor / minorStep) * minorStep;
 
                 const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
+                const nticksMinors = 1 + (coor + size - bestMinMinor) / minorStep >> 0; // integer division
+
                 const ticks = new NumberArray(nticks);
                 const ticksValues = new NumberArray(nticks);
-            
+                
                 // generate ticks
                 for (let i = 0; i < nticks; i++) {
                     ticks[i] = bestMin + step * i;
-                    let val = scaleType[ticks[i]];
-                    ticksValues[i] = (val === undefined) ? Number.NaN : val;
+                    ticksValues[i] = scaleType[ticks[i]] ?? Number.NaN;
                 }
-                return [ticks, ticksValues];
+                
+                const minorTicks = new NumberArray();
+                
+                for (let i = 0; i < nticksMinors; i++) {
+                    const val = bestMinMinor + minorStep * i;
+                    if (ticks.includes(val)) continue;
+                    minorTicks.push(val);
+                }
+                // console.log(minorTicks.length, nticksMinors);
+
+                return [ticks, ticksValues, minorTicks];
             }
         }
     }
