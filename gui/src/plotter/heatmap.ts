@@ -104,8 +104,8 @@ export class HeatMap {
                 let pos = (row * w + col) * 4;        // position in buffer based on x and y
                 
                 // y axis is inverted in default because of different coordinate system
-                let rowIdx = this.figure.figureSettings.yAxis.inverted ? row : h - row - 1;
-                let colIdx = this.figure.figureSettings.xAxis.inverted ? w - col - 1 : col;
+                let rowIdx = this.figure.yAxis.inverted ? row : h - row - 1;
+                let colIdx = this.figure.xAxis.inverted ? w - col - 1 : col;
 
                 let z = m.get(rowIdx, colIdx);
                 // console.log('row', row, 'col', col, z, m.isCContiguous);

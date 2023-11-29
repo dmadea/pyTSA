@@ -1,6 +1,7 @@
+import { DraggableLines } from "./draggableLines";
 import { Figure } from "./figure";
 import { EmptySpace, Grid } from "./grid";
-import { DraggableLines, GraphicObject, IMouseEvent, IPaintEvent, Orientation } from "./object";
+import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 import { backgroundColor } from "./settings";
 import { NumberArray, Matrix } from "./types";
 // import { Rect } from "./types";
@@ -61,11 +62,11 @@ export class Scene extends GraphicObject {
         // this.items.push(grid);
 
         this.fig = new Figure();
-        // this.fig.figureSettings.axisAlignment = 'vertical';
-        this.fig.figureSettings.yAxis.inverted = true;
-        // this.fig.figureSettings.showTickNumbers = ['top', 'left'];
-        this.fig.figureSettings.yAxis.label = 'Time / ps';
-        this.fig.figureSettings.xAxis.label = 'Wavelength / nm';
+        // this.fig.axisAlignment = 'vertical';
+        this.fig.yAxis.inverted = true;
+        // this.fig.showTickNumbers = ['top', 'left'];
+        this.fig.yAxis.label = 'Time / ps';
+        this.fig.xAxis.label = 'Wavelength / nm';
 
         // this.fig.minimalMargin.left = 200;
 
@@ -73,14 +74,16 @@ export class Scene extends GraphicObject {
         // var gridInner = new Grid();
         // grid.addItem(gridInner, 0, 1);
         var f1y = new Figure();
-        // f1y.figureSettings.axisAlignment = 'vertical';
-        // f1y.figureSettings.xAxis.inverted = true;
-        f1y.figureSettings.xAxis.scale = 'symlog';
-        f1y.figureSettings.xAxis.symlogLinscale = 3;
+        // f1y.axisAlignment = 'vertical';
+        // f1y.xAxis.inverted = true;
+        f1y.xAxis.scale = 'symlog';
+        f1y.xAxis.symlogLinthresh = 1;
+        f1y.xAxis.symlogLinscale = 2;
+        f1y.xAxis.autoscale = false;
 
 
-        // f1y.figureSettings.showTickNumbers = ['top', 'right', 'bottom'];
-        // f1y.figureSettings.yAxis.label = 'Amplitude';
+        // f1y.showTickNumbers = ['top', 'right', 'bottom'];
+        // f1y.yAxis.label = 'Amplitude';
 
         // grid.addItem(f1y, 1, 0);
 
@@ -95,8 +98,10 @@ export class Scene extends GraphicObject {
 
         
         var f2x = new Figure();
-        f2x.figureSettings.xAxis.label = 'Wavelength / nm';
-        f1y.figureSettings.xAxis.label = 'Time / ps';
+        f2x.xAxis.label = 'Wavelength / nm';
+        f1y.xAxis.label = 'Time / ps';
+        f2x.xAxis.autoscale = false;
+
 
         // f2x.figureSettings.yAxis.label = 'Amplitude';
         

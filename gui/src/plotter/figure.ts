@@ -1,36 +1,37 @@
 
-import { DraggableLines, GraphicObject, IMouseEvent, IPaintEvent, Orientation } from "./object";
+import { GraphicObject, IMouseEvent, IPaintEvent} from "./object";
 import { Rect, NumberArray, Point, Margin, Matrix } from "./types";
 import { backgroundColor, fontSizeLabels, fontSizeNumbers, frameColor, textColor } from "./settings";
 import { Dataset, determineSigFigures, formatNumber } from "./utils";
 import { Colormap, IColorMap } from "./colormap";
 import { HeatMap } from "./heatmap";
+import { DraggableLines, Orientation } from "./draggableLines";
 
-interface IFigureSettings {
-    xAxis: {
-        label: string,
-        scale: string | NumberArray,  // lin, log, symlog, numberarray - scale is determined from the data
-        viewBounds: number[],   // bounds of view or [x0, x1]
-        autoscale: boolean,
-        inverted: boolean,
-        symlogLinthresh: number, // Defines the range (-x, x), within which the plot is linear.
-        symlogLinscale: number  // number of decades to use for each half of the linear range
-    },
-    yAxis: {
-        label: string,
-        scale: string | NumberArray,  // lin, log, symlog, data
-        viewBounds: number[],   // bounds of view or [x0, x1]
-        autoscale: boolean,
-        inverted: boolean,
-        symlogLinthresh: number, // Defines the range (-x, x), within which the plot is linear.
-        symlogLinscale: number  // number of decades to use for each half of the linear range
-    },
-    title: string,
-    showTicks: string[],        // ['top', 'bottom', 'left', 'right']
-    showTickNumbers: string[],  // ['top', 'bottom', 'left', 'right']
-    axisAlignment: string,   // // could be vertical
+// interface IFigureSettings {
+//     xAxis: {
+//         label: string,
+//         scale: string | NumberArray,  // lin, log, symlog, numberarray - scale is determined from the data
+//         viewBounds: number[],   // bounds of view or [x0, x1]
+//         autoscale: boolean,
+//         inverted: boolean,
+//         symlogLinthresh: number, // Defines the range (-x, x), within which the plot is linear.
+//         symlogLinscale: number  // number of decades to use for each half of the linear range
+//     },
+//     yAxis: {
+//         label: string,
+//         scale: string | NumberArray,  // lin, log, symlog, data
+//         viewBounds: number[],   // bounds of view or [x0, x1]
+//         autoscale: boolean,
+//         inverted: boolean,
+//         symlogLinthresh: number, // Defines the range (-x, x), within which the plot is linear.
+//         symlogLinscale: number  // number of decades to use for each half of the linear range
+//     },
+//     title: string,
+//     showTicks: string[],        // ['top', 'bottom', 'left', 'right']
+//     showTickNumbers: string[],  // ['top', 'bottom', 'left', 'right']
+//     axisAlignment: string,   // // could be vertical
 
-}
+// }
 
 interface ILinePlot {
     x: NumberArray,
@@ -41,39 +42,128 @@ interface ILinePlot {
     zValue: number
 }
 
+export class Axis {
+
+    public label: string;
+    public scale: string | NumberArray;  // lin, log, symlog, data provided as NumberArray
+    public viewBounds: [number, number];   // bounds of view or [x0, x1]
+    public autoscale: boolean;
+    public inverted: boolean;
+    public symlogLinthresh: number; // Defines the range (-x, x), within which the plot is linear.
+    public symlogLinscale: number;  // number of decades to use for each half of the linear range
+    public displayedSignificantFigures: number = 2;
+
+    constructor (label?: string, scale?: string | NumberArray, viewBounds?: [number, number],
+        autoscale?: boolean, inverted?: boolean, symlogLinthresh?: number, symlogLinscale?: number) {
+            this.label = label ?? '';
+            this.scale = scale ?? 'lin';
+            this.viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];
+            this.autoscale = autoscale ?? true;
+            this.inverted = inverted ?? false;
+            this.symlogLinscale = symlogLinscale ?? 1;
+            this.symlogLinthresh = symlogLinthresh ?? 1;
+    }
+
+    // transforms from dummy axis value to real value
+    public transform(num: number) {
+        switch (this.scale) {
+            case 'lin': {
+                return num;
+            }
+            case 'log': {
+                return 10 ** num;
+            }                
+            case 'symlog': {
+                const linthresh = this.symlogLinthresh;
+                const linscale = this.symlogLinscale;
+
+                // linear scale
+                if (Math.abs(num) <= linthresh) {
+                    return num;
+                } else { // log scale
+                    const sign = num >= 0 ? 1 : -1;
+                    return sign * 10 ** (linscale * Math.abs(num) / linthresh + Math.log10(linthresh) - 1);
+                }
+            }
+            default: // for data bound scale
+                if (!(this.scale instanceof NumberArray)) {
+                    throw new Error("Not implemented");
+                }
+                return this.scale[Math.min(this.scale.length - 1, Math.max(0, Math.round(num)))];
+        }
+    }
+
+    // transforms from real data to dummy axis value
+    public invTransform(num: number) {
+        switch (this.scale) {
+            case 'lin': {
+                return num;
+            }
+            case 'log': {
+                return Math.log10(num);
+            }                
+            case 'symlog': {
+                const linthresh = this.symlogLinthresh;
+                const linscale = this.symlogLinscale;
+
+                // linear scale
+                if (Math.abs(num) <= linthresh) {
+                    return num;
+                } else {
+                    const sign = num >= 0 ? 1 : -1;
+                    return sign * linthresh * (1 + Math.log10(Math.abs(num) / linthresh)) / linscale;
+                }
+            }
+            default: // for data bound scale
+                if (!(this.scale instanceof NumberArray)) {
+                    throw new Error("Not implemented");
+                }
+                return this.scale.nearestIndex(num);
+        }
+    }
+}
+
 export class Figure extends GraphicObject {
 
-    public figureSettings: IFigureSettings = {
-        xAxis: {
-            label: '',
-            scale: 'lin', 
-            viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
-            autoscale: false,
-            inverted: false,
-            symlogLinthresh: 1,
-            symlogLinscale: 1
-        },
-        yAxis: {
-            label: '',
-            scale: 'lin',
-            viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
-            autoscale: true,
-            inverted: false,
-            symlogLinthresh: 1,
-            symlogLinscale: 1
-        },
-        title: '',
-        showTicks: ['left', 'right', 'bottom', 'top'],        // ['top', 'bottom', 'left', 'right']
-        showTickNumbers: ['left', 'right', 'bottom', 'top'],  // ['top', 'bottom', 'left', 'right']
-        axisAlignment: 'horizontal',   // could be vertical
-    }
+    // public figureSettings: IFigureSettings = {
+    //     xAxis: {
+    //         label: '',
+    //         scale: 'lin', 
+    //         viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
+    //         autoscale: false,
+    //         inverted: false,
+    //         symlogLinthresh: 1,
+    //         symlogLinscale: 1
+    //     },
+    //     yAxis: {
+    //         label: '',
+    //         scale: 'lin',
+    //         viewBounds: [-Number.MAX_VALUE, Number.MAX_VALUE],
+    //         autoscale: true,
+    //         inverted: false,
+    //         symlogLinthresh: 1,
+    //         symlogLinscale: 1
+    //     },
+    //     title: '',
+    //     showTicks: ['left', 'right', 'bottom', 'top'],        // ['top', 'bottom', 'left', 'right']
+    //     showTickNumbers: ['left', 'right', 'bottom', 'top'],  // ['top', 'bottom', 'left', 'right']
+    //     axisAlignment: 'horizontal',   // could be vertical
+    // }
+
+    public title: string = '';
+    public showTicks: string[] =  ['left', 'right', 'bottom', 'top'];        // ['top', 'bottom', 'left', 'right']
+    public showTickNumbers: string[] =  ['left', 'right', 'bottom', 'top'];  // ['top', 'bottom', 'left', 'right']
+    public axisAlignment: Orientation = Orientation.Horizontal;   // could be vertical
+
+    public xAxis: Axis;
+    public yAxis: Axis;
     
     public steps: NumberArray; 
     public heatmap: HeatMap | null = null;
     
-    public xAxisSigFigures: number = 2;
-    public yAxisSigFigures: number = 2;
-    public font: string = '10 ps sans-serif';
+    // public xAxisSigFigures: number = 2;
+    // public yAxisSigFigures: number = 2;
+    private _ticksValuesFont: string = '10 ps sans-serif';
 
     public requiredMargin: Margin; // last margin required by paining the figure
     
@@ -101,7 +191,7 @@ export class Figure extends GraphicObject {
     private offScreenCanvas: OffscreenCanvas;
     private offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
 
-    private plotCanvasRect = true;
+    private plotCanvasRect = false;
     public minimalMargin: Margin = { 
         left: 10,
         right: 10,
@@ -110,6 +200,10 @@ export class Figure extends GraphicObject {
     };
     
     // public draggableLines: DraggableLines | null = null;
+
+    get tickValuesFont(): string {
+        return this._ticksValuesFont;
+    }
 
     constructor(parent?: GraphicObject, canvasRect?: Rect, margin?: Margin) {
         super(parent, canvasRect, margin);
@@ -135,6 +229,8 @@ export class Figure extends GraphicObject {
         if (this.offScreenCanvasCtx === null) {
             throw new Error('this.offScreenCanvasCtx === null');
         }
+        this.xAxis = new Axis();
+        this.yAxis = new Axis();
     }
 
     // public resize(): void {
@@ -156,35 +252,35 @@ export class Figure extends GraphicObject {
 
     public setViewBounds(xAxisBounds?: [number, number], yAxisBounds?: [number, number]) {
         if (xAxisBounds) {
-            this.figureSettings.xAxis.viewBounds = [this.invTransform(xAxisBounds[0], 'x'), this.invTransform(xAxisBounds[1], 'x')];
+            this.xAxis.viewBounds = [this.xAxis.invTransform(xAxisBounds[0]), this.xAxis.invTransform(xAxisBounds[1])];
         }
 
         if (yAxisBounds) {
-            this.figureSettings.yAxis.viewBounds = [this.invTransform(yAxisBounds[0], 'y'), this.invTransform(yAxisBounds[1], 'y')];
+            this.yAxis.viewBounds = [this.yAxis.invTransform(yAxisBounds[0]), this.yAxis.invTransform(yAxisBounds[1])];
         }
     }
 
     get range() {
-        const x = this.transform(this._range.x, 'x');
-        const y = this.transform(this._range.y, 'y');
+        const x = this.xAxis.transform(this._range.x);
+        const y = this.yAxis.transform(this._range.y);
 
         return {
             x,
             y,
-            w: this.transform(this._range.x + this._range.w, 'x') - x,
-            h: this.transform(this._range.y + this._range.h, 'y') - y,
+            w: this.xAxis.transform(this._range.x + this._range.w) - x,
+            h: this.yAxis.transform(this._range.y + this._range.h) - y,
         }
     }
 
     set range(newRange: Rect) {
-        const x = this.invTransform(newRange.x, 'x');
-        const y = this.invTransform(newRange.y, 'y');
+        const x = this.xAxis.invTransform(newRange.x);
+        const y = this.yAxis.invTransform(newRange.y);
 
         this._range = {
             x,
             y,
-            w: this.invTransform(newRange.x + newRange.w, 'x') - x,
-            h: this.invTransform(newRange.y + newRange.h, 'y') - y,
+            w: this.xAxis.invTransform(newRange.x + newRange.w) - x,
+            h: this.yAxis.invTransform(newRange.y + newRange.h) - y,
         }
     }
 
@@ -198,16 +294,16 @@ export class Figure extends GraphicObject {
         let xrel = (p.x - r.x) / r.w;
         let yrel = (p.y - r.y) / r.h;
 
-        if (this.figureSettings.axisAlignment === 'vertical') {
-            xrel = this.figureSettings.yAxis.inverted ? xrel : 1 - xrel;
-            yrel = this.figureSettings.xAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
+        if (this.axisAlignment === Orientation.Vertical) {
+            xrel = this.yAxis.inverted ? xrel : 1 - xrel;
+            yrel = this.xAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
             return {
                 x: this._range.x + yrel * this._range.w,
                 y: this._range.y + xrel * this._range.h
             }
         } else {
-            xrel = this.figureSettings.xAxis.inverted ? 1 - xrel : xrel;
-            yrel = this.figureSettings.yAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
+            xrel = this.xAxis.inverted ? 1 - xrel : xrel;
+            yrel = this.yAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
             return {
                 x: this._range.x + xrel * this._range.w,
                 y: this._range.y + yrel * this._range.h
@@ -221,10 +317,10 @@ export class Figure extends GraphicObject {
         let xrel = (p.x - this._range.x) / this._range.w;
         let yrel = (p.y - this._range.y) / this._range.h;
 
-        xrel = this.figureSettings.xAxis.inverted ? 1 - xrel : xrel;
-        yrel = this.figureSettings.yAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
+        xrel = this.xAxis.inverted ? 1 - xrel : xrel;
+        yrel = this.yAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
 
-        if (this.figureSettings.axisAlignment === 'vertical') {
+        if (this.axisAlignment === Orientation.Vertical) {
             return {
                 x: r.x + yrel * r.w,
                 y: r.y + (1 - xrel) * r.h
@@ -353,7 +449,7 @@ export class Figure extends GraphicObject {
 
         if  (this.scaling || this.panning) {
             const lastPos = {x: e.e.clientX, y: e.e.clientY};
-            const va = this.figureSettings.axisAlignment === 'vertical';
+            const va = this.axisAlignment === Orientation.Vertical;
 
             var mousemove = (e: MouseEvent) => {
 
@@ -373,8 +469,8 @@ export class Figure extends GraphicObject {
                     let w = this.effRect.w;
                     let h = this.effRect.h;
                     
-                    let xSign = this.figureSettings.xAxis.inverted ? 1 : -1;
-                    let ySign = this.figureSettings.yAxis.inverted ? -1 : 1;
+                    let xSign = this.xAxis.inverted ? 1 : -1;
+                    let ySign = this.yAxis.inverted ? -1 : 1;
         
                     if (va) {
                         [w, h] = [h, w];
@@ -439,10 +535,10 @@ export class Figure extends GraphicObject {
     }
 
     private getBoundedRange(rect: Rect, dontZoom: boolean): Rect {
-        var x0 = Math.max(rect.x, this.figureSettings.xAxis.viewBounds[0]);
-        var y0 = Math.max(rect.y, this.figureSettings.yAxis.viewBounds[0]);
-        var x1 = Math.min(rect.x + rect.w, this.figureSettings.xAxis.viewBounds[1])
-        var y1 = Math.min(rect.y + rect.h, this.figureSettings.yAxis.viewBounds[1])
+        var x0 = Math.max(rect.x, this.xAxis.viewBounds[0]);
+        var y0 = Math.max(rect.y, this.yAxis.viewBounds[0]);
+        var x1 = Math.min(rect.x + rect.w, this.xAxis.viewBounds[1])
+        var y1 = Math.min(rect.y + rect.h, this.yAxis.viewBounds[1])
 
         var retRect: Rect = {
             x: x0,
@@ -452,17 +548,17 @@ export class Figure extends GraphicObject {
         }
 
         if (dontZoom){
-            if (x0 === this.figureSettings.xAxis.viewBounds[0]){
+            if (x0 === this.xAxis.viewBounds[0]){
                 retRect.w = rect.w;
             }
-            if (x1 === this.figureSettings.xAxis.viewBounds[1]){
+            if (x1 === this.xAxis.viewBounds[1]){
                 retRect.w = rect.w;
                 retRect.x = x1 - rect.w;
             }
-            if (y0 === this.figureSettings.yAxis.viewBounds[0]){
+            if (y0 === this.yAxis.viewBounds[0]){
                 retRect.h = rect.h;
             }
-            if (y1 === this.figureSettings.yAxis.viewBounds[1]){
+            if (y1 === this.yAxis.viewBounds[1]){
                 retRect.h = rect.h;
                 retRect.y = y1 - rect.h;
             }
@@ -472,10 +568,10 @@ export class Figure extends GraphicObject {
     }
 
     public rangeChanged(range: Rect): void {
-        this.figureSettings.xAxis.autoscale = false;
-        this.figureSettings.yAxis.autoscale = false;
+        this.xAxis.autoscale = false;
+        this.yAxis.autoscale = false;
         for (const fig of this.xRangeLinks) {
-            if (this.figureSettings.xAxis.scale === fig.figureSettings.xAxis.scale) {
+            if (this.xAxis.scale === fig.xAxis.scale) {
                 fig._range.x = this._range.x;
                 fig._range.w = this._range.w;
             } else {
@@ -486,7 +582,7 @@ export class Figure extends GraphicObject {
             fig.repaint();
         }
         for (const fig of this.yRangeLinks) {
-            if (this.figureSettings.yAxis.scale === fig.figureSettings.yAxis.scale) {
+            if (this.yAxis.scale === fig.yAxis.scale) {
                 fig._range.y = this._range.y;
                 fig._range.h = this._range.h;
             } else {
@@ -497,7 +593,7 @@ export class Figure extends GraphicObject {
             fig.repaint();
         }
         for (const fig of this.xyRangeLinks) {
-            if (this.figureSettings.xAxis.scale === fig.figureSettings.yAxis.scale) {
+            if (this.xAxis.scale === fig.yAxis.scale) {
                 fig._range.y = this._range.x;
                 fig._range.h = this._range.w;
             } else {
@@ -508,7 +604,7 @@ export class Figure extends GraphicObject {
             fig.repaint();
         }
         for (const fig of this.yxRangeLinks) {
-            if (this.figureSettings.yAxis.scale === fig.figureSettings.xAxis.scale) {
+            if (this.yAxis.scale === fig.xAxis.scale) {
                 fig._range.x = this._range.y;
                 fig._range.w = this._range.h;
             } else {
@@ -597,7 +693,7 @@ export class Figure extends GraphicObject {
         // x axis
 
         if (!this.heatmap.isXRegular) {
-            this.figureSettings.xAxis.scale = dataset.x;
+            this.xAxis.scale = dataset.x;
             x = 0;
             w = dataset.x.length - 1;
             // xdiff = 1;
@@ -609,14 +705,14 @@ export class Figure extends GraphicObject {
             // xdiff = w / (dataset.x.length - 1);
             // xOffset = x;
             // this.figureSettings.xAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
-            this.figureSettings.xAxis.scale = 'lin';
+            this.xAxis.scale = 'lin';
 
         }
 
         // y axis
 
         if (!this.heatmap.isYRegular) {
-            this.figureSettings.yAxis.scale = dataset.y;
+            this.yAxis.scale = dataset.y;
             y = 0;
             h = dataset.y.length - 1;
             // ydiff = 1;
@@ -625,7 +721,7 @@ export class Figure extends GraphicObject {
         } else {
             y = dataset.y[0];
             h = dataset.y[dataset.y.length - 1] - y;
-            this.figureSettings.yAxis.scale = 'lin';
+            this.yAxis.scale = 'lin';
             // ydiff = h / (dataset.y.length - 1);
             // yOffset = y;
             // this.figureSettings.yAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
@@ -693,7 +789,7 @@ export class Figure extends GraphicObject {
         let fx = 0.05;  // autoscale margins
 
         // TODO include heatmap ranges
-        if (this.figureSettings.yAxis.autoscale) {
+        if (this.yAxis.autoscale) {
             let mins = [];
             let maxs = [];
             for (const plot of this.linePlots) {
@@ -701,8 +797,8 @@ export class Figure extends GraphicObject {
                 mins.push(min);
                 maxs.push(max);
             }
-            let y0 = this.invTransform(Math.min(...mins), 'y');
-            let y1 = this.invTransform(Math.max(...maxs), 'y');
+            let y0 = this.yAxis.invTransform(Math.min(...mins));
+            let y1 = this.yAxis.invTransform(Math.max(...maxs));
 
             let diff = y1 - y0;
 
@@ -712,9 +808,9 @@ export class Figure extends GraphicObject {
             }
         }
 
-        if (this.figureSettings.xAxis.autoscale) {
-            let x0 = this.invTransform(Math.min(...this.linePlots.map(p => p.x[0])), 'x');
-            let x1 = this.invTransform(Math.min(...this.linePlots.map(p => p.x[p.x.length - 1])), 'x');
+        if (this.xAxis.autoscale) {
+            let x0 = this.xAxis.invTransform(Math.min(...this.linePlots.map(p => p.x[0])));
+            let x1 = this.xAxis.invTransform(Math.min(...this.linePlots.map(p => p.x[p.x.length - 1])));
 
             let diff = x1 - x0;
 
@@ -725,65 +821,6 @@ export class Figure extends GraphicObject {
         }
     }
 
-    // transforms from dummy axis value to real value
-    public transform(num: number, axis: string) {
-        const ax = (axis === 'x') ? this.figureSettings.xAxis : this.figureSettings.yAxis
-        switch (ax.scale) {
-            case 'lin': {
-                return num;
-            }
-            case 'log': {
-                return 10 ** num;
-            }                
-            case 'symlog': {
-                const linthresh = ax.symlogLinscale;
-                const linscale = ax.symlogLinscale;
-
-                // linear scale
-                if (Math.abs(num) <= linthresh) {
-                    return num;
-                } else {
-                    const sign = num >= 0 ? 1 : -1;
-                    return sign * 10 ** (Math.abs(num) / linthresh + Math.log10(linthresh) - 1);
-                }
-            }
-            default: // for data bound scale
-                if (!(ax.scale instanceof NumberArray)) {
-                    throw new Error("Not implemented");
-                }
-                return ax.scale[Math.min(ax.scale.length - 1, Math.max(0, Math.round(num)))];
-        }
-    }
-
-    // transforms from real data to dummy axis value
-    public invTransform(num: number, axis: string) {
-        const ax = (axis === 'x') ? this.figureSettings.xAxis : this.figureSettings.yAxis
-        switch (ax.scale) {
-            case 'lin': {
-                return num;
-            }
-            case 'log': {
-                return Math.log10(num);
-            }                
-            case 'symlog': {
-                const linthresh = ax.symlogLinscale;
-                const linscale = ax.symlogLinscale;
-
-                // linear scale
-                if (Math.abs(num) <= linthresh) {
-                    return num;
-                } else {
-                    const sign = num >= 0 ? 1 : -1;
-                    return sign * linthresh * (1 + Math.log10(Math.abs(num) / linthresh))
-                }
-            }
-            default: // for data bound scale
-                if (!(ax.scale instanceof NumberArray)) {
-                    throw new Error("Not implemented");
-                }
-                return ax.scale.nearestIndex(num);
-        }
-    }
 
 
     private paintPlots(e: IPaintEvent) {
@@ -802,18 +839,18 @@ export class Figure extends GraphicObject {
 
             let usei = false; // in case the scale is determined by data
             let x0;
-            if (this.figureSettings.xAxis.scale instanceof NumberArray && plot.x.length === this.figureSettings.xAxis.scale.length) {
+            if (this.xAxis.scale instanceof NumberArray && plot.x.length === this.xAxis.scale.length) {
                 usei = true;
                 x0 = 0;
             } else {
-                x0 = this.invTransform(plot.x[0], 'x');
+                x0 = this.xAxis.invTransform(plot.x[0]);
             }
 
-            let p0 = this.mapRange2Canvas({x: x0, y: this.invTransform(plot.y[0], 'y')});
+            let p0 = this.mapRange2Canvas({x: x0, y: this.yAxis.invTransform(plot.y[0])});
             e.ctx.moveTo(p0.x, p0.y);
 
             for (let i = 1; i < plot.x.length; i++) {
-                let p = this.mapRange2Canvas({x: (usei) ? i : this.invTransform(plot.x[i], 'x'), y: this.invTransform(plot.y[i], 'y')});
+                let p = this.mapRange2Canvas({x: (usei) ? i : this.xAxis.invTransform(plot.x[i]), y: this.yAxis.invTransform(plot.y[i])});
                 e.ctx.lineTo(p.x, p.y);
             }
             e.ctx.strokeStyle = plot.color;
@@ -931,7 +968,7 @@ export class Figure extends GraphicObject {
     public drawTicks(e: IPaintEvent){  // r is Figure Rectangle, the frame
         e.ctx.fillStyle = textColor;
         const dpr = window.devicePixelRatio;
-        const va = this.figureSettings.axisAlignment === 'vertical';
+        const va = this.axisAlignment === Orientation.Vertical;
         this.requiredMargin = {left: 0, right: 0, bottom: 0, top: 0};
 
         // let pr = window.devicePixelRatio;
@@ -939,36 +976,36 @@ export class Figure extends GraphicObject {
         let [xticks, xticksVals] = this.genMajorTicks('x');
         let [yticks, yticksVals] = this.genMajorTicks('y');
 
-        if (this.figureSettings.xAxis.scale instanceof NumberArray) {
-            this.xAxisSigFigures = 4;
+        if (this.xAxis.scale instanceof NumberArray) {
+            this.xAxis.displayedSignificantFigures = 4;
         } else {
-            this.xAxisSigFigures = Math.max(2, ...xticksVals.map(num => determineSigFigures(num)));
+            this.xAxis.displayedSignificantFigures = Math.max(2, ...xticksVals.map(num => determineSigFigures(num)));
         }
 
-        if (this.figureSettings.yAxis.scale instanceof NumberArray) {
-            this.yAxisSigFigures = 4;
+        if (this.yAxis.scale instanceof NumberArray) {
+            this.yAxis.displayedSignificantFigures = 4;
         } else {
-            this.yAxisSigFigures = Math.max(2, ...yticksVals.map(num => determineSigFigures(num)));
+            this.yAxis.displayedSignificantFigures = Math.max(2, ...yticksVals.map(num => determineSigFigures(num)));
         }
 
-        if (this.figureSettings.xAxis.scale === 'log') {
-            this.xAxisSigFigures = 1;
+        if (this.xAxis.scale === 'log') {
+            this.xAxis.displayedSignificantFigures = 1;
         }
 
-        if (this.figureSettings.yAxis.scale === 'log') {
-            this.yAxisSigFigures = 1;
+        if (this.yAxis.scale === 'log') {
+            this.yAxis.displayedSignificantFigures = 1;
         }
 
-        if (this.figureSettings.xAxis.scale === 'symlog') {
-            this.xAxisSigFigures = 3;
+        if (this.xAxis.scale === 'symlog') {
+            this.xAxis.displayedSignificantFigures = 3;
         }
 
-        if (this.figureSettings.yAxis.scale === 'symlog') {
-            this.yAxisSigFigures = 3;
+        if (this.yAxis.scale === 'symlog') {
+            this.yAxis.displayedSignificantFigures = 3;
         }
 
-        let xFigs = this.xAxisSigFigures;
-        let yFigs = this.yAxisSigFigures;
+        let xFigs = this.xAxis.displayedSignificantFigures;
+        let yFigs = this.yAxis.displayedSignificantFigures;
 
         // estimate the number of significant figures to be plotted
         // let xdiff = xticksVals[1] - xticksVals[0];
@@ -996,9 +1033,9 @@ export class Figure extends GraphicObject {
         const r = this.effRect;
 
         let textMaxHeight = 0;
-        this.font = `${fontSize}px sans-serif`;
+        this._ticksValuesFont = `${fontSize}px sans-serif`;
 
-        e.ctx.font = this.font;
+        e.ctx.font = this._ticksValuesFont;
         e.ctx.textAlign = 'center';  // vertical alignment
         e.ctx.textBaseline = 'middle'; // horizontal alignment
 
@@ -1011,12 +1048,12 @@ export class Figure extends GraphicObject {
         for (let i = 0; i < xticks.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x: 0, y: xticks[i]} : {x: xticks[i], y: 0});
     
-            if (this.figureSettings.showTicks.includes('bottom')){
+            if (this.showTicks.includes('bottom')){
                 e.ctx.moveTo(p.x, r.y + r.h - tickSize);
                 e.ctx.lineTo(p.x, r.y + r.h);
             }
     
-            if (this.figureSettings.showTicks.includes('top')){
+            if (this.showTicks.includes('top')){
                 e.ctx.moveTo(p.x, r.y);
                 e.ctx.lineTo(p.x, r.y + tickSize);
             }
@@ -1028,26 +1065,26 @@ export class Figure extends GraphicObject {
                 textMaxHeight = textHeight;
             }
     
-            if (this.figureSettings.showTickNumbers.includes('bottom')){
+            if (this.showTickNumbers.includes('bottom')){
                 e.ctx.fillText(text, p.x, r.y + r.h + textOffset);
             }
     
-            if (this.figureSettings.showTickNumbers.includes('top')){
+            if (this.showTickNumbers.includes('top')){
                 e.ctx.fillText(text, p.x, r.y - textOffset);
             }
         }
         e.ctx.stroke();
 
-        if (this.figureSettings.showTickNumbers.includes('bottom')){
+        if (this.showTickNumbers.includes('bottom')){
             this.requiredMargin.bottom += textMaxHeight + textOffset;
         }
 
-        if (this.figureSettings.showTickNumbers.includes('top')){
+        if (this.showTickNumbers.includes('top')){
             this.requiredMargin.top += textMaxHeight + textOffset;
         }
 
-        const xLabel = (va) ? this.figureSettings.yAxis.label : this.figureSettings.xAxis.label;
-        const yLabel = (va) ? this.figureSettings.xAxis.label : this.figureSettings.yAxis.label;
+        const xLabel = (va) ? this.yAxis.label : this.xAxis.label;
+        const yLabel = (va) ? this.xAxis.label : this.yAxis.label;
 
         // draw axis labels
         if (xLabel !== "") {
@@ -1064,12 +1101,12 @@ export class Figure extends GraphicObject {
         for (let i = 0; i < yticks.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x:yticks[i], y: 0} : {x:0, y: yticks[i]});
 
-            if (this.figureSettings.showTicks.includes('left')){
+            if (this.showTicks.includes('left')){
                 e.ctx.moveTo(r.x, p.y);
                 e.ctx.lineTo(r.x + tickSize, p.y);
             }
 
-            if (this.figureSettings.showTicks.includes('right')){
+            if (this.showTicks.includes('right')){
                 e.ctx.moveTo(r.x + r.w, p.y);
                 e.ctx.lineTo(r.x + r.w - tickSize, p.y);
             }
@@ -1082,23 +1119,23 @@ export class Figure extends GraphicObject {
                 textMaxWidth = textWidth;
             }
 
-            if (this.figureSettings.showTickNumbers.includes('left')){
+            if (this.showTickNumbers.includes('left')){
                 e.ctx.textAlign = 'right';
                 e.ctx.fillText(text, r.x - textOffset / 2, p.y);
             }
 
-            if (this.figureSettings.showTickNumbers.includes('right')){
+            if (this.showTickNumbers.includes('right')){
                 e.ctx.textAlign = 'left';
                 e.ctx.fillText(text, r.x + r.w + textOffset / 2, p.y);
             }
         }
         e.ctx.stroke();
 
-        if (this.figureSettings.showTickNumbers.includes('left')){
+        if (this.showTickNumbers.includes('left')){
             this.requiredMargin.left += textMaxWidth + textOffset / 2;
         }
 
-        if (this.figureSettings.showTickNumbers.includes('right')){
+        if (this.showTickNumbers.includes('right')){
             this.requiredMargin.right += textMaxWidth + textOffset / 2;
         }
 
@@ -1167,25 +1204,26 @@ export class Figure extends GraphicObject {
     genMajorTicks(axis: string): [NumberArray, NumberArray]{
         // calculate scale
 
-        let coor, size, scaleType, prefferedNBins;
+        let coor, size, scaleType, prefferedNBins, ax;
         const f = 0.005;
         let w = this.effRect.w;
         let h = this.effRect.h;
-        const va = this.figureSettings.axisAlignment == 'vertical';
+        const va = this.axisAlignment == Orientation.Vertical;
         if (va) {
             [w, h] = [h, w];
         }
         if (axis === 'x') {
+            ax = this.xAxis;
             coor = this._range.x;
             size = this._range.w;
-            scaleType = this.figureSettings.xAxis.scale;
             prefferedNBins = Math.max(Math.round((va ? 1.5 : 1) * w * f), 2);
         } else {
+            ax = this.yAxis;
             coor = this._range.y;
             size = this._range.h;
-            scaleType = this.figureSettings.yAxis.scale;
             prefferedNBins = Math.max(Math.round((va ? 1 : 1.5) * h * f), 2);
         }
+        scaleType = ax.scale;
 
         switch (scaleType) {
             case 'lin': {
@@ -1251,7 +1289,7 @@ export class Figure extends GraphicObject {
                 // generate ticks
                 for (let i = 0; i < nticks; i++) {
                     ticks[i] = bestMin + step * i;
-                    ticksValues[i] = this.transform(ticks[i], axis)
+                    ticksValues[i] = ax.transform(ticks[i])
                 }
         
                 return [ticks, ticksValues];
