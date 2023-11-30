@@ -2,7 +2,7 @@
 import { GraphicObject, IMouseEvent, IPaintEvent} from "./object";
 import { Rect, NumberArray, Point, Margin, Matrix } from "./types";
 import { backgroundColor, fontSizeLabels, fontSizeNumbers, frameColor, textColor } from "./settings";
-import { Dataset, determineSigFigures, formatNumber } from "./utils";
+import { Dataset, determineSigFigures, formatNumber, isclose } from "./utils";
 import { Colormap, IColorMap } from "./colormap";
 import { HeatMap } from "./heatmap";
 import { DraggableLines, Orientation } from "./draggableLines";
@@ -228,8 +228,8 @@ export class Figure extends GraphicObject {
         };
         this.requiredMargin = {left: 0, right: 0, top: 0, bottom: 0};
         this._range = {x: -1, y: -1, w: 2, h: 2};
-        this.steps = NumberArray.fromArray([1, 2, 2.5, 5]);
-        // this.steps = NumberArray.fromArray([1, 2, 5]);
+        // this.steps = NumberArray.fromArray([1, 2, 2.5, 5]);
+        this.steps = NumberArray.fromArray([1, 2, 5]);
         this.lastMouseDownPos = {x: 0, y: 0};
         this.lastRange = {...this._range};
 
@@ -1297,7 +1297,7 @@ export class Figure extends GraphicObject {
 
         switch (scaleType) {
             case 'lin': {
-                const scale = 10 ** Math.trunc(Math.log10(Math.abs(size)));
+                const scale = 10 ** Math.floor(Math.log10(Math.abs(size)));
         
                 const extStepsScaled = NumberArray.fromArray([
                     ...NumberArray.mul(this.steps, 0.01 * scale), 
@@ -1307,10 +1307,20 @@ export class Figure extends GraphicObject {
                 const rawStep = size / prefMajorBins;
             
                 //find the nearest value in the array
-                const step = extStepsScaled.nearestValue(rawStep);
+                const _idx = extStepsScaled.nearestIndex(rawStep);
+                const step = extStepsScaled[_idx];
+                const stepScale = 10 ** Math.floor(Math.log10(step));
+
+                const k = (Math.round(step / stepScale) % 5 === 0) ? 2 : 1;
+
+                const minorStep = extStepsScaled[_idx - k];
+
                 const bestMin = Math.ceil(coor / step) * step;
-            
+                const bestMinMinor = Math.ceil(coor / minorStep) * minorStep;
+
                 const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
+                const nticksMinors = 1 + (coor + size - bestMinMinor) / minorStep >> 0; // integer division
+
                 const ticks = new NumberArray(nticks);
             
                 // generate ticks
@@ -1318,8 +1328,14 @@ export class Figure extends GraphicObject {
                     ticks[i] = bestMin + step * i;
                 }
 
-                const minorTicks = NumberArray.linspace(-1, 1, 20);
-        
+                const minorTicks = new NumberArray();
+                
+                for (let i = 0; i < nticksMinors; i++) {
+                    const val = bestMinMinor + minorStep * i;
+                    if (ticks.includes(val)) continue;
+                    minorTicks.push(val);
+                }
+
                 return [ticks, ticks, minorTicks];
             }
             case 'log': {

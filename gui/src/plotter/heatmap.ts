@@ -1,7 +1,8 @@
 import { Colormap, IColorMap } from "./colormap";
 import { Figure } from "./figure";
 import { NumberArray } from "./types";
-import { Dataset } from "./utils";
+import { Dataset, isclose } from "./utils";
+
 
 
 export class HeatMap {
@@ -55,10 +56,6 @@ export class HeatMap {
 
     static isRegularlySpaced(arr: NumberArray): boolean {
         // from numpy https://github.com/numpy/numpy/blob/v1.26.0/numpy/core/numeric.py#L2249-L2371
-        var isclose = (a: number, b: number, rtol: number = 1e-1) => {
-            return Math.abs(a - b) <= rtol * Math.abs(b);
-        }
-
         // check all differences of the array
         let avrgDiff = (arr[arr.length - 1] - arr[0]) / (arr.length - 1);
         let diffArr = NumberArray.diff(arr);

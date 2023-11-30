@@ -47,6 +47,10 @@ export function determineSigFigures(num: number): number {
     return i;
 }
 
+export function isclose (a: number, b: number, rtol: number = 1e-3){
+    return Math.abs(a - b) <= rtol * Math.abs(b);
+}
+
 
 export function formatNumber(num: number, sigFigures?: number): string {
 
