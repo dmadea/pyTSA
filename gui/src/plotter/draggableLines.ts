@@ -210,8 +210,7 @@ export class DraggableLines extends GraphicObject {
     mouseUp(e: IMouseEvent): void {
         this.verticalDragging = false;
         this.horizontalDragging = false;
-        let f = this.parent as Figure;
-        f.preventMouseEvents(false, false);
+        (this.parent as Figure).preventMouseEvents(false, false);
     }
 
     private positionChanged() {
@@ -271,18 +270,14 @@ export class DraggableLines extends GraphicObject {
     }
 
     public mouseMove(e: IMouseEvent): void {
-        if (!this.canvas) {
-            return;
-        }
-
         if (this.horizontalDragging || this.verticalDragging) {
             return;
         }
 
-        let f = this.parent as Figure;
+        const f = this.parent as Figure;
 
-        let vh = this.checkBounds(e.x, e.y, Orientation.Vertical);
-        let hh = this.checkBounds(e.x, e.y, Orientation.Horizontal);
+        const vh = this.checkBounds(e.x, e.y, Orientation.Vertical);
+        const hh = this.checkBounds(e.x, e.y, Orientation.Horizontal);
 
         // on change, repaint
         if (this.verticalHovering !== vh) {
@@ -298,13 +293,13 @@ export class DraggableLines extends GraphicObject {
         f.preventMouseEvents(undefined, this.verticalHovering || this.horizontalHovering);
 
         if (this.verticalHovering && !this.horizontalHovering) {
-            this.canvas.style.cursor = this.cursors.verticalResize;
+            e.canvas.style.cursor = this.cursors.verticalResize;
         } else if (!this.verticalHovering && this.horizontalHovering) {
-            this.canvas.style.cursor = this.cursors.horizontalResize;
+            e.canvas.style.cursor = this.cursors.horizontalResize;
         } else if (this.verticalHovering && this.horizontalHovering) {
-            this.canvas.style.cursor = this.cursors.move;
+            e.canvas.style.cursor = this.cursors.move;
         }  else {
-            this.canvas.style.cursor = this.cursors.crosshair;
+            e.canvas.style.cursor = this.cursors.crosshair;
         }
 
         // console.log(this.verticalHovering, this.horizontalHovering);
@@ -427,7 +422,4 @@ export class DraggableLines extends GraphicObject {
 
         e.ctx.restore();
     }
-
-
-
 }

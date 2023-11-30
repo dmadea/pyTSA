@@ -230,6 +230,10 @@ export class NumberArray extends Array<number> {
         return NumberArray.fromArray(super.slice(start, end));
     }
 
+    public clear() {
+        this.length = 0;
+    }
+
     public log() {
         var str = "[";
         for (let i = 0; i < this.length; i++) {

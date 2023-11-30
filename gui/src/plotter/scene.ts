@@ -25,10 +25,10 @@ export class Scene extends GraphicObject {
         this.canvasResizeObserver = new ResizeObserver((entries) => this.observerCallback(entries));
         this.canvasResizeObserver.observe(this.canvas);
 
-        this.canvas.addEventListener('mousedown', e => this.mouseDown({e, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
-        this.canvas.addEventListener('mouseup', e => this.mouseUp({e, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
-        this.canvas.addEventListener('mousemove', e => this.mouseMove({e, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
-        this.canvas.addEventListener("contextmenu", e => this.contextMenu({e, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
+        this.canvas.addEventListener('mousedown', e => this.mouseDown({e, canvas, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
+        this.canvas.addEventListener('mouseup', e => this.mouseUp({e, canvas, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
+        this.canvas.addEventListener('mousemove', e => this.mouseMove({e, canvas, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
+        this.canvas.addEventListener("contextmenu", e => this.contextMenu({e, canvas, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
     }
 
     private observerCallback(entries: ResizeObserverEntry[]) {
@@ -79,9 +79,9 @@ export class Scene extends GraphicObject {
         var f1y = new Figure();
         // f1y.axisAlignment = 'vertical';
         // f1y.xAxis.inverted = true;
-        f1y.xAxis.scale = 'log';
-        f1y.xAxis.symlogLinthresh = 2.5;
-        f1y.xAxis.symlogLinscale = 2;
+        f1y.xAxis.scale = 'symlog';
+        f1y.xAxis.symlogLinthresh = 50;
+        f1y.xAxis.symlogLinscale = 4;
         f1y.xAxis.autoscale = false;
 
 
@@ -137,7 +137,7 @@ export class Scene extends GraphicObject {
             if (this.fig?.heatmap) {
 
                 // f2x.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
-                f1y.xAxis.scale = this.fig.yAxis.scale;
+                // f1y.xAxis.scale = this.fig.yAxis.scale;
 
                 // get row
                 let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.y);

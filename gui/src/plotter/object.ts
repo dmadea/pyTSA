@@ -7,6 +7,7 @@ export interface IPaintEvent {
 
 export interface IMouseEvent {
     e: MouseEvent,
+    canvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
     y: number  // canvas y coordinate scaled by display ratio
 }

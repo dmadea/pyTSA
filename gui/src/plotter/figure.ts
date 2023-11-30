@@ -1,8 +1,8 @@
 
 import { GraphicObject, IMouseEvent, IPaintEvent} from "./object";
-import { Rect, NumberArray, Point, Margin, Matrix } from "./types";
-import { backgroundColor, fontSizeLabels, fontSizeNumbers, frameColor, textColor } from "./settings";
-import { Dataset, determineSigFigures, formatNumber, isclose } from "./utils";
+import { Rect, NumberArray, Point, Margin } from "./types";
+import { backgroundColor,  frameColor, textColor } from "./settings";
+import { Dataset, determineSigFigures, formatNumber } from "./utils";
 import { Colormap, IColorMap } from "./colormap";
 import { HeatMap } from "./heatmap";
 import { DraggableLines, Orientation } from "./draggableLines";
@@ -52,9 +52,11 @@ export class Axis {
     public symlogLinthresh: number; // Defines the range (-x, x), within which the plot is linear.
     public symlogLinscale: number;  // number of decades to use for each half of the linear range
     public displayedSignificantFigures: number = 2;
+    private figure: Figure;
 
-    constructor (label?: string, scale?: string | NumberArray, viewBounds?: [number, number],
+    constructor (figure: Figure, label?: string, scale?: string | NumberArray, viewBounds?: [number, number],
         autoscale?: boolean, inverted?: boolean, symlogLinthresh?: number, symlogLinscale?: number) {
+            this.figure = figure;
             this.label = label ?? '';
             this.scale = scale ?? 'lin';
             this.viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];
@@ -62,6 +64,10 @@ export class Axis {
             this.inverted = inverted ?? false;
             this.symlogLinscale = symlogLinscale ?? 1;
             this.symlogLinthresh = symlogLinthresh ?? 1;
+    }
+
+    public getInternalRange() {
+
     }
 
     // transforms from dummy axis value to real value
@@ -241,8 +247,8 @@ export class Figure extends GraphicObject {
         if (this.offScreenCanvasCtx === null) {
             throw new Error('this.offScreenCanvasCtx === null');
         }
-        this.xAxis = new Axis();
-        this.yAxis = new Axis();
+        this.xAxis = new Axis(this);
+        this.yAxis = new Axis(this);
     }
 
     // public resize(): void {
@@ -399,27 +405,6 @@ export class Figure extends GraphicObject {
         this.marginLinks.push([figure, orientation]);
     }
 
-    // public mapRange2CanvasArr(xvals: NumberArray, yvals: NumberArray): [NumberArray, NumberArray]{
-    //     if (xvals.length !== yvals.length){
-    //         throw TypeError("Different length of input arrays");
-    //     }
-    //     var newX = new NumberArray(xvals.length)
-    //     var newY = new NumberArray(xvals.length);
-    //     let r = this.figureRect;
-
-    //     for (let i = 0; i < xvals.length; i++) {
-    //         let xScaled = (xvals[i] - this._range.x) / this._range.w;
-    //         let yScaled = (yvals[i] - this._range.y) / this._range.h;
-
-    //         newX[i] = r.x + xScaled * r.w;
-    //         newY[i] = r.y + (1 - yScaled) * r.h;
-    //     }
-    //     return [newX, newY];
-    // }
-
-    // gets the canvas Rect of the figure frame
-
-
     public preventMouseEvents(preventScaling?: boolean, preventPanning?: boolean) {
         if (preventScaling !== undefined) {
             this._preventScaling = preventScaling;
@@ -431,9 +416,6 @@ export class Figure extends GraphicObject {
     }
 
     public mouseDown(e: IMouseEvent): void {
-        if (!this.canvas)
-            return;
-
         this.calcEffectiveRect();
 
         // // we are outside of figure frame
@@ -460,9 +442,9 @@ export class Figure extends GraphicObject {
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
 
         if (this.panning) {
-            this.canvas.style.cursor = this.cursors.grabbing;
+            e.canvas.style.cursor = this.cursors.grabbing;
         } else if (this.scaling) {
-            this.canvas.style.cursor = this.cursors.move;
+            e.canvas.style.cursor = this.cursors.move;
         } else {
             super.mouseDown(e);
         }
@@ -543,10 +525,7 @@ export class Figure extends GraphicObject {
             var mouseup = (e: MouseEvent) => {
                 window.removeEventListener('mousemove', mousemove);
                 window.removeEventListener('mouseup', mouseup);
-                if  (this.canvas) {
-                    this.canvas.style.cursor = this.cursors.crosshair;
-                }
-
+                if  (this.canvas) this.canvas.style.cursor = this.cursors.crosshair;
             }
 
             window.addEventListener('mousemove', mousemove);
@@ -568,16 +547,14 @@ export class Figure extends GraphicObject {
         }
 
         if (dontZoom){
-            if (x0 === this.xAxis.viewBounds[0]){
-                retRect.w = rect.w;
-            }
+            if (x0 === this.xAxis.viewBounds[0]) retRect.w = rect.w;
+            
             if (x1 === this.xAxis.viewBounds[1]){
                 retRect.w = rect.w;
                 retRect.x = x1 - rect.w;
             }
-            if (y0 === this.yAxis.viewBounds[0]){
-                retRect.h = rect.h;
-            }
+            if (y0 === this.yAxis.viewBounds[0]) retRect.h = rect.h;
+            
             if (y1 === this.yAxis.viewBounds[1]){
                 retRect.h = rect.h;
                 retRect.y = y1 - rect.h;
@@ -640,13 +617,7 @@ export class Figure extends GraphicObject {
     }
 
     public mouseMove(e: IMouseEvent): void {
-        if (!this.canvas)
-            return
-
         // console.log('Mouse move from figure');
-        
-
-        // let [x, y] = [e.offsetX * window.devicePixelRatio, e.offsetY * window.devicePixelRatio];
 
         if (this.panning || this.scaling) {
             return;
@@ -660,22 +631,8 @@ export class Figure extends GraphicObject {
             return;
         }
         
-
-
-        // let isInside = this.isInsideFigureRect(e.offsetX, e.offsetY);
-
-        // if (isInside)
-        //     this.canvas.style.cursor = this.cursors.default;
-
-        
-
-        // if (isInside)
-        //     console.log(this.panning, this.scaling);
-
-        // for handling hovering
+        // for handling hovering of items
         super.mouseMove(e);
-        // if (!this.panning && !this.scaling) {
-        // }
     }
 
     mouseUp(e: IMouseEvent): void {
@@ -686,8 +643,7 @@ export class Figure extends GraphicObject {
         this.panning = false;
         this.scaling = false;
 
-        if (this.canvas)
-            this.canvas.style.cursor = this.cursors.crosshair;
+        e.canvas.style.cursor = this.cursors.crosshair;
     }
 
     public addDraggableLines(orientation: Orientation): DraggableLines {
@@ -726,7 +682,6 @@ export class Figure extends GraphicObject {
             // xOffset = x;
             // this.figureSettings.xAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
             this.xAxis.scale = 'lin';
-
         }
 
         // y axis
@@ -850,14 +805,17 @@ export class Figure extends GraphicObject {
         }
 
         this.autoscale();
-
-        e.ctx.save();
-
         const yIT = this.yAxis.getInverseTransform();
         const xIT = this.xAxis.getInverseTransform();
 
+        e.ctx.save();
+
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
+
+            e.ctx.strokeStyle = plot.color;
+            e.ctx.lineWidth = plot.lw;
+            e.ctx.setLineDash(plot.ld);
 
             e.ctx.beginPath();
 
@@ -870,16 +828,16 @@ export class Figure extends GraphicObject {
                 x0 = xIT(plot.x[0]);
             }
 
-            let p0 = this.mapRange2Canvas({x: x0, y: yIT(plot.y[0])});
+            const p0 = this.mapRange2Canvas({x: x0, y: yIT(plot.y[0])});
             e.ctx.moveTo(p0.x, p0.y);
 
             for (let i = 1; i < plot.x.length; i++) {
-                let p = this.mapRange2Canvas({x: (xDataScale) ? i : xIT(plot.x[i]), y: yIT(plot.y[i])});
+                const x = (xDataScale) ? i : xIT(plot.x[i]);
+                const p = this.mapRange2Canvas({x, y: yIT(plot.y[i])});
                 e.ctx.lineTo(p.x, p.y);
+                if (x > this._range.x + this._range.w) break;
             }
-            e.ctx.strokeStyle = plot.color;
-            e.ctx.lineWidth = plot.lw;
-            e.ctx.setLineDash(plot.ld);
+
             e.ctx.stroke();
         }
 
@@ -959,7 +917,6 @@ export class Figure extends GraphicObject {
         this.paintHeatMap(e);
         this.paintPlots(e);
 
-        
 
         e.ctx.restore();
         
@@ -996,37 +953,32 @@ export class Figure extends GraphicObject {
         const va = this.axisAlignment === Orientation.Vertical;
         this.requiredMargin = {left: 0, right: 0, bottom: 0, top: 0};
 
-        // let pr = window.devicePixelRatio;
-
         let [xticks, xticksVals, xMinors] = this.getTicks('x');
         let [yticks, yticksVals, yMinors] = this.getTicks('y');
 
-        if (this.xAxis.scale instanceof NumberArray) {
-            this.xAxis.displayedSignificantFigures = 4;
-        } else {
-            this.xAxis.displayedSignificantFigures = Math.max(2, ...xticksVals.map(num => determineSigFigures(num)));
-        }
+        const _arr: [Axis, NumberArray][] = [[this.xAxis, xticksVals], [this.yAxis, yticksVals]];
 
-        if (this.yAxis.scale instanceof NumberArray) {
-            this.yAxis.displayedSignificantFigures = 4;
-        } else {
-            this.yAxis.displayedSignificantFigures = Math.max(2, ...yticksVals.map(num => determineSigFigures(num)));
-        }
-
-        if (this.xAxis.scale === 'log') {
-            this.xAxis.displayedSignificantFigures = 1;
-        }
-
-        if (this.yAxis.scale === 'log') {
-            this.yAxis.displayedSignificantFigures = 1;
-        }
-
-        if (this.xAxis.scale === 'symlog') {
-            this.xAxis.displayedSignificantFigures = 3;
-        }
-
-        if (this.yAxis.scale === 'symlog') {
-            this.yAxis.displayedSignificantFigures = 3;
+        for (const [ax, vals] of _arr) {
+            switch (ax.scale) {
+                case 'lin': {
+                    ax.displayedSignificantFigures = Math.max(2, ...vals.map(num => determineSigFigures(num)));
+                    break;
+                }
+                case 'log': {
+                    ax.displayedSignificantFigures = 1;
+                    break;
+                }
+                case 'symlog': {
+                    ax.displayedSignificantFigures = Math.max(2, ...vals.map(num => determineSigFigures(num)));
+                    break;
+                }
+                default: {
+                    if (!(ax.scale instanceof NumberArray)) {
+                        throw new Error(`${ax.scale}: Not implemented`);
+                    }
+                    ax.displayedSignificantFigures = 4;
+                }
+            }
         }
 
         let xFigs = this.xAxis.displayedSignificantFigures;
@@ -1265,13 +1217,108 @@ export class Figure extends GraphicObject {
 
     }
 
+    // generates major and minor ticks and major ticks values on linear scale
+    private genLinearTicks(coor: number, size: number, prefMajorBins: number): [NumberArray, NumberArray, NumberArray] {
+        const scale = 10 ** Math.floor(Math.log10(Math.abs(size)));
+        
+        const extStepsScaled = NumberArray.fromArray([
+            ...NumberArray.mul(this.steps, 0.01 * scale), 
+            ...NumberArray.mul(this.steps, 0.1 * scale), 
+            ...NumberArray.mul(this.steps, scale)]);
+    
+        const rawStep = size / prefMajorBins;
+    
+        //find the nearest value in the array
+        const _idx = extStepsScaled.nearestIndex(rawStep);
+        const step = extStepsScaled[_idx];
+        const stepScale = 10 ** Math.floor(Math.log10(step));
+
+        const k = (Math.round(step / stepScale) % 5 === 0) ? 2 : 1;
+
+        const minorStep = extStepsScaled[_idx - k];
+
+        const bestMin = Math.ceil(coor / step) * step;
+        const bestMinMinor = Math.ceil(coor / minorStep) * minorStep;
+
+        const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
+        const nticksMinors = 1 + (coor + size - bestMinMinor) / minorStep >> 0; // integer division
+
+        const ticks = new NumberArray(nticks);
+    
+        // generate ticks
+        for (let i = 0; i < nticks; i++) {
+            ticks[i] = bestMin + step * i;
+        }
+
+        const minorTicks = new NumberArray();
+        
+        for (let i = 0; i < nticksMinors; i++) {
+            const val = bestMinMinor + minorStep * i;
+            if (ticks.includes(val)) continue;
+            minorTicks.push(val);
+        }
+
+        return [ticks, ticks, minorTicks];
+    }
+
+    private genLogTicks(coor: number, size: number, prefMajorBins: number): [NumberArray, NumberArray, NumberArray] {
+        const step = Math.max(1, Math.round(size / prefMajorBins));
+
+        // make major ticks
+        const bestMin = Math.ceil(coor / step) * step;
+        const nticks = 1 + (coor + size - bestMin) >> 0; // integer division
+        let majorTicks = new NumberArray(nticks);
+        let majorTicksValues = new NumberArray(nticks);
+    
+        // generate ticks
+        for (let i = 0; i < nticks; i++) {
+            majorTicks[i] = bestMin + step * i;
+            majorTicksValues[i] = 10 ** majorTicks[i];
+        }
+
+        let minorTicks = new NumberArray();
+        const minorTicksPositions = [2, 3, 4, 5, 6, 7, 8, 9];
+
+        if (step === 1) {
+            // fill before first major tick
+            
+            let firstMajorTickValue = majorTicksValues[0];
+
+            if (majorTicksValues.length === 0) {
+                firstMajorTickValue = 10 ** Math.ceil(coor + size);
+            }
+
+            for (const v of minorTicksPositions) {
+                const tick = Math.log10(0.1 * firstMajorTickValue * v);
+                if (tick < coor) continue;
+                minorTicks.push(tick);
+            }
+
+            for (const majorTickValue of majorTicksValues) {
+                for (const v of minorTicksPositions) {
+                    const tick = Math.log10(majorTickValue * v);
+                    if (tick > coor + size) break;
+                    minorTicks.push(tick);
+                }
+            }
+
+            if (majorTicksValues.length === 0) {
+                majorTicks = minorTicks.copy();
+                majorTicksValues = NumberArray.fromArray(majorTicks.map(num => 10 ** num));
+                minorTicks.clear();
+            }
+        }
+
+        return [majorTicks, majorTicksValues, minorTicks];
+    }
+
     // returns tuple of arrays, first is the x tick position on dummy linear axis
     // and second is actuall value of the tick
     // returns major ticks, major ticks values and minor ticks
     getTicks(axis: string): [NumberArray, NumberArray, NumberArray]{
         // calculate scale
 
-        let coor, size, scaleType, prefMajorBins, prefMinorBins, ax;
+        let coor: number, size: number, prefMajorBins: number, prefMinorBins: number, ax: Axis;
         const f = 0.005;
         const fMinor = 0.05;
         let w = this.effRect.w;
@@ -1293,106 +1340,134 @@ export class Figure extends GraphicObject {
             prefMajorBins = Math.max(Math.round((va ? 1 : 1.5) * h * f), 2);
             prefMinorBins = Math.round(h * fMinor);
         }
-        scaleType = ax.scale;
 
-        switch (scaleType) {
+        switch (ax.scale) {
             case 'lin': {
-                const scale = 10 ** Math.floor(Math.log10(Math.abs(size)));
-        
-                const extStepsScaled = NumberArray.fromArray([
-                    ...NumberArray.mul(this.steps, 0.01 * scale), 
-                    ...NumberArray.mul(this.steps, 0.1 * scale), 
-                    ...NumberArray.mul(this.steps, scale)]);
-            
-                const rawStep = size / prefMajorBins;
-            
-                //find the nearest value in the array
-                const _idx = extStepsScaled.nearestIndex(rawStep);
-                const step = extStepsScaled[_idx];
-                const stepScale = 10 ** Math.floor(Math.log10(step));
-
-                const k = (Math.round(step / stepScale) % 5 === 0) ? 2 : 1;
-
-                const minorStep = extStepsScaled[_idx - k];
-
-                const bestMin = Math.ceil(coor / step) * step;
-                const bestMinMinor = Math.ceil(coor / minorStep) * minorStep;
-
-                const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
-                const nticksMinors = 1 + (coor + size - bestMinMinor) / minorStep >> 0; // integer division
-
-                const ticks = new NumberArray(nticks);
-            
-                // generate ticks
-                for (let i = 0; i < nticks; i++) {
-                    ticks[i] = bestMin + step * i;
-                }
-
-                const minorTicks = new NumberArray();
-                
-                for (let i = 0; i < nticksMinors; i++) {
-                    const val = bestMinMinor + minorStep * i;
-                    if (ticks.includes(val)) continue;
-                    minorTicks.push(val);
-                }
-
-                return [ticks, ticks, minorTicks];
+                return this.genLinearTicks(coor, size, prefMajorBins);
             }
             case 'log': {
-                let fillMinors = size * 11 <= prefMajorBins * 2;
-
-                const step = Math.max(1, Math.round(size / prefMajorBins));
-
-                // make major ticks
-                const bestMin = Math.ceil(coor / step) * step;
-                const nticks = 1 + (coor + size - bestMin) >> 0; // integer division
-                const majorTicks = new NumberArray(nticks);
-                const majorTicksValues = new NumberArray(nticks);
-            
-                // generate ticks
-                for (let i = 0; i < nticks; i++) {
-                    majorTicks[i] = bestMin + step * i;
-                    majorTicksValues[i] = 10 ** majorTicks[i];
-                }
-                // console.log(fillMinors, ticks, ticksValues);
-
-                const minorTicks = new NumberArray();
-                
-                return [majorTicks, majorTicksValues, minorTicks];
+                return this.genLogTicks(coor, size, prefMajorBins);
             }
             case 'symlog': {
-                const scale = 10 ** Math.trunc(Math.log10(Math.abs(size)));
-        
-                const extStepsScaled = NumberArray.fromArray([
-                    ...NumberArray.mul(this.steps, 0.01 * scale), 
-                    ...NumberArray.mul(this.steps, 0.1 * scale), 
-                    ...NumberArray.mul(this.steps, scale)]);
-            
-                const rawStep = size / prefMajorBins;
-            
-                //find the nearest value in the array
-                const step = extStepsScaled.nearestValue(rawStep);
-                const bestMin = Math.ceil(coor / step) * step;
-            
-                const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
-                const ticks = new NumberArray(nticks);
-                const ticksValues = new NumberArray(nticks);
+                const linScale = !(coor > ax.symlogLinthresh || coor + size < -ax.symlogLinthresh);
+                const logScale = !(coor > -ax.symlogLinthresh && coor + size < ax.symlogLinthresh);
+                const ticks = new NumberArray();
+                const ticksValues = new NumberArray();
+                const minorTicks = new NumberArray();
 
-                var T = ax.getTransform()
-            
-                // generate ticks
-                for (let i = 0; i < nticks; i++) {
-                    ticks[i] = bestMin + step * i;
-                    ticksValues[i] = T(ticks[i])
+                if (linScale) {
+                    const start = (coor < -ax.symlogLinthresh) ? -ax.symlogLinthresh : coor;
+                    // const end = (coor + size > ax.symlogLinthresh) ? ax.symlogLinthresh : coor + size;
+                    
+                    // const linSize = end - start;
+                    // const sizeRatio = linSize / size;
+                    // const linPrefMajorBins = (axis === 'x') ? Math.max(Math.round((va ? 1.5 : 1) * w * sizeRatio * f), 2) : Math.max(Math.round((va ? 1 : 1.5) * h * sizeRatio * f), 2);
+                    // console.log(linPrefMajorBins);
+
+                    let [linTicks, linValues, linMinors] = this.genLinearTicks(start, size, prefMajorBins);
+                    // remove ticks outside of the linear range
+                    for (var i = 0; i < linTicks.length; i++) {
+                        if (linTicks[i] > ax.symlogLinthresh) break; 
+                    }
+                    linTicks = linTicks.slice(0, i);
+                    linValues = linValues.slice(0, i);
+
+                    for (var i = 0; i < linMinors.length; i++) {
+                        if (linMinors[i] > ax.symlogLinthresh) break; 
+                    }
+                    linMinors = linMinors.slice(0, i);
+
+                    ticks.push(...linTicks);
+                    ticksValues.push(...linValues);
+                    minorTicks.push(...linMinors);
                 }
 
-                const minorTicks = new NumberArray();
+                if (logScale) {
+                    const axT = ax.getTransform();
+
+                    var getTransformedTicks = (startValue: number, endValue: number): [NumberArray, NumberArray, NumberArray] => {
+
+                        const start = Math.log10(ax.symlogLinthresh);
+                        // const realStart = ;
+                        const end = Math.log10(axT(endValue));
+                        const logSize = end - start;
+                        
+                        let [logTicks, logValues, logMinors] = this.genLogTicks(start, logSize, prefMajorBins);
+                        logTicks.add(-start).mul(ax.symlogLinthresh / ax.symlogLinscale).add(ax.symlogLinthresh);
+                        logMinors.add(-start).mul(ax.symlogLinthresh / ax.symlogLinscale).add(ax.symlogLinthresh);
+
+                        let idx = logTicks.nearestIndex(startValue);
+                        idx = (logTicks[idx] > startValue) ? idx : idx + 1;
+                        logTicks = logTicks.slice(idx);
+                        logValues = logValues.slice(idx);
+
+                        idx = logMinors.nearestIndex(startValue);
+                        idx = (logMinors[idx] > startValue) ? idx : idx + 1;
+                        logMinors = logMinors.slice(idx);
+
+                        return [logTicks, logValues, logMinors];
+
+                    }
+
+                    // for positive vals
+                    if (coor + size > ax.symlogLinthresh) {
+                        const [logTicks, logValues, logMinors] = getTransformedTicks((coor > 0) ? coor : ax.symlogLinthresh, coor + size);
+                        ticks.push(...logTicks);
+                        ticksValues.push(...logValues);
+                        minorTicks.push(...logMinors);
+                    }
+
+                    // for negative vals
+                    if (coor < -ax.symlogLinthresh) {
+                        const [logTicks, logValues, logMinors] = getTransformedTicks((coor + size < 0) ? -(coor + size) : ax.symlogLinthresh, -coor);
+                        ticks.push(...logTicks.mul(-1));
+                        ticksValues.push(...logValues.mul(-1));
+                        minorTicks.push(...logMinors.mul(-1));
+                    }
+
+                    // console.log(idx);
+
+
+                    // // remove ticks before actuall first value
+                    // for (var i = 0; i < logTicks.length; i++) {
+                    //     if (logTicks[i] > ax.symlogLinthresh) break; 
+                    // }
+
+
+                    // const scale = 10 ** Math.trunc(Math.log10(Math.abs(size)));
+        
+                    // const extStepsScaled = NumberArray.fromArray([
+                    //     ...NumberArray.mul(this.steps, 0.01 * scale), 
+                    //     ...NumberArray.mul(this.steps, 0.1 * scale), 
+                    //     ...NumberArray.mul(this.steps, scale)]);
+                
+                    // const rawStep = size / prefMajorBins;
+                
+                    // //find the nearest value in the array
+                    // const step = extStepsScaled.nearestValue(rawStep);
+                    // const bestMin = Math.ceil(coor / step) * step;
+                
+                    // const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
+                    // const ticks = new NumberArray(nticks);
+                    // const ticksValues = new NumberArray(nticks);
+    
+                    // var T = ax.getTransform()
+                
+                    // // generate ticks
+                    // for (let i = 0; i < nticks; i++) {
+                    //     ticks[i] = bestMin + step * i;
+                    //     ticksValues[i] = T(ticks[i])
+                    // }
+    
+                    // const minorTicks = new NumberArray();
+
+                }
         
                 return [ticks, ticksValues, minorTicks];
 
             }
             default: {  
-                if (!(scaleType instanceof NumberArray)) {
+                if (!(ax.scale instanceof NumberArray)) {
                     throw new Error("Not implemented");
                 }
                 // data bound
@@ -1412,7 +1487,7 @@ export class Figure extends GraphicObject {
                 // generate ticks
                 for (let i = 0; i < nticks; i++) {
                     ticks[i] = bestMin + step * i;
-                    ticksValues[i] = scaleType[ticks[i]] ?? Number.NaN;
+                    ticksValues[i] = ax.scale[ticks[i]] ?? Number.NaN;
                 }
                 
                 const minorTicks = new NumberArray();
@@ -1428,6 +1503,4 @@ export class Figure extends GraphicObject {
             }
         }
     }
-
-
 }
