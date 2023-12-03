@@ -1,11 +1,5 @@
 import { NumberArray, Matrix } from "./types";
 
-// export interface Dataset {
-//     data: Matrix,
-//     x: NumberArray,
-//     y: NumberArray
-// }
-
 export class Dataset {
     public data: Matrix;
     public x: NumberArray;
@@ -45,6 +39,18 @@ export function determineSigFigures(num: number): number {
         }
     }
     return i;
+}
+
+export function generateRandomPassword(length: number): string {
+    const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let password = '';
+
+    for (let i = 0; i < length; i++) {
+        const randomIndex = Math.floor(Math.random() * characters.length);
+        password += characters.charAt(randomIndex);
+    }
+
+    return password;
 }
 
 export function isclose (a: number, b: number, rtol: number = 1e-3){
@@ -105,18 +111,20 @@ export function genTestData(n=100){
 }
 
 
+// improve reading of file 
+// https://stackoverflow.com/questions/23331546/how-to-use-javascript-to-read-local-text-file-and-read-line-by-line
 export function loadData(text: string, delimiter: string = '\t', newLine = '\n'): Dataset | null {
 
     let rowData: NumberArray = new NumberArray();
-    let colData = new NumberArray();
-    let data = new NumberArray();
+    const colData = new NumberArray();
+    const data = new NumberArray();
 
     // console.log(data);
     const lines = text.split(newLine);
     let ncols: number | null = null;
 
     for (let i = 0; i < lines.length; i++) {
-        let entries = lines[i].split(delimiter);
+        const entries = lines[i].split(delimiter);
 
         if (!ncols) {
             ncols = entries.length - 1;
@@ -128,6 +136,8 @@ export function loadData(text: string, delimiter: string = '\t', newLine = '\n')
         }
 
         if (entries.length !== ncols + 1){
+            // console.log(i, lines.length);
+            if (i > 1) break;
             throw TypeError("Number of entries does not match the number of columns.");
         }
 
@@ -141,13 +151,13 @@ export function loadData(text: string, delimiter: string = '\t', newLine = '\n')
     if (!ncols)
         return null;
 
-    let dataset = new Dataset(new Matrix(colData.length, ncols, data), rowData, colData)
+        const dataset = new Dataset(new Matrix(colData.length, ncols, data), rowData, colData)
     // console.log(dataset)
 
     return dataset;
-
-
 }
+
+
 
 
     // totally useless code, the same thing can be done elegantly with clipping

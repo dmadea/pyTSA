@@ -1,3 +1,4 @@
+import { ContextMenu } from "./contextmenu";
 import { Rect, Margin } from "./types";
 
 export interface IPaintEvent {
@@ -7,6 +8,13 @@ export interface IPaintEvent {
 
 export interface IMouseEvent {
     e: MouseEvent,
+    canvas: HTMLCanvasElement,
+    x: number,  // canvas x coordinate scaled by display ratio
+    y: number  // canvas y coordinate scaled by display ratio
+}
+
+export interface ITouchEvent {
+    e: TouchEvent,
     canvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
     y: number  // canvas y coordinate scaled by display ratio
@@ -22,6 +30,8 @@ export abstract class GraphicObject{
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
     public margin: Margin;    // margin from canvasRect in absolute values: [left, right, top, bottom] 
     public effRect: Rect // canvas rectangle minus margins
+
+    public contextMenu: ContextMenu | null = null;
 
     // https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
     public cursors = {
@@ -138,6 +148,15 @@ export abstract class GraphicObject{
         }
     }
 
+    doubleClick(e: IMouseEvent) {
+        e.e.preventDefault();
+        for (const item of this.items) {
+            if (item.isInsideEffRect(e.x, e.y)) {
+                item.doubleClick(e);
+            }
+        }
+    }
+
     mouseDown(e: IMouseEvent) {
         for (const item of this.items) {
             item.calcEffectiveRect();
@@ -161,11 +180,46 @@ export abstract class GraphicObject{
         }
     }
 
-    contextMenu(e: IMouseEvent) {
+    showContextMenu(e: IMouseEvent) {
+        if (e.e.ctrlKey) return;
         e.e.preventDefault();
+        if (this.contextMenu) {
+            this.contextMenu.show({x: e.e.pageX, y: e.e.pageY});
+        }
+        // for (const item of this.items) {
+        //     item.contextMenu(e);
+        // }
+    }
+
+    touchStart(e: TouchEvent) {
+        // const dpr = window.devicePixelRatio;
         for (const item of this.items) {
-            item.contextMenu(e);
+            // if (item.isInsideEffRect(e.touches[0].clientX * dpr, e.touches[0].clientY * dpr)) {
+            item.touchStart(e);
+            // }
         }
     }
+
+    touchMove(e: TouchEvent) {
+        // const dpr = window.devicePixelRatio;
+        for (const item of this.items) {
+            // if (item.isInsideEffRect(e.touches[0].clientX * dpr, e.touches[0].clientY * dpr)) {
+            item.touchMove(e);
+            // }
+        }
+    }
+
+    touchEnd(e: TouchEvent) {
+        for (const item of this.items) {
+            item.touchEnd(e);
+        }
+    }
+
+
+
+
+
+
+
 }
 

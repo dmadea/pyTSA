@@ -165,6 +165,13 @@ export class NumberArray extends Array<number> {
         return this;
     }
 
+    public apply(fn: (num: number) => number): NumberArray {
+        for (let i = 0; i < this.length; i++) {
+            this[i] = fn(this[i]);
+        }
+        return this;
+    }
+
     public max(): number{
         var maxval = this[0];
         for (let i = 1; i < this.length; i++) {

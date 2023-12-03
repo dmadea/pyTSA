@@ -1,10 +1,11 @@
+import { Colormap } from "./plotter/color";
 import { Scene } from "./plotter/scene";
 import { Matrix, NumberArray } from "./plotter/types";
 import { Dataset, loadData } from "./plotter/utils";
 import { Splitter } from "./splitter";
+import 'bootstrap/dist/css/bootstrap.min.css';  // https://getbootstrap.com/docs/4.0/getting-started/webpack/
 // import styles from "./styles.css";
 var styles = require("./styles.css");
-
 
 
 function benchmark() {
@@ -85,7 +86,9 @@ function abc(): void {
                 let ext = file.name.split('.').pop()?.toLowerCase();
 
                 let dataset = loadData(reader.result, (ext === 'csv') ? ',' : '\t');
-                // dataset?.transpose();
+                if (ext === 'csv') {
+                    dataset?.transpose();
+                }
 
                 if (dataset && scene.fig){
                     // dataset.data.log();
@@ -93,7 +96,7 @@ function abc(): void {
                     // dataset.data.log();
 
                     // console.log(dataset);
-                    let heatmap = scene.fig.plotHeatmap(dataset);
+                    let heatmap = scene.fig.plotHeatmap(dataset, Colormap.symgrad);
 
                     let xdiff, ydiff, xOffset, yOffset;
                     
@@ -118,6 +121,20 @@ function abc(): void {
                     scene.dLines?.setStickGrid(xdiff, xOffset, ydiff, yOffset);
 
                     scene.fig.setViewBounds([dataset.x[0], dataset.x[dataset.x.length - 1]], [dataset.y[0], dataset.y[dataset.y.length - 1]]);
+
+                    // for (let i = 0; i < dataset.x.length; i++) {
+                    //     var col = dataset.data.getCol(i);
+                    //     const color = Colormap.getColor(i / (dataset.x.length - 1), Colormap.symgrad);
+                    //     scene.figy?.plotLine(dataset.y, col, Colormap.getStringColor(color), [], 1)
+                    // }
+                    
+                    // scene.figx?.clearPlots();
+                    // for (let i = 0; i < dataset.y.length; i+= 2) {
+                    //     var row = dataset.data.getRow(i);
+                    //     const color = Colormap.getStringColor(i / (dataset.y.length - 1), Colormap.jet);
+                    //     scene.figx?.plotLine(dataset.x, row, color, [], 1)
+                    // }
+
                     // scene.repaint();
                 }
                 console.timeEnd('load');

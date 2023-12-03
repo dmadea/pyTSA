@@ -1,11 +1,11 @@
+import { Colormap, getDefaultColor, hsvColor } from "./color";
 import { DraggableLines, Orientation } from "./draggableLines";
-import { Figure } from "./figure";
+import { Figure } from "./figure/figure";
 import { EmptySpace, Grid } from "./grid";
 import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 import { backgroundColor } from "./settings";
 import { NumberArray, Matrix } from "./types";
 // import { Rect } from "./types";
-import { Dataset, genTestData } from "./utils";
 
 
 
@@ -13,6 +13,8 @@ export class Scene extends GraphicObject {
 
     private canvasResizeObserver: ResizeObserver;
     public fig: Figure | null = null;
+    public figy: Figure | null = null;
+    public figx: Figure | null = null;
     public dLines: DraggableLines | null = null;
 
     constructor(canvas: HTMLCanvasElement) {
@@ -25,10 +27,18 @@ export class Scene extends GraphicObject {
         this.canvasResizeObserver = new ResizeObserver((entries) => this.observerCallback(entries));
         this.canvasResizeObserver.observe(this.canvas);
 
-        this.canvas.addEventListener('mousedown', e => this.mouseDown({e, canvas, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
-        this.canvas.addEventListener('mouseup', e => this.mouseUp({e, canvas, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
-        this.canvas.addEventListener('mousemove', e => this.mouseMove({e, canvas, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
-        this.canvas.addEventListener("contextmenu", e => this.contextMenu({e, canvas, x: e.offsetX * window.devicePixelRatio, y: e.offsetY * window.devicePixelRatio}));
+        const dpr = window.devicePixelRatio;
+
+        this.canvas.addEventListener('mousedown', e => this.mouseDown({e, canvas, x: e.offsetX * dpr, y: e.offsetY * dpr}));
+        this.canvas.addEventListener('mouseup', e => this.mouseUp({e, canvas, x: e.offsetX * dpr, y: e.offsetY * dpr}));
+        this.canvas.addEventListener('mousemove', e => this.mouseMove({e, canvas, x: e.offsetX * dpr, y: e.offsetY * dpr}));
+        this.canvas.addEventListener("contextmenu", e => this.showContextMenu({e, canvas, x: e.offsetX * dpr, y: e.offsetY * dpr}));
+        this.canvas.addEventListener("dblclick", e => this.doubleClick({e, canvas, x: e.offsetX * dpr, y: e.offsetY *dpr}));
+
+        this.canvas.addEventListener("touchstart", e => this.touchStart(e));
+        this.canvas.addEventListener("touchmove", e => this.touchMove(e));
+        this.canvas.addEventListener("touchend", e => this.touchEnd(e));
+
     }
 
     private observerCallback(entries: ResizeObserverEntry[]) {
@@ -76,22 +86,35 @@ export class Scene extends GraphicObject {
         
         // var gridInner = new Grid();
         // grid.addItem(gridInner, 0, 1);
-        var f1y = new Figure();
-        // f1y.axisAlignment = 'vertical';
-        // f1y.xAxis.inverted = true;
-        f1y.xAxis.scale = 'symlog';
-        f1y.xAxis.symlogLinthresh = 50;
-        f1y.xAxis.symlogLinscale = 4;
-        f1y.xAxis.autoscale = false;
+        this.figy = new Figure();
+        // this.figy.axisAlignment = 'vertical';
+        // this.figy.xAxis.inverted = true;
+        this.figy.xAxis.scale = 'lin';
+        this.figy.xAxis.symlogLinthresh = 2;
+        this.figy.xAxis.symlogLinscale = 2;
+        this.figy.xAxis.autoscale = false;
+        this.figy.yAxis.autoscale = true;    
 
 
-        // f1y.showTickNumbers = ['top', 'right', 'bottom'];
-        // f1y.yAxis.label = 'Amplitude';
+        const n = 1000;
+        const nSpectra = 50;
+        // for (let i = 0; i < nSpectra; i++) {
+        //     var x = NumberArray.linspace(-Math.PI, Math.PI, n, true);
+        //     var y = x.copy().apply(num => Math.sin(1 * num + 2 * i * Math.PI / (nSpectra - 1)));
+        //     const color = Colormap.getStringColor(i / (nSpectra - 1), Colormap.hot);
+        //     this.figy.plotLine(x, y, color, [], 0.5);
+        // }
 
-        // grid.addItem(f1y, 1, 0);
 
 
-        let n = 1000;
+
+        // this.figy.showTickNumbers = ['top', 'right', 'bottom'];
+        // this.figy.yAxis.label = 'Amplitude';
+
+        // grid.addItem(this.figy, 1, 0);
+
+
+        // let n = 1000;
         var x = NumberArray.linspace(-1, 3, n, true);
         var y = NumberArray.random(-1, 3, n, false);
         this.fig.plotLine(x, y, 'blue', [], 1);
@@ -100,69 +123,74 @@ export class Scene extends GraphicObject {
         // f1.plotLine(NumberArray.fromArray([-1, 0, 1]), NumberArray.fromArray([1, -2, 0.5]), 'red'); 
 
         
-        var f2x = new Figure();
-        f2x.xAxis.label = 'Wavelength / nm';
-        f1y.xAxis.label = 'Time / ps';
-        f2x.xAxis.autoscale = false;
+        this.figx = new Figure();
+        this.figx.xAxis.label = 'Wavelength / nm';
+        this.figy.xAxis.label = 'Time / ps';
+        this.figx.xAxis.autoscale = false;
+        this.figx.yAxis.autoscale = true;
 
 
-        // f2x.figureSettings.yAxis.label = 'Amplitude';
+
+        // this.figx.figureSettings.yAxis.label = 'Amplitude';
         
-        // f2x.figureSettings.showTickNumbers = ['left', 'bottom'];
-        // f2x.minimalMargin.left = 200;
+        // this.figx.figureSettings.showTickNumbers = ['left', 'bottom'];
+        // this.figx.minimalMargin.left = 200;
         
         
-        var linePlot = f2x.plotLine(new NumberArray(), new NumberArray());
-        var linePlotCol = f1y.plotLine(new NumberArray(), new NumberArray());
+        var linePlot = this.figx.plotLine(new NumberArray(), new NumberArray());
+        var linePlotCol = this.figy.plotLine(new NumberArray(), new NumberArray());
         
         // f2.addDraggableLines(DraggableLines.Orientation.Both);
         
-        this.fig.linkXRange(f2x);
-        this.fig.linkYXRange(f1y);  
+        this.fig.linkXRange(this.figx);
+        this.fig.linkYXRange(this.figy);  
         
-        // this.fig.linkMargin(f2x, Orientation.Horizontal);
-        // this.fig.linkMargin(f1y, Orientation.Vertical);
+        // this.fig.linkMargin(this.figx, Orientation.Horizontal);
+        // this.fig.linkMargin(this.figy, Orientation.Vertical);
         
         
         // this.fig.linkYRange(f1);
         grid.addItem(this.fig, 0, 0, 2, 1);
-        grid.addItem(f1y, 0, 1, 1, 1);
-        grid.addItem(f2x, 1, 1, 1, 1);
+        grid.addItem(this.figy, 0, 1, 1, 1);
+        grid.addItem(this.figx, 1, 1, 1, 1);
         // grid.addItem(new EmptySpace(), 0, 1);
         // gridInner.addItem(new Figure(), 0, 0);
+
+        const fy = this.figy;
 
         this.dLines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);
         this.dLines.addPositionChangedListener((pos) => {
             // console.log('position changed', pos);
             if (this.fig?.heatmap) {
 
-                // f2x.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
-                // f1y.xAxis.scale = this.fig.yAxis.scale;
+                // this.figx.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
+                // this.figy.xAxis.scale = this.fig.yAxis.scale;
 
-                // get row
-                let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.y);
-                let row = this.fig.heatmap.dataset.data.getRow(idxy);
-
-                let idxx = this.fig.heatmap.dataset.x.nearestIndex(pos.realPosition.x);
-                let col = this.fig.heatmap.dataset.data.getCol(idxx);
-
-                if (linePlot.x.length !== this.fig.heatmap.dataset.y.length) {
-                    linePlot.x = this.fig.heatmap.dataset.x;
+                if (pos.yChanged) {
+                     // get row
+                    let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.y);
+                    let row = this.fig.heatmap.dataset.data.getRow(idxy);
+                    linePlot.y = row;
+                    this.figx?.repaint();
                 }
 
-                linePlot.y = row;
-                
-                linePlotCol.x = this.fig.heatmap.dataset.y;
-                linePlotCol.y = col;
-                
-                f1y.repaint();
-                f2x.repaint();
-                // console.log(col);
+                if (pos.xChanged) {
+                    let idxx = this.fig.heatmap.dataset.x.nearestIndex(pos.realPosition.x);
+                    let col = this.fig.heatmap.dataset.data.getCol(idxx);
+    
+                    if (linePlot.x.length !== this.fig.heatmap.dataset.y.length) {
+                        linePlot.x = this.fig.heatmap.dataset.x;
+                    }
+                    linePlotCol.x = this.fig.heatmap.dataset.y;
+                    linePlotCol.y = col;
+                    fy.repaint();
+                }
+
             }            
         });
 
-        var ly = f1y.addDraggableLines(DraggableLines.Orientation.Vertical);
-        var lx = f2x.addDraggableLines(DraggableLines.Orientation.Vertical);
+        var ly = this.figy.addDraggableLines(DraggableLines.Orientation.Vertical);
+        var lx = this.figx.addDraggableLines(DraggableLines.Orientation.Vertical);
 
         ly.addPositionChangedListener((pos) => {
             if (this.fig?.heatmap) {
@@ -171,9 +199,10 @@ export class Scene extends GraphicObject {
 
                 linePlot.y = row;
 
-                f2x.repaint();
+                this.figx?.repaint();
             }
         });
+
 
         lx.addPositionChangedListener((pos) => {
             if (this.fig?.heatmap) {
@@ -183,7 +212,7 @@ export class Scene extends GraphicObject {
                 linePlotCol.x = this.fig.heatmap.dataset.y;
                 linePlotCol.y = col;
 
-                f1y.repaint();
+                fy.repaint();
             }
         });
 

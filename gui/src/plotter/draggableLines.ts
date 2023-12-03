@@ -1,4 +1,4 @@
-import { Figure } from "./figure";
+import { Figure } from "./figure/figure";
 import { GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 import { Point, Rect } from "./types";
 import { formatNumber } from "./utils";
@@ -12,7 +12,9 @@ export enum Orientation {
 
 export interface IPosition {
     internalPosition: Point,
-    realPosition: Point
+    realPosition: Point,
+    xChanged: boolean,
+    yChanged: boolean
 }
 
 interface IStickGrid {
@@ -181,15 +183,20 @@ export class DraggableLines extends GraphicObject {
                         x: xnum * this.stickGrid.xdiff + this.stickGrid.xOffset,
                         y: ynum * this.stickGrid.ydiff + this.stickGrid.yOffset
                     }
+
+                    const xChanged = newPos.x !== this.position.x;
+                    const yChanged = newPos.y !== this.position.y;
     
-                    if (newPos.x !== this.position.x || newPos.y !== this.position.y) {
+                    if (xChanged || yChanged) {
                         this.position = newPos;
-                        this.positionChanged();
+                        this.positionChanged(xChanged, yChanged);
                         f.repaintItems();
                     }
                 } else {
+                    const xChanged = pos.x !== this.position.x;
+                    const yChanged = pos.y !== this.position.y;
                     this.position = pos;
-                    this.positionChanged();
+                    this.positionChanged(xChanged, yChanged);
                     f.repaintItems();
                 }
                 // console.timeEnd('mousemove');
@@ -213,7 +220,7 @@ export class DraggableLines extends GraphicObject {
         (this.parent as Figure).preventMouseEvents(false, false);
     }
 
-    private positionChanged() {
+    private positionChanged(xChanged: boolean, yChanged: boolean) {
         const f = this.parent as Figure;
         const xT = f.xAxis.getTransform();
         const yT = f.yAxis.getTransform();
@@ -258,7 +265,8 @@ export class DraggableLines extends GraphicObject {
         for (const fun of this.positionChangedListeners) {
             let pos: IPosition = {
                 internalPosition: this.position,
-                realPosition: {x: xT(this.position.x), y: yT(this.position.y)}
+                realPosition: {x: xT(this.position.x), y: yT(this.position.y)},
+                xChanged, yChanged
             };
 
             fun(pos);
@@ -308,22 +316,22 @@ export class DraggableLines extends GraphicObject {
     public rangeChanged(range: Rect): void {
         if (this.position.x < range.x) {
             this.position.x = range.x;
-            this.positionChanged();
+            this.positionChanged(true, false);
         }
 
         if (this.position.y < range.y) {
             this.position.y = range.y;
-            this.positionChanged();
+            this.positionChanged(false, true);
         }
 
         if (this.position.x > range.x + range.w) {
             this.position.x = range.x + range.w;
-            this.positionChanged();
+            this.positionChanged(true, false);
         }
 
         if (this.position.y > range.y + range.h) {
             this.position.y = range.y + range.h;
-            this.positionChanged();
+            this.positionChanged(false, true);
         }
     }
 
