@@ -1,5 +1,5 @@
 import { IMouseEvent } from "./object";
-import { Point } from "./types";
+import { Point, Rect } from "./types";
 import { generateRandomPassword } from "./utils";
 
 export class ContextMenu {
@@ -42,17 +42,43 @@ export class ContextMenu {
     protected addMenu(text: string, menu: ContextMenu): HTMLButtonElement {
         
         var action = document.createElement('button');
-        action.innerText = text;
+        action.innerText = text + "\t▸";
         action.classList.add("dropdown-item", "small", "pt-0", "pb-0");
-        action.addEventListener("mousemove", e => {
-            if (menu.menu.classList.contains("show")) {
-                // show at position of button
-                // menu.hide();
-                // console.log('hide');
-            } else {
-                menu.show({x: this.menu.offsetLeft + action.clientLeft + action.clientWidth, y: this.menu.offsetTop + action.offsetTop});
-                // console.log('show');
+
+        const divMenu = menu.menu;
+
+        document.addEventListener("mousemove", e => {
+
+            var actionRect: Rect = {
+                x: this.menu.offsetLeft,
+                y: this.menu.offsetTop + action.offsetTop,
+                w: action.offsetWidth,
+                h: action.offsetHeight
             }
+
+            // console.log(actionRect, e.pageX, e.pageY);
+
+
+            let show = false;
+
+            if (e.pageX >= actionRect.x && e.pageX <= actionRect.x + actionRect.w 
+                && e.pageY >= actionRect.y && e.pageY <= actionRect.y + actionRect.h) {
+                    show = true;
+                    // console.log('on action');
+                }
+
+            if (e.pageX >= divMenu.offsetLeft && e.pageX <= divMenu.offsetLeft + divMenu.offsetWidth
+                && e.pageY >= divMenu.offsetTop && e.pageY <= divMenu.offsetTop + divMenu.offsetHeight) {
+                    show = true;
+                    // console.log('on menu');
+                }
+            
+            if (show) {
+                menu.show({x: actionRect.x + actionRect.w, y: actionRect.y});
+            } else {
+                menu.hide();
+            }
+
         });
 
         this.otherMenus.push(menu);

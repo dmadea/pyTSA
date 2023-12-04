@@ -10,7 +10,7 @@ export enum Orientation {
     Both
 }
 
-export interface IPosition {
+export interface IPositionChangedEvent {
     internalPosition: Point,
     realPosition: Point,
     xChanged: boolean,
@@ -48,7 +48,7 @@ export class DraggableLines extends GraphicObject {
 
     private verticalDragging: boolean = false;
     private horizontalDragging: boolean = false;
-    private positionChangedListeners: ((position: IPosition) => void)[] = [];
+    private positionChangedListeners: ((position: IPositionChangedEvent) => void)[] = [];
 
     private xLinks: DraggableLines[] = [];
     private yLinks: DraggableLines[] = [];
@@ -263,7 +263,7 @@ export class DraggableLines extends GraphicObject {
         }
 
         for (const fun of this.positionChangedListeners) {
-            let pos: IPosition = {
+            let pos: IPositionChangedEvent = {
                 internalPosition: this.position,
                 realPosition: {x: xT(this.position.x), y: yT(this.position.y)},
                 xChanged, yChanged
@@ -273,7 +273,7 @@ export class DraggableLines extends GraphicObject {
         }
     }
 
-    public addPositionChangedListener(callback: (pos: IPosition) => void) {
+    public addPositionChangedListener(callback: (pos: IPositionChangedEvent) => void) {
         this.positionChangedListeners.push(callback);
     }
 

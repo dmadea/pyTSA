@@ -8,6 +8,7 @@ import { HeatMap } from "./heatmap";
 import { DraggableLines, Orientation } from "../draggableLines";
 import { Axis } from "./axis";
 import { ContextMenu } from "../contextmenu";
+import { FigureContextMenu } from "./figurecontextmenu";
 
 
 interface ILinePlot {
@@ -19,66 +20,7 @@ interface ILinePlot {
     zValue: number
 }
 
-class AxisContextMenu extends ContextMenu {
 
-    public fig: Figure;
-
-    constructor(parentFigure: Figure) {
-        super();
-        this.fig = parentFigure;
-    }
-
-    protected createMenu(): HTMLDivElement {
-        super.createMenu();
-
-        this.addCheckBox("Autoscale");
-
-        var s = this.addSelect("Scale", "Linear", "Logarithmic", "Symlog", "Data bound");
-        s.addEventListener("change", e => {
-            console.log(s.selectedOptions[0].text);
-        });
-
-        var linthresh = this.addNumberInput("linthresh", 1, 0);
-        var linscale = this.addNumberInput("linscale", 1, 0);
-        
-        return this.menu;
-    }
-}
-
-class FigureContextMenu extends ContextMenu {
-
-    public fig: Figure;
-
-    constructor(parentFigure: Figure) {
-        super();
-        this.fig = parentFigure;
-    }
-
-    protected createMenu(): HTMLDivElement {
-        super.createMenu();
-
-        var viewAllAction = this.addAction("View all");
-        viewAllAction.addEventListener("click", e => {
-            this.fig.viewAll();
-        });
-
-        var a2 = this.addAction("action 2");
-        this.addDivider();
-        var a3 = this.addAction("action 3");
-        this.addAction("action 3");
-        this.addCheckBox('checkbox 1');
-
-        var menu = new AxisContextMenu(this.fig);
-        this.addMenu("X axis", menu);
-
-
-        a3.addEventListener("click", e => {
-            // console.log("action 3 clicked");
-        });
-
-        return this.menu;
-    }
-}
 
 export class Figure extends GraphicObject {
 
@@ -363,6 +305,8 @@ export class Figure extends GraphicObject {
         // // we are outside of figure frame
         // if (!this.isInsideEffRect(x, y))
         //     return;
+
+        if (e.e.ctrlKey) return;  // for this case, default context menu is opened
 
         if (this._preventPanning && !this._preventScaling) {
             super.mouseDown(e);
@@ -1322,6 +1266,7 @@ export class Figure extends GraphicObject {
         let coor: number, size: number, prefMajorBins: number, prefMinorBins: number, ax: Axis;
         const f = 0.005;
         const fMinor = 0.05;
+        const dpr = window.devicePixelRatio;
         let fx = f * 1;
         let fy = f * 2; // 2 times more preffered number of ticks on y axis then on x axis because of smaller text
         let w = this.effRect.w;
@@ -1335,13 +1280,13 @@ export class Figure extends GraphicObject {
             ax = this.xAxis;
             coor = this._range.x;
             size = this._range.w;
-            prefMajorBins = Math.max(Math.round(fx * w), 2);
+            prefMajorBins = Math.max(Math.round(fx * w / dpr), 2);
             prefMinorBins = Math.round(w * fMinor);
         } else {
             ax = this.yAxis;
             coor = this._range.y;
             size = this._range.h;
-            prefMajorBins = Math.max(Math.round(fy * h), 2);
+            prefMajorBins = Math.max(Math.round(fy * h / dpr), 2);
             prefMinorBins = Math.round(h * fMinor);
         }
 
