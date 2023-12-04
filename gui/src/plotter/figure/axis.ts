@@ -1,6 +1,11 @@
 import { NumberArray } from "../types";
 import { Figure } from "./figure";
 
+export enum AxisType {
+    xAxis,
+    yAxis
+}
+
 export class Axis {
 
     public label: string;
@@ -12,10 +17,13 @@ export class Axis {
     public symlogLinscale: number;  // number of decades to use for each half of the linear range
     public displayedSignificantFigures: number = 2;
     private figure: Figure;
+    
+    public axisType: AxisType;
 
-    constructor (figure: Figure, label?: string, scale?: string | NumberArray, viewBounds?: [number, number],
+    constructor (figure: Figure, axisType: AxisType, label?: string, scale?: string | NumberArray, viewBounds?: [number, number],
         autoscale?: boolean, inverted?: boolean, symlogLinthresh?: number, symlogLinscale?: number) {
             this.figure = figure;
+            this.axisType = axisType;
             this.label = label ?? '';
             this.scale = scale ?? 'lin';
             this.viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];

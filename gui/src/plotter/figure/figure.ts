@@ -6,7 +6,7 @@ import { Dataset, determineSigFigures, formatNumber } from "../utils";
 import { Colormap, ILut } from "../color";
 import { HeatMap } from "./heatmap";
 import { DraggableLines, Orientation } from "../draggableLines";
-import { Axis } from "./axis";
+import { Axis, AxisType } from "./axis";
 import { ContextMenu } from "../contextmenu";
 import { FigureContextMenu } from "./figurecontextmenu";
 
@@ -48,7 +48,7 @@ export class Figure extends GraphicObject {
 
     private lastMouseDownPos: Point;
     private lastRange: Rect;
-    private linePlots: Array<ILinePlot> = [];
+    public linePlots: Array<ILinePlot> = [];
 
     private xRangeLinks: Figure[] = [];
     private yRangeLinks: Figure[] = [];
@@ -63,7 +63,7 @@ export class Figure extends GraphicObject {
     private _preventPanning: boolean = false;
     private _preventScaling: boolean = false;
 
-    private offScreenCanvas: OffscreenCanvas;
+    public offScreenCanvas: OffscreenCanvas;
     private offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
 
     private plotCanvasRect = false;
@@ -106,14 +106,13 @@ export class Figure extends GraphicObject {
         if (this.offScreenCanvasCtx === null) {
             throw new Error('this.offScreenCanvasCtx === null');
         }
-        this.xAxis = new Axis(this);
-        this.yAxis = new Axis(this);
+        this.xAxis = new Axis(this, AxisType.xAxis);
+        this.yAxis = new Axis(this, AxisType.yAxis);
         this.contextMenu = new FigureContextMenu(this);
     }
 
     // public resize(): void {
     //     super.resize();
-
     // }
 
     public setCanvasRect(cr: Rect): void {
@@ -898,8 +897,8 @@ export class Figure extends GraphicObject {
         const va = this.axisAlignment === Orientation.Vertical;
         this.requiredMargin = {left: 0, right: 0, bottom: 0, top: 0};
 
-        let [xticks, xticksVals, xMinors] = this.getTicks('x');
-        let [yticks, yticksVals, yMinors] = this.getTicks('y');
+        let [xticks, xticksVals, xMinors] = this.getTicks(this.xAxis);
+        let [yticks, yticksVals, yMinors] = this.getTicks(this.yAxis);
 
         const _arr: [Axis, NumberArray][] = [[this.xAxis, xticksVals], [this.yAxis, yticksVals]];
 
@@ -1157,7 +1156,7 @@ export class Figure extends GraphicObject {
             // console.log('margins are different');
             this.margin = newMargin;
             this.calcEffectiveRect();
-            // this.repaint();
+            this.repaint();
         }
 
     }
@@ -1260,37 +1259,35 @@ export class Figure extends GraphicObject {
     // returns tuple of arrays, first is the x tick position on dummy linear axis
     // and second is actuall value of the tick
     // returns major ticks, major ticks values and minor ticks
-    getTicks(axis: string): [NumberArray, NumberArray, NumberArray]{
+    getTicks(axis: Axis): [NumberArray, NumberArray, NumberArray]{
         // calculate scale
 
-        let coor: number, size: number, prefMajorBins: number, prefMinorBins: number, ax: Axis;
+        let coor: number, size: number, prefMajorBins: number, prefMinorBins: number;
         const f = 0.005;
         const fMinor = 0.05;
         const dpr = window.devicePixelRatio;
-        let fx = f * 1;
-        let fy = f * 2; // 2 times more preffered number of ticks on y axis then on x axis because of smaller text
-        let w = this.effRect.w;
+        let fx = f * 2;
+        let fy = f * 3; // 2 times more preffered number of ticks on y axis then on x axis because of smaller text
+        let w = this.effRect.w; 
         let h = this.effRect.h;
         const va = this.axisAlignment == Orientation.Vertical;
         if (va) {
             [w, h] = [h, w];
             [fx, fy] = [fy, fx];
         }
-        if (axis === 'x') {
-            ax = this.xAxis;
+        if (axis.axisType === AxisType.xAxis) {
             coor = this._range.x;
             size = this._range.w;
             prefMajorBins = Math.max(Math.round(fx * w / dpr), 2);
             prefMinorBins = Math.round(w * fMinor);
         } else {
-            ax = this.yAxis;
             coor = this._range.y;
             size = this._range.h;
             prefMajorBins = Math.max(Math.round(fy * h / dpr), 2);
             prefMinorBins = Math.round(h * fMinor);
         }
 
-        switch (ax.scale) {
+        switch (axis.scale) {
             case 'lin': {
                 return this.genLinearTicks(coor, size, prefMajorBins);
             }
@@ -1298,14 +1295,14 @@ export class Figure extends GraphicObject {
                 return this.genLogTicks(coor, size, prefMajorBins);
             }
             case 'symlog': {
-                const linScale = !(coor > ax.symlogLinthresh || coor + size < -ax.symlogLinthresh);
-                const logScale = !(coor > -ax.symlogLinthresh && coor + size < ax.symlogLinthresh);
+                const linScale = !(coor > axis.symlogLinthresh || coor + size < -axis.symlogLinthresh);
+                const logScale = !(coor > -axis.symlogLinthresh && coor + size < axis.symlogLinthresh);
                 const ticks = new NumberArray();
                 const ticksValues = new NumberArray();
                 const minorTicks = new NumberArray();
 
                 if (linScale) {
-                    const start = (coor < -ax.symlogLinthresh) ? -ax.symlogLinthresh : coor;
+                    const start = (coor < -axis.symlogLinthresh) ? -axis.symlogLinthresh : coor;
                     // const end = (coor + size > ax.symlogLinthresh) ? ax.symlogLinthresh : coor + size;
                     
                     // const linSize = end - start;
@@ -1316,13 +1313,13 @@ export class Figure extends GraphicObject {
                     let [linTicks, linValues, linMinors] = this.genLinearTicks(start, size, prefMajorBins);
                     // remove ticks outside of the linear range
                     for (var i = 0; i < linTicks.length; i++) {
-                        if (linTicks[i] > ax.symlogLinthresh) break; 
+                        if (linTicks[i] > axis.symlogLinthresh) break; 
                     }
                     linTicks = linTicks.slice(0, i);
                     linValues = linValues.slice(0, i);
 
                     for (var i = 0; i < linMinors.length; i++) {
-                        if (linMinors[i] > ax.symlogLinthresh) break; 
+                        if (linMinors[i] > axis.symlogLinthresh) break; 
                     }
                     linMinors = linMinors.slice(0, i);
 
@@ -1332,21 +1329,21 @@ export class Figure extends GraphicObject {
                 }
 
                 if (logScale) {
-                    const axT = ax.getTransform();
+                    const axT = axis.getTransform();
 
                     var getTransformedTicks = (startValue: number, endValue: number): [NumberArray, NumberArray, NumberArray] => {
 
-                        const start = Math.log10(ax.symlogLinthresh);
+                        const start = Math.log10(axis.symlogLinthresh);
                         // const realStart = Math.max(ax.symlogLinthresh, coor);
                         // const start = Math.log10(axT(startValue));
                         const end = Math.log10(axT(endValue));
                         const logSize = end - start;
-                        const factor = (endValue - ax.symlogLinthresh) / (endValue - startValue);
+                        const factor = (endValue - axis.symlogLinthresh) / (endValue - startValue);
 
-                        prefMajorBins = (axis === 'x') ? Math.max(Math.round(fx * w * factor), 2) : Math.max(Math.round(fy * h  * factor), 2)
+                        prefMajorBins = (axis.axisType === AxisType.xAxis) ? Math.max(Math.round(fx * w * factor), 2) : Math.max(Math.round(fy * h  * factor), 2)
                         
                         let [logTicks, logValues, logMinors] = this.genLogTicks(start, logSize, prefMajorBins);
-                        let tr = (num: number) => ax.symlogLinscale + (num - start) * ax.symlogLinthresh / ax.symlogLinscale;
+                        let tr = (num: number) => axis.symlogLinthresh + (num - start) * axis.symlogLinthresh / axis.symlogLinscale;
 
                         logTicks.apply(tr);
                         logMinors.apply(tr);
@@ -1371,8 +1368,8 @@ export class Figure extends GraphicObject {
                     }
 
                     // for positive vals
-                    if (coor + size > ax.symlogLinthresh) {
-                        const [logTicks, logValues, logMinors] = getTransformedTicks(Math.max(coor, ax.symlogLinthresh), coor + size);
+                    if (coor + size > axis.symlogLinthresh) {
+                        const [logTicks, logValues, logMinors] = getTransformedTicks(Math.max(coor, axis.symlogLinthresh), coor + size);
                         ticks.push(...logTicks);
                         ticksValues.push(...logValues);
                         minorTicks.push(...logMinors);
@@ -1380,8 +1377,8 @@ export class Figure extends GraphicObject {
                     }
 
                     // for negative vals
-                    if (coor < -ax.symlogLinthresh) {
-                        const [logTicks, logValues, logMinors] = getTransformedTicks(-Math.min(coor + size, -ax.symlogLinthresh), -coor);
+                    if (coor < -axis.symlogLinthresh) {
+                        const [logTicks, logValues, logMinors] = getTransformedTicks(-Math.min(coor + size, -axis.symlogLinthresh), -coor);
                         ticks.push(...logTicks.mul(-1));
                         ticksValues.push(...logValues.mul(-1));
                         minorTicks.push(...logMinors.mul(-1));
@@ -1392,7 +1389,7 @@ export class Figure extends GraphicObject {
 
             }
             default: {  
-                if (!(ax.scale instanceof NumberArray)) {
+                if (!(axis.scale instanceof NumberArray)) {
                     throw new Error("Not implemented");
                 }
                 // data bound
@@ -1412,7 +1409,7 @@ export class Figure extends GraphicObject {
                 // generate ticks
                 for (let i = 0; i < nticks; i++) {
                     ticks[i] = bestMin + step * i;
-                    ticksValues[i] = ax.scale[ticks[i]] ?? Number.NaN;
+                    ticksValues[i] = axis.scale[ticks[i]] ?? Number.NaN;
                 }
                 
                 const minorTicks = new NumberArray();

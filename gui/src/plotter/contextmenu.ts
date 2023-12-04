@@ -6,12 +6,16 @@ export class ContextMenu {
 
     public menu: HTMLDivElement;
     private otherMenus: ContextMenu[] = [];
+    private constructed: boolean = false;
+    public gridClass: string = "col-3";
+
+    public parentMenu?: ContextMenu;
 
     constructor() {
         this.menu = this.createMenu();
     }
 
-    protected createMenu(): HTMLDivElement {
+    private createMenu(): HTMLDivElement {
         var menu = document.createElement('div');
         menu.classList.add("dropdown-menu");
         // menu.classList.add("dropdown-menu-sm");
@@ -35,7 +39,7 @@ export class ContextMenu {
             if (hide) this.hide();
         });
 
-        this.menu = menu;
+        // this.menu = menu;
         return menu;
     }
 
@@ -45,6 +49,7 @@ export class ContextMenu {
         action.innerText = text + "\t▸";
         action.classList.add("dropdown-item", "small", "pt-0", "pb-0");
 
+        // menu._order = this._order + 1;
         const divMenu = menu.menu;
 
         document.addEventListener("mousemove", e => {
@@ -57,7 +62,6 @@ export class ContextMenu {
             }
 
             // console.log(actionRect, e.pageX, e.pageY);
-
 
             let show = false;
 
@@ -74,7 +78,7 @@ export class ContextMenu {
                 }
             
             if (show) {
-                menu.show({x: actionRect.x + actionRect.w, y: actionRect.y});
+                if (!menu.isShowing()) menu.show({x: actionRect.x + actionRect.w, y: actionRect.y});
             } else {
                 menu.hide();
             }
@@ -83,6 +87,7 @@ export class ContextMenu {
 
         this.otherMenus.push(menu);
         menu.otherMenus.push(this);
+        menu.parentMenu = this;
         this.menu.appendChild(action);
         return action;
     }
@@ -124,66 +129,101 @@ export class ContextMenu {
     }
 
     protected addSelect(text: string, ...options: string[]): HTMLSelectElement {
-        // var div = document.createElement('div');
-        // div.classList.add("form-check");
+
+        var divrow = document.createElement('div');
+        divrow.classList.add("row");
+        divrow.style.marginLeft = "10px";
+
+        var divcol1 = document.createElement('div');
+        divcol1.classList.add("col");
         // div.style.marginLeft = "15px";
 
         var select = document.createElement("select");
-        select.classList.add("form-select", "form-select-sm");
+        select.classList.add("col-form-input", "small");
 
         for (const option of options) {
             let optElement = document.createElement("option");
             optElement.text = option;
             select.appendChild(optElement);
         }
-        
-        // var label = document.createElement("label");
-        // label.classList.add("form-check-label", "small");
-        // label.textContent = text;
-        
-        // div.appendChild(label);
-        // div.appendChild(select);
 
-        var header = document.createElement("h6");
-        header.classList.add("dropdown-header");
-        header.textContent = text;
+        divcol1.appendChild(select);
 
-        this.menu.appendChild(header);
-        this.menu.appendChild(select);
+        var divcol2 = document.createElement('div');
+        divcol2.classList.add(this.gridClass);
+
+        var label = document.createElement("label");
+        label.classList.add("col-form-label", "col-form-label-sm", "text-nowrap");
+        label.textContent = text;
+
+        divcol2.appendChild(label);
+        divrow.appendChild(divcol2);
+        divrow.appendChild(divcol1);
+        this.menu.appendChild(divrow);
         return select;
     }
 
-    protected addNumberInput(text: string, value: number, min?: number, max?: number): HTMLInputElement {
+    protected addNumberInput(text: string, value: number, min?: number, max?: number, step?: number): HTMLInputElement {
+        var divrow = document.createElement('div');
+        divrow.classList.add("row");
+        divrow.style.marginLeft = "10px";
 
-        // <div class="form-outline">
-        //     <input type="number" id="typeNumber" class="form-control" />
-        //     <label class="form-label" for="typeNumber">Number input</label>
-        // </div>
-
-        var div = document.createElement('div');
-        div.classList.add("form-outline");
-        // div.style.marginLeft = "15px";
+        var divcol1 = document.createElement('div');
+        divcol1.classList.add("col");
 
         var input = document.createElement('input');
         input.type = "number";
-        input.classList.add("form-control", "small");
+        input.classList.add("col-form-input", "small");
         input.value = value.toString();
         input.min = (min === undefined) ? "" : min?.toString();
         input.max = (max === undefined) ? "" : max?.toString();
+        input.step = (step === undefined) ? "" : step?.toString();
         input.id = generateRandomPassword(10);
 
-        div.appendChild(input);
+        divcol1.appendChild(input);
+
+        var divcol2 = document.createElement('div');
+        divcol2.classList.add(this.gridClass);
 
         var label = document.createElement("label");
-        label.classList.add("form-label", "small");
+        label.classList.add("col-form-label", "col-form-label-sm");
         label.textContent = text;
         label.htmlFor = input.id;
 
-        div.appendChild(label);
-        this.menu.appendChild(div);
-
+        divcol2.appendChild(label);
+        divrow.appendChild(divcol2);
+        divrow.appendChild(divcol1);
+        this.menu.appendChild(divrow);
         return input;
+    }
 
+    protected addTextInput(text: string, value: string): HTMLInputElement {
+        var divrow = document.createElement('div');
+        divrow.classList.add("row");
+        divrow.style.marginLeft = "10px";
+
+        var divcol1 = document.createElement('div');
+        divcol1.classList.add("col");
+
+        var input = document.createElement('input');
+        input.type = "text";
+        input.classList.add("col-form-input", "small");
+        input.value = value;
+
+        divcol1.appendChild(input);
+
+        var divcol2 = document.createElement('div');
+        divcol2.classList.add(this.gridClass);
+
+        var label = document.createElement("label");
+        label.classList.add("col-form-label", "col-form-label-sm");
+        label.textContent = text;
+
+        divcol2.appendChild(label);
+        divrow.appendChild(divcol2);
+        divrow.appendChild(divcol1);
+        this.menu.appendChild(divrow);
+        return input;
     }
 
     protected addDivider() {
@@ -192,7 +232,26 @@ export class ContextMenu {
         this.menu.appendChild(div);
     }
 
+    protected constructMenu() {
+        throw Error('Not implemented');
+    }
+
+    protected updateMenu() {
+        // to be implemented if necessary
+    }
+
+    public isShowing() {
+        return this.menu.classList.contains("show");
+    }
+
     public show(location: Point) {
+        if (!this.constructed) {
+            this.constructMenu();
+            this.constructed = true;
+        }
+
+        this.updateMenu();
+
         this.menu.classList.add("show");
         const mousex = location.x;
         const mousey = location.y;
@@ -201,10 +260,12 @@ export class ContextMenu {
         let x = mousex;
         let y = mousey;
         if (mousex + this.menu.offsetWidth > document.body.offsetWidth) {
-            x -= this.menu.offsetWidth;
+            var diffx = (this.parentMenu) ? this.parentMenu.menu.offsetWidth : 0;
+            x -= diffx + this.menu.offsetWidth;
         }
         if (mousey + this.menu.offsetHeight > document.body.offsetHeight) {
-            y -= this.menu.offsetHeight;
+            var diffy = (this.parentMenu) ? this.parentMenu.menu.offsetHeight : 0;
+            y -= diffy + this.menu.offsetHeight;
         }
 
         this.menu.style.cssText = `position: "block"; left: ${x}px; top: ${y}px`;
@@ -213,6 +274,4 @@ export class ContextMenu {
     public hide() {
         this.menu.classList.remove("show");
     }
-
-
 }

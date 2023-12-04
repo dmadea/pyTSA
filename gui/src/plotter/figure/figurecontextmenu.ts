@@ -1,4 +1,7 @@
 import { ContextMenu } from "../contextmenu";
+import { Orientation } from "../draggableLines";
+import { NumberArray } from "../types";
+import { Axis, AxisType } from "./axis";
 import { Figure } from "./figure";
 
 
@@ -6,60 +9,194 @@ import { Figure } from "./figure";
 class AxisContextMenu extends ContextMenu {
 
     public fig: Figure;
+    public axis: Axis;
+    private autoscale?: HTMLInputElement;
+    private axisScale?: HTMLSelectElement;
+    private linscale?: HTMLInputElement;
+    private linthresh?: HTMLInputElement;
+    private inverted?: HTMLInputElement;
+    private axLabel?: HTMLInputElement;
 
-    constructor(parentFigure: Figure) {
-        super();
-        this.fig = parentFigure;
+    private getTextFromScale(scale: string | NumberArray) {
+        switch (scale) {
+            case 'lin': {
+                return "Linear";
+            }
+            case 'log': {
+                return "Logarithmic";
+            }                
+            case 'symlog': {
+                return "Symmetric logarithmic";
+            }
+            default: // for data bound scale
+                if (!(scale instanceof NumberArray)) {
+                    throw new Error("Not implemented");
+                }
+
+                return "Data bound";
+        }
     }
 
-    protected createMenu(): HTMLDivElement {
-        super.createMenu();
+    private getScaleFromText(scale: string): string | NumberArray {
+        switch (scale) {
+            case 'Linear': {
+                return "lin";
+            }
+            case 'Logarithmic': {
+                return "log";
+            }                
+            case 'Symmetric logarithmic': {
+                return "symlog";
+            }
+            default: {  // data bound
+                if (this.fig.heatmap) {
+                    return (this.axis.axisType === AxisType.xAxis) ? this.fig.heatmap.dataset.x : this.fig.heatmap.dataset.y;
+                } else if (this.fig.linePlots.length > 0) {
+                    return this.fig.linePlots[0].x;
+                } else {
+                    return "lin";
+                }
+            }
+        }
+    }
 
-        this.addCheckBox("Autoscale");
+    constructor(parentFigure: Figure, axis: Axis) {
+        super();
+        this.fig = parentFigure;
+        this.axis = axis;
+    }
 
-        var s = this.addSelect("Scale", "Linear", "Logarithmic", "Symlog", "Data bound");
-        s.addEventListener("change", e => {
-            console.log(s.selectedOptions[0].text);
+    protected constructMenu() {
+        var autoscale = this.addCheckBox("Autoscale");
+        autoscale.addEventListener("change", e => {
+            this.axis.autoscale = autoscale.checked;
+            if (autoscale.checked) this.fig.repaint();
+        });
+        this.autoscale = autoscale;
+
+        var inverted = this.addCheckBox("Inverted");
+        inverted.addEventListener("change", e => {
+            this.axis.inverted = inverted.checked;
+            if (this.fig.heatmap) {
+                this.fig.heatmap.recalculateImage();
+            }
+            this.fig.repaint();
+        });
+        this.inverted = inverted;
+
+        var axLabel = this.addTextInput("Label", this.axis.label);
+        axLabel.addEventListener("change", e => {
+            this.axis.label = axLabel.value ?? "";
+            this.fig.repaint();
         });
 
-        var linthresh = this.addNumberInput("linthresh", 1, 0);
-        var linscale = this.addNumberInput("linscale", 1, 0);
-        
-        return this.menu;
+        var options = ["Linear", "Logarithmic", "Symmetric logarithmic", "Data bound"];
+        // if (this.axis.axisType === AxisType.xAxis) {  // y axis cannot be data bound
+        //     options.push("Data bound");
+        // }
+
+        var axisScale = this.addSelect("Scale", ...options);
+        axisScale.addEventListener("change", e => {
+            this.axis.scale = this.getScaleFromText(axisScale.selectedOptions[0].text);
+            this.fig.repaint();
+        });
+        this.axisScale = axisScale;
+
+        var linthresh = this.addNumberInput("Linthresh", 1, 0, undefined, 0.1);
+        var linscale = this.addNumberInput("Linscale", 1, 0, undefined, 0.1);
+
+        linthresh.addEventListener("change", e => {
+            var num = parseFloat(linthresh.value);
+            var num = (num === 0) ? 1 : num;
+            this.axis.symlogLinthresh = num;
+            this.fig.repaint();
+        });
+        this.linthresh = linthresh;
+
+        linscale.addEventListener("change", e => {
+            var num = parseFloat(linthresh.value);
+            var num = (num === 0) ? 1 : num;
+            this.axis.symlogLinscale = num;
+            this.fig.repaint();
+        });
+        this.linscale = linscale;
+    }
+
+    protected updateMenu(): void {
+        if (this.autoscale) {
+            this.autoscale.checked = this.axis.autoscale;
+        }
+
+        if (this.inverted) {
+            this.inverted.checked = this.axis.inverted;
+        }
+
+        if (this.axLabel) {
+            this.axLabel.value = this.axis.label;
+        }
+
+        if (this.axisScale) {
+            this.axisScale.selectedOptions[0].text = this.getTextFromScale(this.axis.scale);
+        }
+
+        if (this.linthresh) {
+            this.linthresh.value = this.axis.symlogLinthresh.toString();
+        }
+
+        if (this.linscale) {
+            this.linscale.value = this.axis.symlogLinscale.toString();
+        }
     }
 }
 
 export class FigureContextMenu extends ContextMenu {
 
     public fig: Figure;
+    private axisAlignment?: HTMLSelectElement;
 
     constructor(parentFigure: Figure) {
         super();
         this.fig = parentFigure;
     }
 
-    protected createMenu(): HTMLDivElement {
-        super.createMenu();
-
+    protected constructMenu(): void {
         var viewAllAction = this.addAction("View all");
         viewAllAction.addEventListener("click", e => {
             this.fig.viewAll();
         });
 
-        var a2 = this.addAction("action 2");
-        this.addDivider();
-        var a3 = this.addAction("action 3");
-        this.addAction("action 3");
-        this.addCheckBox('checkbox 1');
-
-        var menu = new AxisContextMenu(this.fig);
-        this.addMenu("X axis", menu);
-
-
-        a3.addEventListener("click", e => {
-            // console.log("action 3 clicked");
+        // var a2 = this.addAction("action 2");
+        // this.addDivider();
+        var copy = this.addAction("Copy this to clipboard");
+        copy.addEventListener("click", e => {
+            this.fig.offScreenCanvas.convertToBlob().then(blob => {
+                navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+            });
         });
+        // this.addAction("action 3");
+        // this.addCheckBox('checkbox 1');
 
-        return this.menu;
+        var xAxisMenu = new AxisContextMenu(this.fig, this.fig.xAxis);
+        var yAxisMenu = new AxisContextMenu(this.fig, this.fig.yAxis);
+
+        this.addMenu("X axis", xAxisMenu);
+        this.addMenu("Y axis", yAxisMenu);
+
+        var axAlign = this.addSelect("Axis alignment", "Horizontal", "Vertical");
+        axAlign.addEventListener("change", e => {
+            const opt = axAlign.selectedOptions[0].text;
+            this.fig.axisAlignment = opt == "Vertical" ? Orientation.Vertical : Orientation.Horizontal;
+            this.fig.repaint();
+        });
+        this.axisAlignment = axAlign;
     }
+
+    protected updateMenu(): void {
+        if (this.axisAlignment) {
+            this.axisAlignment.selectedOptions[0].text = this.fig.axisAlignment === Orientation.Vertical ? "Vertical" : "Horizontal";
+        }
+    }
+
+
+
 }
