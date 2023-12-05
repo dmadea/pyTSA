@@ -264,14 +264,14 @@ export class Scene extends GraphicObject {
 
     }
     
-    public mouseMove(e: IMouseEvent): void {
-        // if (this.canvas) {
-        //     this.canvas.style.cursor = this.cursors.default;
-        // }
+    // public mouseMove(e: IMouseEvent): void {
+    //     // if (this.canvas) {
+    //     //     this.canvas.style.cursor = this.cursors.default;
+    //     // }
 
-        super.mouseMove(e);
+    //     super.mouseMove(e);
 
-    }
+    // }
 
 
 }

@@ -49,7 +49,7 @@ export class Figure extends GraphicObject {
     private _range: Rect;  // in case of scale of data, the range will be just indexes of data it is bound to
 
     private lastMouseDownPos: Point;
-    private mousePos: Point;
+    private mousePos: Point | null;
     private lastRange: Rect;
     public linePlots: Array<ILinePlot> = [];
 
@@ -123,10 +123,6 @@ export class Figure extends GraphicObject {
         super.setCanvasRect(cr);
         this.offScreenCanvas.width = this.canvasRect.w;
         this.offScreenCanvas.height = this.canvasRect.h;
-        for (const item of this.items) {
-            item.canvasRect = {...this.canvasRect};
-            // item.margin = {...this.margin};
-        }
     }
 
     public setViewBounds(xAxisBounds?: [number, number], yAxisBounds?: [number, number]) {
@@ -305,9 +301,8 @@ export class Figure extends GraphicObject {
     public mouseDown(e: IMouseEvent): void {
         // this.calcEffectiveRect();
 
-        // // we are outside of figure frame
-        // if (!this.isInsideEffRect(x, y))
-        //     return;
+        // we are outside of figure frame
+        if (!this.isInsideEffRect(e.x, e.y)) return;
 
         if (e.e.ctrlKey) return;  // for this case, default context menu is opened
 
@@ -512,21 +507,21 @@ export class Figure extends GraphicObject {
             return;
         }
         
-        if (this._preventPanning || this._preventScaling) {
-            super.mouseMove(e);
+        if (this.isInsideEffRect(e.x, e.y)) {
+            e.canvas.style.cursor = this.cursors.crosshair;
+            this.mousePos = {x: e.x, y: e.y};
+        } else {
+            e.canvas.style.cursor = this.cursors.default;
+            this.mousePos = null;
+
+            // console.log('setting up cursor');
         }
 
-        this.mousePos = {x: e.x, y: e.y};
-        this.repaintItems();
-
-        // plot position
-        
-        // if (this._preventPanning && this._preventScaling) {
-        //     return;
-        // }
-        
-        // for handling hovering of items
+        // for handling mousemove event of items
         super.mouseMove(e);
+        
+        // plot mouse position
+        this.repaintItems();
     }
 
     public mouseUp(e: IMouseEvent): void {
@@ -537,7 +532,7 @@ export class Figure extends GraphicObject {
         this.panning = false;
         this.scaling = false;
 
-        e.canvas.style.cursor = this.cursors.crosshair;
+        // e.canvas.style.cursor = this.cursors.crosshair;
 
         if (e.x === this.lastMouseDownPos.x && e.y === this.lastMouseDownPos.y && e.e.button == 2) {
             this.showContextMenu(e);
@@ -613,23 +608,25 @@ export class Figure extends GraphicObject {
         return this.heatmap;
     }
 
-    private setColorbarCR() {
-        if (!this.colorbar) return;
-        let s = 150;
-        var cr: Rect = {
-            x: this.canvasRect.x + this.canvasRect.w - s,
-            y: this.canvasRect.y,
-            w: s,
-            h: this.canvasRect.h
-        }
-        this.colorbar.setCanvasRect(cr);
-        // this.colorbar.canvasRect = cr;
-    }
+    // private setColorbarCR() {
+    //     if (!this.colorbar) return;
+    //     let s = 150;
+    //     var cr: Rect = {
+    //         x: this.canvasRect.x + this.canvasRect.w - s,
+    //         y: this.canvasRect.y,
+    //         w: s,
+    //         h: this.canvasRect.h
+    //     }
+    //     this.colorbar.setCanvasRect(cr);
+    //     // this.colorbar.canvasRect = cr;
+    // }
 
     public addColorbar(colormap?: ILut) {
-        this.colorbar = new Colorbar(this, undefined, colormap);
-        this.setColorbarCR();
+        if (this.colorbar) return;
 
+        this.colorbar = new Colorbar(this, undefined, colormap);
+        this.items.push(this.colorbar);
+        // this.colorbar.setCanvasRect(this.canvasRect);
         this.linkMargin(this.colorbar, Orientation.Vertical);
     }   
 
@@ -834,9 +831,12 @@ export class Figure extends GraphicObject {
 
         const xIT = this.xAxis.getTransform();
         const yIT = this.yAxis.getTransform();
-        const p = this.mapCanvas2Range(this.mousePos);
-
-        var text = `x: ${formatNumber(xIT(p.x), 4)}, y: ${formatNumber(yIT(p.y), 4)}`;
+        if (this.mousePos) {
+            const p = this.mapCanvas2Range(this.mousePos);
+            var text = `x: ${formatNumber(xIT(p.x), 4)}, y: ${formatNumber(yIT(p.y), 4)}`;
+        } else {
+            var text = "";
+        };
 
         const offset = 30;
 
@@ -846,10 +846,16 @@ export class Figure extends GraphicObject {
 
         // repaint all other items
 
+        // set canvas rect to all items
+        for (const item of this.items) {
+            item.setCanvasRect(this.canvasRect);
+            item.setMargin(this.margin);
+        }
+
         super.paint(e);
 
         // paint colorbar
-        if (this.colorbar) this.colorbar.paint(e);
+        // if (this.colorbar) this.colorbar.paint(e);
 
     }
 
@@ -857,14 +863,14 @@ export class Figure extends GraphicObject {
     // }
 
     paint(e: IPaintEvent): void {
-        for (const item of this.items) {
-            item.canvasRect = {...this.canvasRect};
-            item.margin = {...this.margin};
-        }
+        // for (const item of this.items) {
+        //     item.canvasRect = {...this.canvasRect};
+        //     item.margin = {...this.margin};
+        // }
 
-        if (this.colorbar) {
-            this.setColorbarCR();
-        }
+        // if (this.colorbar) {
+        //     this.setColorbarCR();
+        // }
 
         e.ctx.save();
 
@@ -1172,7 +1178,7 @@ export class Figure extends GraphicObject {
         }
 
         if (this.colorbar) {
-            this.requiredMargin.right += 150;
+            this.requiredMargin.right += this.colorbar.width;
         }
 
         this.requiredMargin = {
@@ -1496,7 +1502,7 @@ export class Figure extends GraphicObject {
 export class Colorbar extends Figure {
 
     public colormap: ILut;
-    public width: number = 50;  // in px
+    public width: number = 150;  // in px
 
     constructor(figure: Figure, canvasRect?: Rect, colormap?: ILut) {
         super(figure, canvasRect);
@@ -1520,13 +1526,25 @@ export class Colorbar extends Figure {
     }
 
     public setCanvasRect(cr: Rect): void {
-        if (cr.w !== this.canvasRect.w || cr.h !== this.canvasRect.h) {
-            super.setCanvasRect(cr);
+
+        console.log(cr, "setCanvasRect colorbar")
+
+
+        // cr is parent canvas rectangle
+
+        var thisCR: Rect = {
+            x: cr.x + cr.w - this.width,
+            y: cr.y,
+            w: this.width,
+            h: cr.h
+        }
+
+        if (thisCR.w !== this.canvasRect.w || thisCR.h !== this.canvasRect.h) {
+            super.setCanvasRect(thisCR);
             this.renderColorbar();
             console.log("rerendering colorbar")
         } else {
-            this.canvasRect.x = cr.x;
-            this.canvasRect.y = cr.y;
+            super.setCanvasRect(thisCR);
         }
     }
 
@@ -1567,6 +1585,7 @@ export class Colorbar extends Figure {
         e.ctx.drawImage(this.offScreenCanvas, 
         0, 0, this.offScreenCanvas.width, this.offScreenCanvas.height,
         this.effRect.x, this.effRect.y, this.effRect.w, this.effRect.h);
+        console.log(this.canvasRect, this.effRect);
     }
 
     protected storeImage(): void {

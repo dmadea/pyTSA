@@ -24,14 +24,14 @@ export abstract class GraphicObject{
     protected items: GraphicObject[];
     public parent: GraphicObject | null; // = null;
 
-    public canvas: HTMLCanvasElement | null = null;
+    public canvas?: HTMLCanvasElement | null = null;
     public ctx: CanvasRenderingContext2D | null;
 
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
-    public margin: Margin;    // margin from canvasRect in absolute values: [left, right, top, bottom] 
-    public effRect: Rect // canvas rectangle minus margins
+    public margin: Margin;      // margin from canvasRect in absolute values: [left, right, top, bottom] 
+    public effRect: Rect         // canvas rectangle minus margins
 
-    public contextMenu: ContextMenu | null = null;
+    public contextMenu?: ContextMenu;
 
     // https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
     public cursors = {
@@ -45,8 +45,9 @@ export abstract class GraphicObject{
         topArrow: 'n-resize',
         verticalResize: 'ew-resize',
         horizontalResize: 'ns-resize'
-
     }
+
+
 
     constructor(parent?: GraphicObject,
         canvasRect: Rect = {x: 0, y: 0, w: 0, h: 0},
@@ -57,24 +58,23 @@ export abstract class GraphicObject{
         } else {
             this.parent = null;
         }
+        this.items = [];
         this.canvasRect = canvasRect;
+        // this.setCanvasRect(canvasRect);
         this.margin = margin;
         this.canvas = null;
         this.ctx  = null;
         this.effRect = {...this.canvasRect};
-        this.calcEffectiveRect();
+        // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
-        this.items = [];
         
     }
 
     public setParent(parent: GraphicObject | null) {
         this.parent = parent;
         if (this.parent) {
-            if (this.parent.canvas !== null && this.parent.ctx !== null){
-                this.canvas = this.parent.canvas;
-                this.ctx = this.parent.ctx;
-            }
+            this.canvas = this.parent.canvas;
+            this.ctx = this.parent.ctx;
         }
     }
 
@@ -101,6 +101,16 @@ export abstract class GraphicObject{
         // we are outside of figure frame
         if (x < this.effRect.x || x > this.effRect.x + this.effRect.w || 
             y < this.effRect.y || y > this.effRect.y + this.effRect.h) {
+            return false;
+        }
+        return true;
+    }
+
+    public isInsideCanvasRect(x: number, y: number): boolean
+    {
+        // we are outside of figure frame
+        if (x < this.canvasRect.x || x > this.canvasRect.x + this.canvasRect.w || 
+            y < this.canvasRect.y || y > this.canvasRect.y + this.canvasRect.h) {
             return false;
         }
         return true;
@@ -136,14 +146,25 @@ export abstract class GraphicObject{
 
     public setCanvasRect(cr: Rect) {
         this.canvasRect = cr;
-        this.calcEffectiveRect();
+        for (const item of this.items) {
+            item.setCanvasRect(cr);
+        }
+        // this.calcEffectiveRect();
+    }
+
+    public setMargin(m: Margin) {
+        this.margin = m;
+        for (const item of this.items) {
+            item.setMargin(m);
+        }
     }
 
     public resize() {
-        this.calcEffectiveRect();
+        // this.calcEffectiveRect();
         //set new dimensions also for items
         for (const item of this.items) {
-            item.canvasRect = {...this.effRect};
+            item.setCanvasRect(this.canvasRect);
+            // item.canvasRect = {...this.effRect};
             item.resize();
         }
     }
@@ -151,7 +172,7 @@ export abstract class GraphicObject{
     doubleClick(e: IMouseEvent) {
         e.e.preventDefault();
         for (const item of this.items) {
-            if (item.isInsideEffRect(e.x, e.y)) {
+            if (item.isInsideCanvasRect(e.x, e.y)) {
                 item.doubleClick(e);
             }
         }
@@ -159,8 +180,8 @@ export abstract class GraphicObject{
 
     mouseDown(e: IMouseEvent) {
         for (const item of this.items) {
-            item.calcEffectiveRect();
-            if (item.isInsideEffRect(e.x, e.y)) {
+            // item.calcEffectiveRect();
+            if (item.isInsideCanvasRect(e.x, e.y)) {
                 item.mouseDown(e);
             }
         }
@@ -174,7 +195,7 @@ export abstract class GraphicObject{
 
     mouseMove(e: IMouseEvent) {
         for (const item of this.items) {
-            if (item.isInsideEffRect(e.x, e.y)) {
+            if (item.isInsideCanvasRect(e.x, e.y)) {
                 item.mouseMove(e);
             }
         }

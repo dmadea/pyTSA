@@ -36,18 +36,28 @@ export class Grid extends GraphicObject {
             this.items.splice(idx, 1);
             this.positions.splice(idx, 1);
             this.recalculateGrid();
+            this.repaint();
         }
     }
 
     public resize(): void {
         this.calcEffectiveRect();
-        this.recalculateGrid(false);
+        this.recalculateGrid();
         for (const item of this.items) {
             item.resize();
         }
     }
 
-    recalculateGrid(repaint: boolean = true){
+    public setCanvasRect(cr: Rect): void {
+        this.canvasRect = cr;
+        this.recalculateGrid();
+    }
+
+    public setMargin(m: Margin): void {
+        // do nothing
+    }
+
+    public recalculateGrid(){
         let ncols = Math.max(...this.positions.map(p => (p.col))) + 1;
         let nrows = Math.max(...this.positions.map(p => (p.row))) + 1;
 
@@ -93,23 +103,14 @@ export class Grid extends GraphicObject {
                 w: width * wRatios / wtotalRatio + this.effRect.w * (pos.colSpan - 1) * this.gridSettings.horizontalSpace, 
                 h: height * hRatios / htotalRatio + this.effRect.h * (pos.rowSpan - 1) * this.gridSettings.verticalSpace
             });
-
-            // item.canvasRect.x = x;
-            // item.canvasRect.y = y;
-            // item.canvasRect.w = ;
-            // item.canvasRect.h = ;
-            // console.log(item.canvasRect);
         }
 
-        //repaint
-        if (repaint)
-            this.repaint();
     }
 
     addItem(item: GraphicObject, row: number = 0, col: number = 0, rowSpan: number = 1, colSpan: number = 1) {
         super.addItem(item);
         this.positions.push({row, col, rowSpan, colSpan});
-        this.recalculateGrid(false);
+        this.recalculateGrid();
     }
 }
 

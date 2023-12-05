@@ -282,6 +282,8 @@ export class DraggableLines extends GraphicObject {
             return;
         }
 
+        if (!this.isInsideEffRect(e.x, e.y)) return;
+
         const f = this.parent as Figure;
 
         const vh = this.checkBounds(e.x, e.y, Orientation.Vertical);
