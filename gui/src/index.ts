@@ -92,6 +92,8 @@ function abc(): void {
 
                 if (dataset && scene.fig){
                     // dataset.data.log();
+                    scene.fig.clearPlots();
+                    // scene.fig.addColorbar();
                     dataset.transpose(); 
                     // dataset.data.log();
 
@@ -150,5 +152,6 @@ function abc(): void {
 
 
 }
+
 
 abc()

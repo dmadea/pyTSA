@@ -77,6 +77,7 @@ export class Scene extends GraphicObject {
         // this.fig.showTickNumbers = ['top', 'left'];
         this.fig.yAxis.label = 'Time / ps';
         this.fig.xAxis.label = 'Wavelength / nm';
+        this.fig.addColorbar(Colormap.hot);
         // this.fig.xAxis.scale = 'symlog';
         // this.fig.yAxis.scale = 'symlog';
 
@@ -159,23 +160,23 @@ export class Scene extends GraphicObject {
         const fy = this.figy;
 
         this.dLines = this.fig.addDraggableLines(DraggableLines.Orientation.Both);
-        this.dLines.addPositionChangedListener((pos) => {
+        this.dLines.addPositionChangedListener((e) => {
             // console.log('position changed', pos);
             if (this.fig?.heatmap) {
 
                 // this.figx.figureSettings.xAxis.scale = this.fig.figureSettings.xAxis.scale;
                 // this.figy.xAxis.scale = this.fig.yAxis.scale;
 
-                if (pos.yChanged) {
+                if (e.yChanged) {
                      // get row
-                    let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.y);
+                    let idxy = this.fig.heatmap.dataset.y.nearestIndex(e.realPosition.y);
                     let row = this.fig.heatmap.dataset.data.getRow(idxy);
                     linePlot.y = row;
                     this.figx?.repaint();
                 }
 
-                if (pos.xChanged) {
-                    let idxx = this.fig.heatmap.dataset.x.nearestIndex(pos.realPosition.x);
+                if (e.xChanged) {
+                    let idxx = this.fig.heatmap.dataset.x.nearestIndex(e.realPosition.x);
                     let col = this.fig.heatmap.dataset.data.getCol(idxx);
     
                     if (linePlot.x.length !== this.fig.heatmap.dataset.y.length) {
@@ -192,9 +193,9 @@ export class Scene extends GraphicObject {
         var ly = this.figy.addDraggableLines(DraggableLines.Orientation.Vertical);
         var lx = this.figx.addDraggableLines(DraggableLines.Orientation.Vertical);
 
-        ly.addPositionChangedListener((pos) => {
+        ly.addPositionChangedListener((e) => {
             if (this.fig?.heatmap) {
-                let idxy = this.fig.heatmap.dataset.y.nearestIndex(pos.realPosition.x);
+                let idxy = this.fig.heatmap.dataset.y.nearestIndex(e.realPosition.x);
                 let row = this.fig.heatmap.dataset.data.getRow(idxy);
 
                 linePlot.y = row;
@@ -204,9 +205,9 @@ export class Scene extends GraphicObject {
         });
 
 
-        lx.addPositionChangedListener((pos) => {
+        lx.addPositionChangedListener((e) => {
             if (this.fig?.heatmap) {
-                let idxx = this.fig.heatmap.dataset.x.nearestIndex(pos.realPosition.x);
+                let idxx = this.fig.heatmap.dataset.x.nearestIndex(e.realPosition.x);
                 let col = this.fig.heatmap.dataset.data.getCol(idxx);
 
                 linePlotCol.x = this.fig.heatmap.dataset.y;

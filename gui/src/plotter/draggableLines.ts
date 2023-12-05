@@ -1,7 +1,7 @@
 import { Figure } from "./figure/figure";
 import { GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 import { Point, Rect } from "./types";
-import { formatNumber } from "./utils";
+import { drawTextWithGlow, formatNumber } from "./utils";
 
 
 export enum Orientation {
@@ -338,29 +338,31 @@ export class DraggableLines extends GraphicObject {
     private strokeHorizontal(e: IPaintEvent) {
         e.ctx.strokeStyle = (this.horizontalHovering) ? this.onHoverColor : this.color;
         // e.ctx.lineWidth = (this.horizontalHovering) ? 2 : 1;
-        let f = this.parent as Figure;
-        let va = f.axisAlignment === Orientation.Vertical;
-        let p0 = f.mapRange2Canvas((va) ? {x: this.position.x, y: 0} : {x: 0, y: this.position.y});
+        const f = this.parent as Figure;
+        const va = f.axisAlignment === Orientation.Vertical;
+        const p0 = f.mapRange2Canvas((va) ? {x: this.position.x, y: 0} : {x: 0, y: this.position.y});
         e.ctx.beginPath();
         e.ctx.moveTo(f.effRect.x, p0.y);
 
         if (this.showText) {
-            let xText = f.effRect.x - this.textPosition + f.effRect.w;
+            const xText = f.effRect.x - this.textPosition + f.effRect.w;
 
             e.ctx.fillStyle = this.onHoverColor;
             e.ctx.textAlign = 'right';  // vertical alignment
             e.ctx.textBaseline = 'middle'; // horizontal alignment
             e.ctx.font = f.tickValuesFont;
 
-            let num = (va) ? f.xAxis.getTransform()(this.position.x) : f.yAxis.getTransform()(this.position.y);
+            const num = (va) ? f.xAxis.getTransform()(this.position.x) : f.yAxis.getTransform()(this.position.y);
 
-            let text = formatNumber(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
-            let textSize = e.ctx.measureText(text);
+            const text = formatNumber(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
+            const textSize = e.ctx.measureText(text);
+            const offset = 6;
 
-            let offset = 6;
+            e.ctx.save()
+            drawTextWithGlow(text, xText, p0.y, e.ctx, f.tickValuesFont);
+            e.ctx.restore();
 
             e.ctx.lineTo(xText - textSize.width - offset, p0.y);
-            e.ctx.fillText(text, xText, p0.y);
             e.ctx.moveTo(xText + offset, p0.y);
         }
 
@@ -371,40 +373,39 @@ export class DraggableLines extends GraphicObject {
     private strokeVertical(e: IPaintEvent) {
         e.ctx.strokeStyle = (this.verticalHovering) ? this.onHoverColor : this.color;
         // e.ctx.lineWidth = (this.verticalHovering) ? 2 : 1;
-        let f = this.parent as Figure;
-        let va = f.axisAlignment === Orientation.Vertical;
-        let p0 = f.mapRange2Canvas((va) ? {x: 0, y: this.position.y} : {x: this.position.x, y: 0});
+        const f = this.parent as Figure;
+        const va = f.axisAlignment === Orientation.Vertical;
+        const p0 = f.mapRange2Canvas((va) ? {x: 0, y: this.position.y} : {x: this.position.x, y: 0});
         e.ctx.beginPath();
-        e.ctx.moveTo(p0.x, f.effRect.y);
+        // f.calcEffectiveRect();
+        e.ctx.moveTo(p0.x, f.effRect.y + f.effRect.h);
 
         if (this.showText) {
-            let yText = f.effRect.y + this.textPosition;
+            const yText = f.effRect.y + this.textPosition;
 
-            let num = (va) ? f.yAxis.getTransform()(this.position.y) : f.xAxis.getTransform()(this.position.x);
-
-            let text = formatNumber(num, 1 + ((va) ? f.yAxis.displayedSignificantFigures : f.xAxis.displayedSignificantFigures));
-            let textSize = e.ctx.measureText(text);
+            const num = (va) ? f.yAxis.getTransform()(this.position.y) : f.xAxis.getTransform()(this.position.x);
 
             e.ctx.save();
             e.ctx.translate(p0.x, yText);
             e.ctx.rotate(-Math.PI / 2);
-            // e.ctx.fillText(text, p0.x, yText);
-
-            e.ctx.fillStyle = this.onHoverColor;
+            
             e.ctx.textAlign = 'right';  // vertical alignment
             e.ctx.textBaseline = 'middle'; // horizontal alignment
             e.ctx.font = f.tickValuesFont;
 
-            e.ctx.fillText(text, 0, 0);
+            const text = formatNumber(num, 1 + ((va) ? f.yAxis.displayedSignificantFigures : f.xAxis.displayedSignificantFigures));
+            const textSize = e.ctx.measureText(text);
+            
+            drawTextWithGlow(text, 0, 0, e.ctx, f.tickValuesFont);
             e.ctx.restore();
 
-            let offset = 6;
+            const offset = 6;
 
-            e.ctx.lineTo(p0.x, yText  - offset);
-            e.ctx.moveTo(p0.x, yText + textSize.width + offset);
+            e.ctx.lineTo(p0.x, yText + textSize.width + offset);
+            e.ctx.moveTo(p0.x, yText - offset);
         }
 
-        e.ctx.lineTo(p0.x, f.effRect.y + f.effRect.h);
+        e.ctx.lineTo(p0.x, f.effRect.y);
         e.ctx.stroke();
     }
 
@@ -424,8 +425,8 @@ export class DraggableLines extends GraphicObject {
         } else if (this.orientation === Orientation.Vertical ) {
             this.strokeVertical(e);
         } else {  // both
-            this.strokeHorizontal(e);
             this.strokeVertical(e);
+            this.strokeHorizontal(e);
         }
 
         e.ctx.restore();

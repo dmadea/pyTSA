@@ -12,12 +12,12 @@
 export interface Margin {
     left: number,
     right: number,
-    top: number, 
+    top: number,
     bottom: number
 }
 
 export interface Rect {
-    x: number, 
+    x: number,
     y: number,
     w: number, // width
     h: number  // height
@@ -36,12 +36,12 @@ export class NumberArray extends Array<number> {
         Object.assign(arr, array);
         return arr;
     }
-    
+
     static diff(array: number[] | NumberArray): NumberArray {
         if (array.length < 2) {
             throw TypeError("Array has to have at least 2 elements.");
         }
-        let arr = new NumberArray(array.length -1);
+        let arr = new NumberArray(array.length - 1);
         for (let i = 0; i < array.length - 1; i++) {
             arr[i] = array[i + 1] - array[i];
         }
@@ -76,7 +76,7 @@ export class NumberArray extends Array<number> {
 
     static random(min: number, max: number, n: number, log?: boolean): NumberArray {
         let diff = max - min;
-        
+
         let arr = new NumberArray(n);
         for (let i = 0; i < n; i++) {
             arr[i] = (log) ? 10 ** (Math.random() * diff + min) : Math.random() * diff + min;
@@ -84,8 +84,8 @@ export class NumberArray extends Array<number> {
         return arr;
     }
 
-    constructor(arrayLength?: number){
-        if (arrayLength){
+    constructor(arrayLength?: number) {
+        if (arrayLength) {
             super(arrayLength);
         } else {
             super();
@@ -112,7 +112,7 @@ export class NumberArray extends Array<number> {
         return this[this.nearestIndex(value)];
     }
 
-    public copy(): NumberArray{
+    public copy(): NumberArray {
         let arr = new NumberArray(this.length);
         for (let i = 0; i < arr.length; i++) {
             arr[i] = this[i];
@@ -149,7 +149,7 @@ export class NumberArray extends Array<number> {
         }
         return this;
     }
-    
+
     static add(array: NumberArray | number[], value: number): NumberArray {
         let arr = new NumberArray(array.length);
         for (let i = 0; i < arr.length; i++) {
@@ -172,34 +172,34 @@ export class NumberArray extends Array<number> {
         return this;
     }
 
-    public max(): number{
+    public max(): number {
         var maxval = this[0];
         for (let i = 1; i < this.length; i++) {
-            if (this[i] > maxval){
+            if (this[i] > maxval) {
                 maxval = this[i];
             }
         }
         return maxval;
     }
 
-    public min(): number{
+    public min(): number {
         var minval = this[0];
         for (let i = 1; i < this.length; i++) {
-            if (this[i] < minval){
+            if (this[i] < minval) {
                 minval = this[i];
             }
         }
         return minval;
     }
-    
+
     public minmax(): [number, number] {
         var minval = this[0];
         var maxval = this[0];
         for (let i = 1; i < this.length; i++) {
-            if (this[i] < minval){
+            if (this[i] < minval) {
                 minval = this[i];
             }
-            if (this[i] > maxval){
+            if (this[i] > maxval) {
                 maxval = this[i];
             }
         }
@@ -210,7 +210,7 @@ export class NumberArray extends Array<number> {
         var minIndex = 0;
         var minval = this[0];
         for (let i = 1; i < this.length; i++) {
-            if (this[i] < minval){
+            if (this[i] < minval) {
                 minval = this[i];
                 minIndex = i;
             }
@@ -245,7 +245,7 @@ export class NumberArray extends Array<number> {
         var str = "[";
         for (let i = 0; i < this.length; i++) {
             let nums = `${this[i].toPrecision(3)}`;
-            str += (i === this.length - 1) ? nums :  `${nums}, `;
+            str += (i === this.length - 1) ? nums : `${nums}, `;
         }
         str += "]";
         console.log(str);
@@ -268,8 +268,8 @@ export class Matrix extends NumberArray {
     //     return arr;
     // }
 
-    constructor (nrows?: number, ncols?: number, arr?: number[] | NumberArray) {
-        if (nrows && ncols && !arr){
+    constructor(nrows?: number, ncols?: number, arr?: number[] | NumberArray) {
+        if (nrows && ncols && !arr) {
             super(nrows * ncols);
             this._nrows = nrows;
             this._ncols = ncols;
@@ -351,7 +351,7 @@ export class Matrix extends NumberArray {
             str += "[";
             for (let j = 0; j < this._ncols; j++) {
                 let nums = `${this.get(i, j).toPrecision(3)}`;
-                str += (j === this._ncols - 1) ? nums :  `${nums}, `;
+                str += (j === this._ncols - 1) ? nums : `${nums}, `;
             }
             str += (i === this._nrows - 1) ? "]" : "],\n";
         }

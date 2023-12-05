@@ -126,13 +126,13 @@ export abstract class GraphicObject{
         }
     }
 
-    public width() {
-        return this.canvas?.width;
-    }
+    // public width() {
+    //     return this.canvas?.width;
+    // }
     
-    public height() {
-        return this.canvas?.height;
-    }
+    // public height() {
+    //     return this.canvas?.height;
+    // }
 
     public setCanvasRect(cr: Rect) {
         this.canvasRect = cr;

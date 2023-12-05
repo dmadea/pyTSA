@@ -10,6 +10,7 @@ export class ContextMenu {
     public gridClass: string = "col-3";
 
     public parentMenu?: ContextMenu;
+    private updateUIFuncs: (() => void)[] = [];
 
     constructor() {
         this.menu = this.createMenu();
@@ -236,8 +237,8 @@ export class ContextMenu {
         throw Error('Not implemented');
     }
 
-    protected updateMenu() {
-        // to be implemented if necessary
+    public addUpdateUI(fun: () => void) {
+        this.updateUIFuncs.push(fun);  // will run before showing the context menu
     }
 
     public isShowing() {
@@ -250,7 +251,9 @@ export class ContextMenu {
             this.constructed = true;
         }
 
-        this.updateMenu();
+        for (const f of this.updateUIFuncs) {
+            f();
+        }
 
         this.menu.classList.add("show");
         const mousex = location.x;

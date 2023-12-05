@@ -10,12 +10,6 @@ class AxisContextMenu extends ContextMenu {
 
     public fig: Figure;
     public axis: Axis;
-    private autoscale?: HTMLInputElement;
-    private axisScale?: HTMLSelectElement;
-    private linscale?: HTMLInputElement;
-    private linthresh?: HTMLInputElement;
-    private inverted?: HTMLInputElement;
-    private axLabel?: HTMLInputElement;
 
     private getTextFromScale(scale: string | NumberArray) {
         switch (scale) {
@@ -72,7 +66,6 @@ class AxisContextMenu extends ContextMenu {
             this.axis.autoscale = autoscale.checked;
             if (autoscale.checked) this.fig.repaint();
         });
-        this.autoscale = autoscale;
 
         var inverted = this.addCheckBox("Inverted");
         inverted.addEventListener("change", e => {
@@ -82,7 +75,6 @@ class AxisContextMenu extends ContextMenu {
             }
             this.fig.repaint();
         });
-        this.inverted = inverted;
 
         var axLabel = this.addTextInput("Label", this.axis.label);
         axLabel.addEventListener("change", e => {
@@ -100,7 +92,6 @@ class AxisContextMenu extends ContextMenu {
             this.axis.scale = this.getScaleFromText(axisScale.selectedOptions[0].text);
             this.fig.repaint();
         });
-        this.axisScale = axisScale;
 
         var linthresh = this.addNumberInput("Linthresh", 1, 0, undefined, 0.1);
         var linscale = this.addNumberInput("Linscale", 1, 0, undefined, 0.1);
@@ -111,7 +102,6 @@ class AxisContextMenu extends ContextMenu {
             this.axis.symlogLinthresh = num;
             this.fig.repaint();
         });
-        this.linthresh = linthresh;
 
         linscale.addEventListener("change", e => {
             var num = parseFloat(linthresh.value);
@@ -119,40 +109,23 @@ class AxisContextMenu extends ContextMenu {
             this.axis.symlogLinscale = num;
             this.fig.repaint();
         });
-        this.linscale = linscale;
+
+        this.addUpdateUI(() => {
+            autoscale.checked = this.axis.autoscale;
+            inverted.checked = this.axis.inverted;
+            axLabel.value = this.axis.label;
+            axisScale.selectedOptions[0].text = this.getTextFromScale(this.axis.scale);
+            linthresh.value = this.axis.symlogLinthresh.toString();
+            linscale.value = this.axis.symlogLinscale.toString();
+        });
+
     }
 
-    protected updateMenu(): void {
-        if (this.autoscale) {
-            this.autoscale.checked = this.axis.autoscale;
-        }
-
-        if (this.inverted) {
-            this.inverted.checked = this.axis.inverted;
-        }
-
-        if (this.axLabel) {
-            this.axLabel.value = this.axis.label;
-        }
-
-        if (this.axisScale) {
-            this.axisScale.selectedOptions[0].text = this.getTextFromScale(this.axis.scale);
-        }
-
-        if (this.linthresh) {
-            this.linthresh.value = this.axis.symlogLinthresh.toString();
-        }
-
-        if (this.linscale) {
-            this.linscale.value = this.axis.symlogLinscale.toString();
-        }
-    }
 }
 
 export class FigureContextMenu extends ContextMenu {
 
     public fig: Figure;
-    private axisAlignment?: HTMLSelectElement;
 
     constructor(parentFigure: Figure) {
         super();
@@ -188,15 +161,10 @@ export class FigureContextMenu extends ContextMenu {
             this.fig.axisAlignment = opt == "Vertical" ? Orientation.Vertical : Orientation.Horizontal;
             this.fig.repaint();
         });
-        this.axisAlignment = axAlign;
+
+        this.addUpdateUI(() => {
+            axAlign.selectedOptions[0].text = this.fig.axisAlignment === Orientation.Vertical ? "Vertical" : "Horizontal";
+        });
     }
-
-    protected updateMenu(): void {
-        if (this.axisAlignment) {
-            this.axisAlignment.selectedOptions[0].text = this.fig.axisAlignment === Orientation.Vertical ? "Vertical" : "Horizontal";
-        }
-    }
-
-
 
 }

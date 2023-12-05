@@ -157,6 +157,18 @@ export function loadData(text: string, delimiter: string = '\t', newLine = '\n')
     return dataset;
 }
 
+export function drawTextWithGlow(text: string, x: number, y: number, ctx: CanvasRenderingContext2D, font: string) {
+    ctx.globalCompositeOperation = "source-over";  // calculate the difference of the colors
+    ctx.fillStyle = "black";
+    ctx.font = font;
+    ctx.textBaseline = 'middle'; // horizontal alignment
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 5;
+    ctx.setLineDash([]);
+    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x, y);
+}
+
 
 
 
