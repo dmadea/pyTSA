@@ -326,9 +326,9 @@ export class Figure extends GraphicObject {
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
 
         if (this.panning) {
-            e.canvas.style.cursor = this.cursors.grabbing;
+            e.mainCanvas.style.cursor = this.cursors.grabbing;
         } else if (this.scaling) {
-            e.canvas.style.cursor = this.cursors.move;
+            e.mainCanvas.style.cursor = this.cursors.move;
         } else {
             super.mouseDown(e);
         }
@@ -409,7 +409,7 @@ export class Figure extends GraphicObject {
             var mouseup = (e: MouseEvent) => {
                 window.removeEventListener('mousemove', mousemove);
                 window.removeEventListener('mouseup', mouseup);
-                if  (this.canvas) this.canvas.style.cursor = this.cursors.crosshair;
+                if  (this.mainCanvas) this.mainCanvas.style.cursor = this.cursors.crosshair;
             }
 
             window.addEventListener('mousemove', mousemove);
@@ -508,10 +508,10 @@ export class Figure extends GraphicObject {
         }
         
         if (this.isInsideEffRect(e.x, e.y)) {
-            e.canvas.style.cursor = this.cursors.crosshair;
+            e.mainCanvas.style.cursor = this.cursors.crosshair;
             this.mousePos = {x: e.x, y: e.y};
         } else {
-            e.canvas.style.cursor = this.cursors.default;
+            e.mainCanvas.style.cursor = this.cursors.default;
             this.mousePos = null;
 
             // console.log('setting up cursor');
@@ -642,7 +642,7 @@ export class Figure extends GraphicObject {
             return;
         }
 
-        e.ctx.imageSmoothingEnabled = false;
+        e.mainCtx.imageSmoothingEnabled = false;
 
         const x = this.heatmap.dataset.x;
         const y = this.heatmap.dataset.y;
@@ -664,7 +664,7 @@ export class Figure extends GraphicObject {
         const p0 = this.mapRange2Canvas({x: x0 - xdiff / 2, y: y0 - ydiff / 2});
         const p1 = this.mapRange2Canvas({x: x1 + xdiff / 2, y: y1 + ydiff / 2});
 
-        e.ctx.drawImage(this.heatmap.getCanvas(), 
+        e.mainCtx.drawImage(this.heatmap.getCanvas(), 
         0, 0, this.heatmap.width(), this.heatmap.height(),
         p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
 
@@ -752,16 +752,16 @@ export class Figure extends GraphicObject {
         const yIT = this.yAxis.getInverseTransform();
         const xIT = this.xAxis.getInverseTransform();
 
-        e.ctx.save();
+        e.mainCtx.save();
 
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
 
-            e.ctx.strokeStyle = plot.color;
-            e.ctx.lineWidth = plot.lw;
-            e.ctx.setLineDash(plot.ld);
+            e.mainCtx.strokeStyle = plot.color;
+            e.mainCtx.lineWidth = plot.lw;
+            e.mainCtx.setLineDash(plot.ld);
 
-            e.ctx.beginPath();
+            e.mainCtx.beginPath();
 
             let xDataScale = false; // in case the scale is determined by data
             let x0;
@@ -773,30 +773,30 @@ export class Figure extends GraphicObject {
             }
 
             const p0 = this.mapRange2Canvas({x: x0, y: yIT(plot.y[0])});
-            e.ctx.moveTo(p0.x, p0.y);
+            e.mainCtx.moveTo(p0.x, p0.y);
 
             for (let i = 1; i < plot.x.length; i++) {
                 const x = (xDataScale) ? i : xIT(plot.x[i]);
                 const p = this.mapRange2Canvas({x, y: yIT(plot.y[i])});
-                e.ctx.lineTo(p.x, p.y);
+                e.mainCtx.lineTo(p.x, p.y);
                 if (x > this._range.x + this._range.w) break;
             }
 
-            e.ctx.stroke();
+            e.mainCtx.stroke();
         }
 
-        e.ctx.restore();
+        e.mainCtx.restore();
 
         // console.timeEnd('paintPlots');
     }
 
     protected storeImage() {
-        if (!this.offScreenCanvasCtx || !this.canvas) return;
+        if (!this.offScreenCanvasCtx || !this.mainCanvas) return;
 
         const w = this.canvasRect.w;
         const h = this.canvasRect.h;
 
-        this.offScreenCanvasCtx.drawImage(this.canvas, 
+        this.offScreenCanvasCtx.drawImage(this.mainCanvas, 
             this.canvasRect.x, this.canvasRect.y, w, h,
             0, 0, w, h);
     }
@@ -805,16 +805,16 @@ export class Figure extends GraphicObject {
         // https://stackoverflow.com/questions/4532166/how-to-capture-a-section-of-a-canvas-to-a-bitmap
 
         // console.time('repaintItems');
-        if (!this.offScreenCanvasCtx || !this.ctx || !this.offScreenCanvas || !this.canvas) return;
+        if (!this.offScreenCanvasCtx || !this.mainCtx || !this.offScreenCanvas || !this.mainCanvas) return;
 
         const w = this.canvasRect.w;
         const h = this.canvasRect.h;
 
-        const e: IPaintEvent = {canvas: this.canvas, ctx: this.ctx};
+        const e: IPaintEvent = {mainCanvas: this.mainCanvas, mainCtx: this.mainCtx};
 
-        e.ctx.imageSmoothingEnabled = true;
+        e.mainCtx.imageSmoothingEnabled = true;
 
-        e.ctx.drawImage(this.offScreenCanvas, 
+        e.mainCtx.drawImage(this.offScreenCanvas, 
             0, 0, w, h,
             this.canvasRect.x, this.canvasRect.y, w, h);
         
@@ -840,9 +840,9 @@ export class Figure extends GraphicObject {
 
         const offset = 30;
 
-        e.ctx.save();
-        drawTextWithGlow(text, this.effRect.x + offset, this.effRect.y + this.effRect.h - offset, e.ctx, this.tickValuesFont);
-        e.ctx.restore();
+        e.mainCtx.save();
+        drawTextWithGlow(text, this.effRect.x + offset, this.effRect.y + this.effRect.h - offset, e.mainCtx, this.tickValuesFont);
+        e.mainCtx.restore();
 
         // repaint all other items
 
@@ -872,38 +872,38 @@ export class Figure extends GraphicObject {
         //     this.setColorbarCR();
         // }
 
-        e.ctx.save();
+        e.mainCtx.save();
 
         // clip to canvas rectangle
 
-        e.ctx.fillStyle = backgroundColor;
-        e.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.mainCtx.fillStyle = backgroundColor;
+        e.mainCtx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
 
-        e.ctx.strokeStyle = frameColor;
+        e.mainCtx.strokeStyle = frameColor;
 
         if (this.plotCanvasRect){
-            e.ctx.setLineDash([4, 2]);
-            e.ctx.strokeRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-            e.ctx.setLineDash([]);
+            e.mainCtx.setLineDash([4, 2]);
+            e.mainCtx.strokeRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+            e.mainCtx.setLineDash([]);
         }
 
         // paint everything inside the plot
 
         //plot content
-        e.ctx.rect(this.effRect.x, this.effRect.y, this.effRect.w, this.effRect.h);
-        e.ctx.clip();
+        e.mainCtx.rect(this.effRect.x, this.effRect.y, this.effRect.w, this.effRect.h);
+        e.mainCtx.clip();
 
         this.paintHeatMap(e);
         this.paintPlots(e);
 
-        e.ctx.restore();
+        e.mainCtx.restore();
 
         // if (this._cancelPaining) {
         //     console.log('painting canceled');
         //     return;
         // }
 
-        e.ctx.save();
+        e.mainCtx.save();
 
         // e.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
         // e.ctx.clip();
@@ -911,8 +911,8 @@ export class Figure extends GraphicObject {
         const dpr = window.devicePixelRatio;
         
         // draw figure rectangle
-        e.ctx.lineWidth = 1 + Math.round(dpr);
-        e.ctx.strokeRect(this.effRect.x, this.effRect.y, this.effRect.w, this.effRect.h);
+        e.mainCtx.lineWidth = 1 + Math.round(dpr);
+        e.mainCtx.strokeRect(this.effRect.x, this.effRect.y, this.effRect.w, this.effRect.h);
 
         var needRepaint = this.drawTicks(e);
         // console.log(needRepaint);
@@ -921,7 +921,7 @@ export class Figure extends GraphicObject {
 
         // backup the figure so that it can be reused later when repainting items
         
-        e.ctx.restore();
+        e.mainCtx.restore();
 
 
         // if (this._cancelPaining) {
@@ -956,7 +956,7 @@ export class Figure extends GraphicObject {
     }
 
     public drawTicks(e: IPaintEvent): boolean{  // r is Figure Rectangle, the frame
-        e.ctx.fillStyle = textColor;
+        e.mainCtx.fillStyle = textColor;
         const dpr = window.devicePixelRatio;
         const va = this.axisAlignment === Orientation.Vertical;
         this.requiredMargin = {left: 0, right: 0, bottom: 0, top: 0};
@@ -1021,65 +1021,65 @@ export class Figure extends GraphicObject {
         let textMaxHeight = 0;
         this._ticksValuesFont = `${fontSize}px sans-serif`;
 
-        e.ctx.font = this._ticksValuesFont;
-        e.ctx.textAlign = 'center';  // vertical alignment
-        e.ctx.textBaseline = 'middle'; // horizontal alignment
+        e.mainCtx.font = this._ticksValuesFont;
+        e.mainCtx.textAlign = 'center';  // vertical alignment
+        e.mainCtx.textBaseline = 'middle'; // horizontal alignment
 
-        const _metrics = e.ctx.measureText("M");
+        const _metrics = e.mainCtx.measureText("M");
         let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
         // console.log(textOffset);
 
-        e.ctx.beginPath();
+        e.mainCtx.beginPath();
 
         for (let i = 0; i < xticks.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x: 0, y: xticks[i]} : {x: xticks[i], y: 0});
     
             if (this.showTicks.includes('bottom')){
-                e.ctx.moveTo(p.x, r.y + r.h - tickSize);
-                e.ctx.lineTo(p.x, r.y + r.h);
+                e.mainCtx.moveTo(p.x, r.y + r.h - tickSize);
+                e.mainCtx.lineTo(p.x, r.y + r.h);
             }
     
             if (this.showTicks.includes('top')){
-                e.ctx.moveTo(p.x, r.y);
-                e.ctx.lineTo(p.x, r.y + tickSize);
+                e.mainCtx.moveTo(p.x, r.y);
+                e.mainCtx.lineTo(p.x, r.y + tickSize);
             }
 
             let text = `${formatNumber(xticksVals[i], xFigs)}`;
-            let metrics = e.ctx.measureText(text);
+            let metrics = e.mainCtx.measureText(text);
             let textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
             if (textMaxHeight < textHeight) {
                 textMaxHeight = textHeight;
             }
     
             if (this.showTickNumbers.includes('bottom')){
-                e.ctx.fillText(text, p.x, r.y + r.h + textOffset);
+                e.mainCtx.fillText(text, p.x, r.y + r.h + textOffset);
             }
     
             if (this.showTickNumbers.includes('top')){
-                e.ctx.fillText(text, p.x, r.y - textOffset);
+                e.mainCtx.fillText(text, p.x, r.y - textOffset);
             }
         }
-        e.ctx.stroke();
+        e.mainCtx.stroke();
 
         // draw x minor ticks
-        e.ctx.save();
-        e.ctx.lineWidth = 1;
+        e.mainCtx.save();
+        e.mainCtx.lineWidth = 1;
 
         for (let i = 0; i < xMinors.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x: 0, y: xMinors[i]} : {x: xMinors[i], y: 0});
     
             if (this.showTicks.includes('bottom')){
-                e.ctx.moveTo(p.x, r.y + r.h - minorTickSize);
-                e.ctx.lineTo(p.x, r.y + r.h);
+                e.mainCtx.moveTo(p.x, r.y + r.h - minorTickSize);
+                e.mainCtx.lineTo(p.x, r.y + r.h);
             }
     
             if (this.showTicks.includes('top')){
-                e.ctx.moveTo(p.x, r.y);
-                e.ctx.lineTo(p.x, r.y + minorTickSize);
+                e.mainCtx.moveTo(p.x, r.y);
+                e.mainCtx.lineTo(p.x, r.y + minorTickSize);
             }
         }
-        e.ctx.stroke();
-        e.ctx.restore();
+        e.mainCtx.stroke();
+        e.mainCtx.restore();
 
         if (this.showTickNumbers.includes('bottom')){
             this.requiredMargin.bottom += textMaxHeight + textOffset;
@@ -1095,7 +1095,7 @@ export class Figure extends GraphicObject {
         // draw axis labels
         if (xLabel !== "") {
             const midPointX = r.x + r.w / 2;
-            e.ctx.fillText(xLabel, midPointX, r.y + r.h + this.requiredMargin.bottom + textOffset);
+            e.mainCtx.fillText(xLabel, midPointX, r.y + r.h + this.requiredMargin.bottom + textOffset);
             this.requiredMargin.bottom += textMaxHeight + textOffset;
         }
                 
@@ -1103,22 +1103,22 @@ export class Figure extends GraphicObject {
         // textOffset /= 2;
         let textMaxWidth = 0;
 
-        e.ctx.beginPath();
+        e.mainCtx.beginPath();
         for (let i = 0; i < yticks.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x:yticks[i], y: 0} : {x:0, y: yticks[i]});
 
             if (this.showTicks.includes('left')){
-                e.ctx.moveTo(r.x, p.y);
-                e.ctx.lineTo(r.x + tickSize, p.y);
+                e.mainCtx.moveTo(r.x, p.y);
+                e.mainCtx.lineTo(r.x + tickSize, p.y);
             }
 
             if (this.showTicks.includes('right')){
-                e.ctx.moveTo(r.x + r.w, p.y);
-                e.ctx.lineTo(r.x + r.w - tickSize, p.y);
+                e.mainCtx.moveTo(r.x + r.w, p.y);
+                e.mainCtx.lineTo(r.x + r.w - tickSize, p.y);
             }
 
             let text = `${formatNumber(yticksVals[i], yFigs)}`;
-            let metrics = e.ctx.measureText(text);
+            let metrics = e.mainCtx.measureText(text);
             let textWidth = metrics.width;
             // console.log(textWidth);
             if (textMaxWidth < textWidth) {
@@ -1126,36 +1126,36 @@ export class Figure extends GraphicObject {
             }
 
             if (this.showTickNumbers.includes('left')){
-                e.ctx.textAlign = 'right';
-                e.ctx.fillText(text, r.x - textOffset / 2, p.y);
+                e.mainCtx.textAlign = 'right';
+                e.mainCtx.fillText(text, r.x - textOffset / 2, p.y);
             }
 
             if (this.showTickNumbers.includes('right')){
-                e.ctx.textAlign = 'left';
-                e.ctx.fillText(text, r.x + r.w + textOffset / 2, p.y);
+                e.mainCtx.textAlign = 'left';
+                e.mainCtx.fillText(text, r.x + r.w + textOffset / 2, p.y);
             }
         }
-        e.ctx.stroke();
+        e.mainCtx.stroke();
 
         // draw y minor ticks
-        e.ctx.save();
-        e.ctx.lineWidth = 1;
+        e.mainCtx.save();
+        e.mainCtx.lineWidth = 1;
 
         for (let i = 0; i < yMinors.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x:yMinors[i], y: 0} : {x:0, y: yMinors[i]});
 
             if (this.showTicks.includes('left')){
-                e.ctx.moveTo(r.x, p.y);
-                e.ctx.lineTo(r.x + minorTickSize, p.y);
+                e.mainCtx.moveTo(r.x, p.y);
+                e.mainCtx.lineTo(r.x + minorTickSize, p.y);
             }
 
             if (this.showTicks.includes('right')){
-                e.ctx.moveTo(r.x + r.w, p.y);
-                e.ctx.lineTo(r.x + r.w - minorTickSize, p.y);
+                e.mainCtx.moveTo(r.x + r.w, p.y);
+                e.mainCtx.lineTo(r.x + r.w - minorTickSize, p.y);
             }
         }
-        e.ctx.stroke();
-        e.ctx.restore();
+        e.mainCtx.stroke();
+        e.mainCtx.restore();
 
         if (this.showTickNumbers.includes('left')){
             this.requiredMargin.left += textMaxWidth + textOffset / 2;
@@ -1168,12 +1168,12 @@ export class Figure extends GraphicObject {
         // draw axis labels
         if (yLabel !== "") {
             const midPointY = r.y + r.h / 2;
-            e.ctx.save();
-            e.ctx.textAlign = 'center';
-            e.ctx.translate(r.x - this.requiredMargin.left - textOffset, midPointY);
-            e.ctx.rotate(-Math.PI / 2);
-            e.ctx.fillText(yLabel, 0, 0);
-            e.ctx.restore();
+            e.mainCtx.save();
+            e.mainCtx.textAlign = 'center';
+            e.mainCtx.translate(r.x - this.requiredMargin.left - textOffset, midPointY);
+            e.mainCtx.rotate(-Math.PI / 2);
+            e.mainCtx.fillText(yLabel, 0, 0);
+            e.mainCtx.restore();
             this.requiredMargin.left += textMaxWidth + textOffset;
         }
 
@@ -1582,7 +1582,7 @@ export class Colorbar extends Figure {
 
         // paint colorbar here
         this.calcEffectiveRect();
-        e.ctx.drawImage(this.offScreenCanvas, 
+        e.mainCtx.drawImage(this.offScreenCanvas, 
         0, 0, this.offScreenCanvas.width, this.offScreenCanvas.height,
         this.effRect.x, this.effRect.y, this.effRect.w, this.effRect.h);
         console.log(this.canvasRect, this.effRect);

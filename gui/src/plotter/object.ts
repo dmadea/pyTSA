@@ -2,20 +2,24 @@ import { ContextMenu } from "./contextmenu";
 import { Rect, Margin } from "./types";
 
 export interface IPaintEvent {
-    canvas: HTMLCanvasElement,
-    ctx: CanvasRenderingContext2D
+    mainCanvas: HTMLCanvasElement,
+    mainCtx: CanvasRenderingContext2D,
+    secCanvas: HTMLCanvasElement,
+    secCtx: CanvasRenderingContext2D
 }
 
 export interface IMouseEvent {
     e: MouseEvent,
-    canvas: HTMLCanvasElement,
+    mainCanvas: HTMLCanvasElement,
+    secCanvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
     y: number  // canvas y coordinate scaled by display ratio
 }
 
 export interface ITouchEvent {
     e: TouchEvent,
-    canvas: HTMLCanvasElement,
+    mainCanvas: HTMLCanvasElement,
+    secCanvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
     y: number  // canvas y coordinate scaled by display ratio
 }
@@ -24,8 +28,11 @@ export abstract class GraphicObject{
     protected items: GraphicObject[];
     public parent: GraphicObject | null; // = null;
 
-    public canvas?: HTMLCanvasElement | null = null;
-    public ctx: CanvasRenderingContext2D | null;
+    public mainCanvas: HTMLCanvasElement | null = null;  // main canvas for plotting figure etc.
+    public mainCtx: CanvasRenderingContext2D | null;     // corresponding context
+
+    public secCanvas: HTMLCanvasElement | null = null; // canvas for plotting items, responsive minor stuff
+    public secCtx: CanvasRenderingContext2D | null;  // corresponding context
 
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
     public margin: Margin;      // margin from canvasRect in absolute values: [left, right, top, bottom] 
@@ -47,8 +54,6 @@ export abstract class GraphicObject{
         horizontalResize: 'ns-resize'
     }
 
-
-
     constructor(parent?: GraphicObject,
         canvasRect: Rect = {x: 0, y: 0, w: 0, h: 0},
         margin: Margin = {left: 0, right: 0, top: 0, bottom: 0}) {
@@ -62,8 +67,10 @@ export abstract class GraphicObject{
         this.canvasRect = canvasRect;
         // this.setCanvasRect(canvasRect);
         this.margin = margin;
-        this.canvas = null;
-        this.ctx  = null;
+        this.mainCanvas = null;
+        this.mainCtx  = null;
+        this.secCanvas = null;
+        this.secCtx = null;
         this.effRect = {...this.canvasRect};
         // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
@@ -73,8 +80,10 @@ export abstract class GraphicObject{
     public setParent(parent: GraphicObject | null) {
         this.parent = parent;
         if (this.parent) {
-            this.canvas = this.parent.canvas;
-            this.ctx = this.parent.ctx;
+            this.mainCanvas = this.parent.mainCanvas;
+            this.mainCtx = this.parent.mainCtx;
+            this.secCanvas = this.parent.secCanvas;
+            this.secCtx = this.parent.secCtx;
         }
     }
 
@@ -130,8 +139,8 @@ export abstract class GraphicObject{
     }
 
     public repaint() {
-        if (this.ctx && this.canvas) {
-            const e: IPaintEvent = {canvas: this.canvas, ctx: this.ctx};
+        if (this.mainCtx && this.mainCanvas && this.secCanvas && this.secCtx) {
+            const e: IPaintEvent = {mainCanvas: this.mainCanvas, mainCtx: this.mainCtx, secCanvas: this.secCanvas, secCtx: this.secCtx};
             this.paint(e);
         }
     }

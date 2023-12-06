@@ -1,7 +1,7 @@
 import { Colormap } from "./plotter/color";
-import { Scene } from "./plotter/scene";
 import { Matrix, NumberArray } from "./plotter/types";
 import { Dataset, loadData } from "./plotter/utils";
+import { SceneUser } from "./scene";
 import { Splitter } from "./splitter";
 import 'bootstrap/dist/css/bootstrap.min.css';  // https://getbootstrap.com/docs/4.0/getting-started/webpack/
 // import styles from "./styles.css";
@@ -42,7 +42,7 @@ function abc(): void {
     // window.addEventListener("load", () => {
         
     // });
-    var scene = new Scene(document.getElementById("canvas") as HTMLCanvasElement);
+    var scene = new SceneUser(document.getElementById("canvas") as HTMLCanvasElement);
     // var fig = scene.addFigure();
     scene.testAddGrid();
     // fig.paint();
