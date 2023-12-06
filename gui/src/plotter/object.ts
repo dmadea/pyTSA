@@ -2,24 +2,24 @@ import { ContextMenu } from "./contextmenu";
 import { Rect, Margin } from "./types";
 
 export interface IPaintEvent {
-    mainCanvas: HTMLCanvasElement,
-    mainCtx: CanvasRenderingContext2D,
-    secCanvas: HTMLCanvasElement,
-    secCtx: CanvasRenderingContext2D
+    bottomCanvas: HTMLCanvasElement,
+    bottomCtx: CanvasRenderingContext2D,
+    topCanvas: HTMLCanvasElement,
+    topCtx: CanvasRenderingContext2D
 }
 
 export interface IMouseEvent {
     e: MouseEvent,
-    mainCanvas: HTMLCanvasElement,
-    secCanvas: HTMLCanvasElement,
+    bottomCanvas: HTMLCanvasElement,
+    topCanvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
     y: number  // canvas y coordinate scaled by display ratio
 }
 
 export interface ITouchEvent {
     e: TouchEvent,
-    mainCanvas: HTMLCanvasElement,
-    secCanvas: HTMLCanvasElement,
+    bottomCanvas: HTMLCanvasElement,
+    topCanvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
     y: number  // canvas y coordinate scaled by display ratio
 }
@@ -28,15 +28,15 @@ export abstract class GraphicObject{
     protected items: GraphicObject[];
     public parent: GraphicObject | null; // = null;
 
-    public mainCanvas: HTMLCanvasElement | null = null;  // main canvas for plotting figure etc.
-    public mainCtx: CanvasRenderingContext2D | null;     // corresponding context
+    public bottomCanvas: HTMLCanvasElement | null = null;  // main canvas for plotting figure etc.
+    public bottomCtx: CanvasRenderingContext2D | null;     // corresponding context
 
-    public secCanvas: HTMLCanvasElement | null = null; // canvas for plotting items, responsive minor stuff
-    public secCtx: CanvasRenderingContext2D | null;  // corresponding context
+    public topCanvas: HTMLCanvasElement | null = null; // canvas for plotting items, responsive minor stuff
+    public topCtx: CanvasRenderingContext2D | null;  // corresponding context
 
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
     public margin: Margin;      // margin from canvasRect in absolute values: [left, right, top, bottom] 
-    public effRect: Rect         // canvas rectangle minus margins
+    // public effRect: Rect         // canvas rectangle minus margins
 
     public contextMenu?: ContextMenu;
 
@@ -67,11 +67,11 @@ export abstract class GraphicObject{
         this.canvasRect = canvasRect;
         // this.setCanvasRect(canvasRect);
         this.margin = margin;
-        this.mainCanvas = null;
-        this.mainCtx  = null;
-        this.secCanvas = null;
-        this.secCtx = null;
-        this.effRect = {...this.canvasRect};
+        this.bottomCanvas = null;
+        this.bottomCtx  = null;
+        this.topCanvas = null;
+        this.topCtx = null;
+        // this.effRect = {...this.canvasRect};
         // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
         
@@ -80,10 +80,10 @@ export abstract class GraphicObject{
     public setParent(parent: GraphicObject | null) {
         this.parent = parent;
         if (this.parent) {
-            this.mainCanvas = this.parent.mainCanvas;
-            this.mainCtx = this.parent.mainCtx;
-            this.secCanvas = this.parent.secCanvas;
-            this.secCtx = this.parent.secCtx;
+            this.bottomCanvas = this.parent.bottomCanvas;
+            this.bottomCtx = this.parent.bottomCtx;
+            this.topCanvas = this.parent.topCanvas;
+            this.topCtx = this.parent.topCtx;
         }
     }
 
@@ -94,10 +94,10 @@ export abstract class GraphicObject{
         }
     }
 
-    public calcEffectiveRect(){
+    public getEffectiveRect(): Rect{
         let x = this.canvasRect.x + this.margin.left;
         let y = this.canvasRect.y + this.margin.top;
-        this.effRect = {
+        return {
             x: x,
             y: y,
             w: this.canvasRect.w - this.margin.right - this.margin.left,
@@ -108,8 +108,9 @@ export abstract class GraphicObject{
     public isInsideEffRect(x: number, y: number): boolean
     {
         // we are outside of figure frame
-        if (x < this.effRect.x || x > this.effRect.x + this.effRect.w || 
-            y < this.effRect.y || y > this.effRect.y + this.effRect.h) {
+        const r = this.getEffectiveRect();
+        if (x < r.x || x > r.x + r.w || 
+            y < r.y || y > r.y + r.h) {
             return false;
         }
         return true;
@@ -127,7 +128,7 @@ export abstract class GraphicObject{
 
     public paint(e: IPaintEvent): void {
         for (const item of this.items) {
-            item.calcEffectiveRect();
+            // item.calcEffectiveRect();
             item.paint(e);
         }
     }
@@ -139,8 +140,8 @@ export abstract class GraphicObject{
     }
 
     public repaint() {
-        if (this.mainCtx && this.mainCanvas && this.secCanvas && this.secCtx) {
-            const e: IPaintEvent = {mainCanvas: this.mainCanvas, mainCtx: this.mainCtx, secCanvas: this.secCanvas, secCtx: this.secCtx};
+        if (this.bottomCtx && this.bottomCanvas && this.topCanvas && this.topCtx) {
+            const e: IPaintEvent = {bottomCanvas: this.bottomCanvas, bottomCtx: this.bottomCtx, topCanvas: this.topCanvas, topCtx: this.topCtx};
             this.paint(e);
         }
     }
@@ -154,7 +155,7 @@ export abstract class GraphicObject{
     // }
 
     public setCanvasRect(cr: Rect) {
-        this.canvasRect = cr;
+        this.canvasRect = {...cr};
         for (const item of this.items) {
             item.setCanvasRect(cr);
         }
@@ -162,18 +163,18 @@ export abstract class GraphicObject{
     }
 
     public setMargin(m: Margin) {
-        this.margin = m;
+        this.margin = {...m};
         for (const item of this.items) {
             item.setMargin(m);
         }
     }
 
     public resize() {
-        // this.calcEffectiveRect();
+        // const r = this.getEffectiveRect();
         //set new dimensions also for items
         for (const item of this.items) {
             item.setCanvasRect(this.canvasRect);
-            // item.canvasRect = {...this.effRect};
+            // item.canvasRect = r;
             item.resize();
         }
     }
@@ -189,7 +190,6 @@ export abstract class GraphicObject{
 
     mouseDown(e: IMouseEvent) {
         for (const item of this.items) {
-            // item.calcEffectiveRect();
             if (item.isInsideCanvasRect(e.x, e.y)) {
                 item.mouseDown(e);
             }

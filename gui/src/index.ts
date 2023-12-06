@@ -42,7 +42,8 @@ function abc(): void {
     // window.addEventListener("load", () => {
         
     // });
-    var scene = new SceneUser(document.getElementById("canvas") as HTMLCanvasElement);
+    var canvasDiv = document.getElementById("canvas-div") as HTMLDivElement;
+    var scene = new SceneUser(canvasDiv);
     // var fig = scene.addFigure();
     scene.testAddGrid();
     // fig.paint();

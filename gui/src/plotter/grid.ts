@@ -41,15 +41,15 @@ export class Grid extends GraphicObject {
     }
 
     public resize(): void {
-        this.calcEffectiveRect();
-        this.recalculateGrid();
+        // this.calcEffectiveRect();
+        // this.recalculateGrid();
         for (const item of this.items) {
             item.resize();
         }
     }
 
     public setCanvasRect(cr: Rect): void {
-        this.canvasRect = cr;
+        this.canvasRect = {...cr};
         this.recalculateGrid();
     }
 
@@ -62,10 +62,11 @@ export class Grid extends GraphicObject {
         let nrows = Math.max(...this.positions.map(p => (p.row))) + 1;
 
         // console.log('recalculateGrid', this.canvasRect);
+        const r = this.getEffectiveRect();
 
         // calculate total width and height of components
-        let width = this.effRect.w - this.effRect.w * (ncols - 1) * this.gridSettings.horizontalSpace;
-        let height = this.effRect.h - this.effRect.h * (nrows - 1) * this.gridSettings.verticalSpace;
+        let width = r.w - r.w * (ncols - 1) * this.gridSettings.horizontalSpace;
+        let height = r.h - r.h * (nrows - 1) * this.gridSettings.verticalSpace;
 
         if (this.gridSettings.widthRatios === null || this.gridSettings.widthRatios.length !== ncols){
             this.gridSettings.widthRatios = new NumberArray(ncols).fill(1);  // fill only ones
@@ -82,16 +83,16 @@ export class Grid extends GraphicObject {
             const item = this.items[i];
             const pos = this.positions[i];
 
-            var x = this.effRect.x;
+            var x = r.x;
 
             for (let j = 0; j < pos.col; j++) {
                 x += width * this.gridSettings.widthRatios[j] / wtotalRatio;
-                x += this.effRect.w * this.gridSettings.horizontalSpace;
+                x += r.w * this.gridSettings.horizontalSpace;
             }
-            var y = this.effRect.y;
+            var y = r.y;
             for (let j = 0; j < pos.row; j++) {
                 y += height * this.gridSettings.heightRatios[j] / htotalRatio;
-                y += this.effRect.h * this.gridSettings.verticalSpace;
+                y += r.h * this.gridSettings.verticalSpace;
             }
 
             const wRatios = this.gridSettings.widthRatios.slice(pos.col, pos.col + pos.colSpan).sum();
@@ -100,8 +101,8 @@ export class Grid extends GraphicObject {
             item.setCanvasRect({
                 x, 
                 y,
-                w: width * wRatios / wtotalRatio + this.effRect.w * (pos.colSpan - 1) * this.gridSettings.horizontalSpace, 
-                h: height * hRatios / htotalRatio + this.effRect.h * (pos.rowSpan - 1) * this.gridSettings.verticalSpace
+                w: width * wRatios / wtotalRatio + r.w * (pos.colSpan - 1) * this.gridSettings.horizontalSpace, 
+                h: height * hRatios / htotalRatio + r.h * (pos.rowSpan - 1) * this.gridSettings.verticalSpace
             });
         }
 

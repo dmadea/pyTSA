@@ -90,11 +90,11 @@ export class HeatMap {
         let zlim1 = (this.zRange[1] === null) ? m.max() : this.zRange[1];
         let limdiff = zlim1 - zlim0;
 
-        const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
+        // const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
 
-        zlim0 = - extreme;
-        zlim1 = + extreme;
-        limdiff = zlim1 - zlim0;
+        // zlim0 = - extreme;
+        // zlim1 = + extreme;
+        // limdiff = zlim1 - zlim0;
 
         const w = this.imageData.width;
         const h = this.imageData.height;

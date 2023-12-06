@@ -142,8 +142,11 @@ export class FigureContextMenu extends ContextMenu {
         // this.addDivider();
         var copy = this.addAction("Copy this to clipboard");
         copy.addEventListener("click", e => {
-            this.fig.offScreenCanvas.convertToBlob().then(blob => {
-                navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+
+            // TODO copy only canvas rect
+            this.fig.bottomCanvas?.toBlob(blob => {
+                if (blob) navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+
             });
         });
         // this.addAction("action 3");

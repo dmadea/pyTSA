@@ -1,5 +1,3 @@
-import { DraggableLines, Orientation } from "./draggableLines";
-import { Figure } from "./figure/figure";
 import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 // import { Rect } from "./types";
 
@@ -7,82 +5,116 @@ import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 export class Scene extends GraphicObject {
 
     private canvasResizeObserver: ResizeObserver;
-    public fig: Figure | null = null;
-    public figy: Figure | null = null;
-    public figx: Figure | null = null;
-    public dLines: DraggableLines | null = null;
 
-    constructor(parentElement: HTMLDivElement, canvasClass: string = "canvas") {
+    constructor(parentElement: HTMLDivElement) {
         super();
+        var wrapper = document.createElement("div");
+        wrapper.style.cssText = "position: relative; width: 100%; height: 100%";
 
-        this.mainCanvas = document.createElement("canvas");
-        this.secCanvas = document.createElement("canvas");
-        this.mainCanvas.classList.add(canvasClass);
-        this.secCanvas.classList.add(canvasClass);
+        var mainCanvas = document.createElement("canvas");
+        var secCanvas = document.createElement("canvas");
+        mainCanvas.style.position = "absolute";
+        secCanvas.style.position = "absolute";
 
-        this.mainCanvas.style.zIndex = "1";
-        this.secCanvas.style.zIndex = "2";
+        mainCanvas.style.zIndex = "0";
+        secCanvas.style.zIndex = "1";
 
-        parentElement.appendChild(this.mainCanvas);
-        parentElement.appendChild(this.secCanvas);
+        wrapper.appendChild(mainCanvas);
+        wrapper.appendChild(secCanvas);
+        parentElement.appendChild(wrapper);
 
-        this.mainCtx = this.mainCanvas.getContext('2d') as CanvasRenderingContext2D;
-        this.secCtx = this.secCanvas.getContext('2d') as CanvasRenderingContext2D;
+        this.bottomCtx = mainCanvas.getContext('2d') as CanvasRenderingContext2D;
+        this.topCtx = secCanvas.getContext('2d') as CanvasRenderingContext2D;
+
+        this.bottomCanvas = mainCanvas;
+        this.topCanvas = secCanvas;
 
         // this.items = [];
         this.margin = {left: 10, right:10 , top: 10, bottom: 10};
-        this.canvasRect = {x:0, y:0, w: this.mainCanvas.width, h: this.mainCanvas.height};
-        this.canvasResizeObserver = new ResizeObserver((entries) => this.observerCallback(entries));
-        this.canvasResizeObserver.observe(this.mainCanvas);
-
-        const dpr = window.devicePixelRatio;
-        
-        
+        this.canvasRect = {x:0, y:0, w: mainCanvas.width, h: mainCanvas.height};
+        this.canvasResizeObserver = new ResizeObserver((entries) => {
+            window.requestAnimationFrame(() => {
+                if (!Array.isArray(entries) || !entries.length) {
+                  return;
+                }
+    
+                if (this.bottomCanvas && this.topCanvas){
+    
+                    const dpr = window.devicePixelRatio;
+                    
+                    this.bottomCanvas.style.width = `${wrapper.clientWidth}px`;
+                    this.topCanvas.style.width = `${wrapper.clientWidth}px`;
+                    this.bottomCanvas.style.height = `${wrapper.clientHeight}px`;
+                    this.topCanvas.style.height = `${wrapper.clientHeight}px`;
+    
+                    const w = wrapper.clientWidth * dpr;
+                    const h = wrapper.clientHeight * dpr;
+    
+                    this.bottomCanvas.width = w;
+                    this.bottomCanvas.height = h;
+                    this.topCanvas.width = w;
+                    this.topCanvas.height = h;
+    
+                    this.resize();
+                }
+              });
+        });
+        this.canvasResizeObserver.observe(wrapper);
 
         var mousedown = (e: MouseEvent) => {
+            const dpr = window.devicePixelRatio;
             this.mouseDown({
-                e, mainCanvas: this.mainCanvas,
-
+                e, bottomCanvas: mainCanvas, topCanvas: secCanvas, x: e.offsetX * dpr, y: e.offsetY * dpr
             })
         };
 
-        this.mainCanvas.addEventListener('mousedown', e => this.mouseDown({e, mainCanvas: canvas, x: e.offsetX * dpr, y: e.offsetY * dpr}));
-        this.mainCanvas.addEventListener('mouseup', e => this.mouseUp({e, mainCanvas: canvas, x: e.offsetX * dpr, y: e.offsetY * dpr}));
-        this.mainCanvas.addEventListener('mousemove', e => this.mouseMove({e, mainCanvas: canvas, x: e.offsetX * dpr, y: e.offsetY * dpr}));
-        this.mainCanvas.addEventListener("contextmenu", e => this.showContextMenu({e, mainCanvas: canvas, x: e.offsetX * dpr, y: e.offsetY * dpr}));
-        this.mainCanvas.addEventListener("dblclick", e => this.doubleClick({e, mainCanvas: canvas, x: e.offsetX * dpr, y: e.offsetY *dpr}));
+        var mouseup = (e: MouseEvent) => {
+            const dpr = window.devicePixelRatio;
+            this.mouseUp({
+                e, bottomCanvas: mainCanvas, topCanvas: secCanvas, x: e.offsetX * dpr, y: e.offsetY * dpr
+            })
+        };
 
-        this.mainCanvas.addEventListener("touchstart", e => this.touchStart(e));
-        this.mainCanvas.addEventListener("touchmove", e => this.touchMove(e));
-        this.mainCanvas.addEventListener("touchend", e => this.touchEnd(e));
+        var mousemove = (e: MouseEvent) => {
+            const dpr = window.devicePixelRatio;
+            this.mouseMove({
+                e, bottomCanvas: mainCanvas, topCanvas: secCanvas, x: e.offsetX * dpr, y: e.offsetY * dpr
+            })
+        };
 
-    }
+        var contextmenu = (e: MouseEvent) => {
+            const dpr = window.devicePixelRatio;
+            this.showContextMenu({
+                e, bottomCanvas: mainCanvas, topCanvas: secCanvas, x: e.offsetX * dpr, y: e.offsetY * dpr
+            })
+        };
 
-    private observerCallback(entries: ResizeObserverEntry[]) {
-        window.requestAnimationFrame((): void | undefined => {
-            if (!Array.isArray(entries) || !entries.length) {
-              return;
-            }
+        var dblclick = (e: MouseEvent) => {
+            const dpr = window.devicePixelRatio;
+            this.doubleClick({
+                e, bottomCanvas: mainCanvas, topCanvas: secCanvas, x: e.offsetX * dpr, y: e.offsetY * dpr
+            })
+        };
 
-            if (this.mainCanvas && this.secCanvas){
+        secCanvas.addEventListener('mousedown', mousedown);
+        secCanvas.addEventListener('mouseup', mouseup);
+        secCanvas.addEventListener('mousemove', mousemove);
+        secCanvas.addEventListener("contextmenu", contextmenu);
+        secCanvas.addEventListener("dblclick", dblclick);
 
-                this.mainCanvas.width = this.mainCanvas.clientWidth * window.devicePixelRatio;
-                this.mainCanvas.height = this.mainCanvas.clientHeight * window.devicePixelRatio;
-                // console.log(window.devicePixelRatio, this.canvas.width, this.canvas.height);
-
-                this.resize();
-            }
-          });
+        secCanvas.addEventListener("touchstart", e => this.touchStart(e));
+        secCanvas.addEventListener("touchmove", e => this.touchMove(e));
+        secCanvas.addEventListener("touchend", e => this.touchEnd(e));
     }
 
     public resize(): void {
         // set new dimensions
-        if (this.mainCanvas){
+        if (this.bottomCanvas){
             this.canvasRect = {
                 x: 0,
                 y: 0,
-                w: this.mainCanvas.width,
-                h: this.mainCanvas.height
+                w: this.bottomCanvas.width,
+                h: this.bottomCanvas.height
             }
         }
         super.resize();
@@ -94,10 +126,11 @@ export class Scene extends GraphicObject {
 
         // clear plot
 
-        e.mainCtx.restore();
+        e.bottomCtx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.topCtx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // e.mainCtx.restore();
         // this.ctx.fillStyle = backgroundColor;
-        e.mainCtx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        e.mainCtx.save();
+        // e.mainCtx.save();
         console.log('initial paint from scene');
 
         super.paint(e);

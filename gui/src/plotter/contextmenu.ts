@@ -79,7 +79,7 @@ export class ContextMenu {
                 }
             
             if (show) {
-                if (!menu.isShowing()) menu.show({x: actionRect.x + actionRect.w, y: actionRect.y});
+                if (!menu.isVisible()) menu.show({x: actionRect.x + actionRect.w, y: actionRect.y});
             } else {
                 menu.hide();
             }
@@ -241,7 +241,7 @@ export class ContextMenu {
         this.updateUIFuncs.push(fun);  // will run before showing the context menu
     }
 
-    public isShowing() {
+    public isVisible() {
         return this.menu.classList.contains("show");
     }
 

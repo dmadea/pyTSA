@@ -22,7 +22,7 @@ export class SceneUser extends Scene {
 
     testAddGrid(){
         // this.calcEffectiveRect();
-        var grid = new Grid(this, {...this.effRect});
+        var grid = new Grid(this);
         this.addItem(grid);
         // this.items.push(grid);
 
@@ -32,7 +32,7 @@ export class SceneUser extends Scene {
         // this.fig.showTickNumbers = ['top', 'left'];
         this.fig.yAxis.label = 'Time / ps';
         this.fig.xAxis.label = 'Wavelength / nm';
-        this.fig.addColorbar(Colormap.hot);
+        this.fig.addColorbar(Colormap.symgrad);
         // this.fig.xAxis.scale = 'symlog';
         // this.fig.yAxis.scale = 'symlog';
 
@@ -84,8 +84,6 @@ export class SceneUser extends Scene {
         this.figy.xAxis.label = 'Time / ps';
         this.figx.xAxis.autoscale = false;
         this.figx.yAxis.autoscale = true;
-
-
 
         // this.figx.figureSettings.yAxis.label = 'Amplitude';
         
