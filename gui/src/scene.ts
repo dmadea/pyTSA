@@ -1,6 +1,6 @@
-import { Colormap } from "./plotter/color";
+import { Colormap, Colormaps } from "./plotter/color";
 import { DraggableLines } from "./plotter/draggableLines";
-import { Figure } from "./plotter/figure/figure";
+import { Colorbar, Figure } from "./plotter/figure/figure";
 import { Grid } from "./plotter/grid";
 import { Scene } from "./plotter/scene";
 import { NumberArray } from "./plotter/types";
@@ -12,6 +12,7 @@ export class SceneUser extends Scene {
     public figy: Figure | null = null;
     public figx: Figure | null = null;
     public dLines: DraggableLines | null = null;
+    public colorbar: Colorbar | null = null;
 
     addFigure(){
         var figure = new Figure(this, {...this.canvasRect});
@@ -32,7 +33,7 @@ export class SceneUser extends Scene {
         // this.fig.showTickNumbers = ['top', 'left'];
         this.fig.yAxis.label = 'Time / ps';
         this.fig.xAxis.label = 'Wavelength / nm';
-        this.fig.addColorbar(Colormap.symgrad);
+        this.colorbar = this.fig.addColorbar(new Colormap(Colormaps.symgrad));
         // this.fig.xAxis.scale = 'symlog';
         // this.fig.yAxis.scale = 'symlog';
 

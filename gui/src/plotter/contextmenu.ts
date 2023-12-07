@@ -237,8 +237,8 @@ export class ContextMenu {
         throw Error('Not implemented');
     }
 
-    public addUpdateUI(fun: () => void) {
-        this.updateUIFuncs.push(fun);  // will run before showing the context menu
+    public addUpdateUICallback(callback: () => void) {
+        this.updateUIFuncs.push(callback);  // will run before showing the context menu
     }
 
     public isVisible() {

@@ -1,4 +1,4 @@
-import { Colormap, ILut } from "../color";
+import { Colormap, Colormaps, ILut } from "../color";
 import { Figure } from "./figure";
 import { NumberArray } from "../types";
 import { Dataset, isclose } from "../utils";
@@ -15,8 +15,7 @@ export class HeatMap {
     private _isYRegular: boolean;
 
     public dataset: Dataset;
-    public colormap: ILut;
-    // public imageBitmap: ImageBitmap;
+    public colormap: Colormap;
     public zRange: [number | null, number | null] = [null, null];  // min, max
 
     get isXRegular() {
@@ -27,7 +26,7 @@ export class HeatMap {
         return this._isYRegular;
     }
 
-    constructor(figure: Figure, dataset: Dataset, colormap: ILut = Colormap.symgrad) {
+    constructor(figure: Figure, dataset: Dataset, colormap: Colormap) {
         let matrix = dataset.data;
         if (matrix.ncols !== dataset.x.length || matrix.nrows !== dataset.y.length) {
             throw TypeError("Dimensions are not aligned with x and y arrays.");
@@ -86,15 +85,11 @@ export class HeatMap {
 
         const m = this.dataset.data;
 
-        let zlim0 = (this.zRange[0] === null) ? m.min() : this.zRange[0];
-        let zlim1 = (this.zRange[1] === null) ? m.max() : this.zRange[1];
-        let limdiff = zlim1 - zlim0;
+        const zlim0 = (this.zRange[0] === null) ? m.min() : this.zRange[0];
+        const zlim1 = (this.zRange[1] === null) ? m.max() : this.zRange[1];
+        const limdiff = zlim1 - zlim0;
 
         // const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
-
-        // zlim0 = - extreme;
-        // zlim1 = + extreme;
-        // limdiff = zlim1 - zlim0;
 
         const w = this.imageData.width;
         const h = this.imageData.height;
@@ -115,7 +110,7 @@ export class HeatMap {
                 // interpolate the rgba values
                 // console.log(zScaled);
 
-                const rgba = Colormap.getColor(zScaled, this.colormap);
+                const rgba = this.colormap.getColor(zScaled);
 
                 this.imageData.data[pos] = rgba[0];              // some R value [0, 255]
                 this.imageData.data[pos+1] = rgba[1];              // some G value
@@ -125,6 +120,5 @@ export class HeatMap {
         }
 
         this.offScreenCanvasCtx.putImageData(this.imageData, 0, 0);
-        // this.imageBitmap = this.offScreenCanvas.transferToImageBitmap();
     }
 }

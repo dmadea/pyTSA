@@ -1,4 +1,4 @@
-import { Colormap } from "./plotter/color";
+import { Colormap, Colormaps } from "./plotter/color";
 import { Matrix, NumberArray } from "./plotter/types";
 import { Dataset, loadData } from "./plotter/utils";
 import { SceneUser } from "./scene";
@@ -35,6 +35,8 @@ function benchmark() {
 
 function abc(): void {
 
+    Colormaps.getColormapsNames();
+
     var leftPane = document.querySelector(".left") as HTMLDivElement;
     var splitbar = document.querySelector(".splitbar") as HTMLDivElement;
     var splitter = new Splitter(leftPane, splitbar);
@@ -62,8 +64,7 @@ function abc(): void {
         d.transpose();
         d.data.log();
 
-        scene.fig?.plotHeatmap(d);
-
+        scene.fig?.plotHeatmap(d, new Colormap(Colormaps.symgrad));
 
 
     });
@@ -99,7 +100,8 @@ function abc(): void {
                     // dataset.data.log();
 
                     // console.log(dataset);
-                    let heatmap = scene.fig.plotHeatmap(dataset, Colormap.symgrad);
+                    let heatmap = scene.fig.plotHeatmap(dataset, new Colormap(Colormaps.symgrad));
+                    scene.colorbar?.linkHeatMap(heatmap);
 
                     let xdiff, ydiff, xOffset, yOffset;
                     

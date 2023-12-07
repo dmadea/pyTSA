@@ -3,12 +3,12 @@ import { GraphicObject, IMouseEvent, IPaintEvent} from "../object";
 import { Rect, NumberArray, Point, Margin } from "../types";
 import { backgroundColor,  frameColor, textColor } from "../settings";
 import { Dataset, determineSigFigures, drawTextWithGlow, formatNumber } from "../utils";
-import { Colormap, ILut } from "../color";
+import { Colormap, Colormaps, ILut } from "../color";
 import { HeatMap } from "./heatmap";
 import { DraggableLines, Orientation } from "../draggableLines";
 import { Axis, AxisType } from "./axis";
 import { ContextMenu } from "../contextmenu";
-import { FigureContextMenu } from "./figurecontextmenu";
+import { ColorbarContextMenu, FigureContextMenu } from "./figurecontextmenu";
 // import { Colorbar } from "./colorbar";
 
 
@@ -20,7 +20,6 @@ interface ILinePlot {
     lw: number,  // line width
     zValue: number
 }
-
 
 
 export class Figure extends GraphicObject {
@@ -60,8 +59,8 @@ export class Figure extends GraphicObject {
 
     private marginLinks: ([Figure, Orientation])[] = [];
 
-    private panning: boolean = false;
-    private scaling: boolean = false;
+    public panning: boolean = false;
+    public scaling: boolean = false;
     private lastCenterPoint: Point;
     private _preventPanning: boolean = false;
     private _preventScaling: boolean = false;
@@ -79,8 +78,6 @@ export class Figure extends GraphicObject {
     private _painting: boolean = false;
     private _cancelPaining: boolean = false;
     
-    // public draggableLines: DraggableLines | null = null;
-
     get tickValuesFont(): string {
         return this._ticksValuesFont;
     }
@@ -112,6 +109,10 @@ export class Figure extends GraphicObject {
         // }
         this.xAxis = new Axis(this, AxisType.xAxis);
         this.yAxis = new Axis(this, AxisType.yAxis);
+        this.setContextMenu();
+    }
+
+    protected setContextMenu() {
         this.contextMenu = new FigureContextMenu(this);
     }
 
@@ -516,6 +517,11 @@ export class Figure extends GraphicObject {
         if (this.panning || this.scaling) {
             return;
         }
+
+        if (this._preventPanning || this._preventScaling) {
+            super.mouseMove(e);
+            return;
+        }
         
         if (this.isInsideEffRect(e.x, e.y)) {
             e.topCanvas.style.cursor = this.cursors.crosshair;
@@ -535,14 +541,16 @@ export class Figure extends GraphicObject {
     }
 
     public mouseUp(e: IMouseEvent): void {
-        if (this._preventPanning || this._preventScaling) {
-            super.mouseUp(e);
-        }
+    //     if (this._preventPanning || this._preventScaling) {
+    // }
+        super.mouseUp(e);
 
         this.panning = false;
         this.scaling = false;
 
         // e.canvas.style.cursor = this.cursors.crosshair;
+
+        if (!this.isInsideEffRect(e.x, e.y)) return;
 
         if (e.x === this.lastMouseDownPos.x && e.y === this.lastMouseDownPos.y && e.e.button == 2) {
             this.showContextMenu(e);
@@ -562,7 +570,7 @@ export class Figure extends GraphicObject {
         return plot;
     }
 
-    public plotHeatmap(dataset: Dataset, colormap: ILut = Colormap.symgrad ): HeatMap {
+    public plotHeatmap(dataset: Dataset, colormap: Colormap): HeatMap {
         this.heatmap = new HeatMap(this, dataset, colormap);
 
         let x, y, h, w;
@@ -631,13 +639,14 @@ export class Figure extends GraphicObject {
     //     // this.colorbar.canvasRect = cr;
     // }
 
-    public addColorbar(colormap?: ILut) {
-        if (this.colorbar) return;
+    public addColorbar(colormap?: Colormap): Colorbar {
+        if (this.colorbar) return this.colorbar;
 
         this.colorbar = new Colorbar(this, undefined, colormap);
         this.items.push(this.colorbar);
         // this.colorbar.setCanvasRect(this.canvasRect);
         this.linkMargin(this.colorbar, Orientation.Vertical);
+        return this.colorbar;
     }   
 
     public removePlot(plot: ILinePlot){
@@ -865,6 +874,10 @@ export class Figure extends GraphicObject {
 
     }
 
+    public setMargin(m: Margin): void {
+        this.margin = m;
+    }
+
     // private async paintAsync(e: IPaintEvent) {
     // }
 
@@ -912,8 +925,8 @@ export class Figure extends GraphicObject {
 
         e.bottomCtx.save();
 
-        // e.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        // e.ctx.clip();
+        // e.bottomCtx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // e.bottomCtx.clip();
 
         const dpr = window.devicePixelRatio;
         
@@ -924,11 +937,12 @@ export class Figure extends GraphicObject {
         var needRepaint = this.drawTicks(e);
         // console.log(needRepaint);
 
-        if (needRepaint) return;
+        e.bottomCtx.restore();
+
+        // if (needRepaint) return;
 
         // backup the figure so that it can be reused later when repainting items
         
-        e.bottomCtx.restore();
 
 
         // if (this._cancelPaining) {
@@ -1183,7 +1197,7 @@ export class Figure extends GraphicObject {
         }
 
         if (this.colorbar) {
-            this.requiredMargin.right += this.colorbar.width;
+            this.requiredMargin.right += this.colorbar.canvasRect.w;
         }
 
         this.requiredMargin = {
@@ -1227,8 +1241,8 @@ export class Figure extends GraphicObject {
             this.margin.bottom !== newMargin.bottom) {
 
             // console.log('margins are different');
+            // this.setMargin(newMargin);
             this.margin = newMargin;
-            // this.calcEffectiveRect();
             this.repaint();
             return true;
         }
@@ -1507,20 +1521,24 @@ export class Figure extends GraphicObject {
 
 export class Colorbar extends Figure {
 
-    public colormap: ILut;
-    public width: number = 130;  // in px
+    private _colormap: Colormap;
+    private _width: number = 20;  // with of the colorbar (effective rectagle) in px
 
     public offScreenCanvas: OffscreenCanvas;
     protected offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
     private parentCanvasRect: Rect;
-    private rendered: boolean = false;
+    private heatmapList: HeatMap[] = [];
 
-    constructor(figure: Figure, canvasRect?: Rect, colormap?: ILut) {
+    private cWidth = 1;
+    private cHeight = 500; // 500 pixels to draw the colormap
+    private lastMargin: Margin;
+
+    constructor(figure: Figure, canvasRect?: Rect, colormap?: Colormap) {
         super(figure, {x:0, y:0, w:0, h:0});
-        this.colormap = colormap ?? Colormap.symgrad;
+        this._colormap = (colormap === undefined) ? new Colormap(Colormaps.symgrad) : colormap;
         this.parentCanvasRect = {...figure.canvasRect};
 
-        this.offScreenCanvas = new OffscreenCanvas(this.canvasRect.w, this.canvasRect.h);
+        this.offScreenCanvas = new OffscreenCanvas(this.cWidth, this.cHeight);
         this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
         if (this.offScreenCanvasCtx === null) {
             throw new Error('this.offScreenCanvasCtx === null');
@@ -1536,11 +1554,49 @@ export class Colorbar extends Figure {
         this.yAxis.scale = 'lin';
         this.items = [];
         this.linePlots = [];
+        this.lastMargin = this.margin;
         this.renderColorbar();
     }
 
-    public addColorbar(colormap?: ILut | undefined): void {
-        // Do nothing
+    get width() {
+        return this._width * window.devicePixelRatio;
+    }
+
+    get colormap() {
+        return this._colormap;
+    }
+
+    // TODO include transform
+    set colormap(colormap: Colormap) {
+        // var inv = this._colormap.inverted;
+        this._colormap = colormap;
+        // this._colormap.inverted = inv;
+        this.renderColorbar();
+        this.renderHeatmaps();
+        this.repaintFigure();
+    }
+
+    // public addColorbar(colormap?: Colormap | undefined): Colorbar {
+    //     // do nothing
+    // }
+
+    public linkHeatMap(heatmap: HeatMap) {
+        if (!this.heatmapList.includes(heatmap)) {
+            this.heatmapList.push(heatmap);
+            heatmap.colormap = this.colormap; // link the colormap of the colorbar to that of heatmap
+
+            // set range that corresponds to colorbar
+
+            const rng = this.range;
+            const m = heatmap.dataset.data;
+            const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
+            this.range = {x: rng.x, w: rng.w, y: -extreme, h: 2 * extreme};
+            this.rangeChanged(this.getInternalRange());
+        }
+    }
+
+    private getTargetWidth() {
+        return this.margin.left + this.width + this.margin.right;
     }
 
     public setCanvasRect(cr: Rect): void {
@@ -1551,34 +1607,22 @@ export class Colorbar extends Figure {
         // cr is parent canvas rectangle
 
         var thisCR: Rect = {
-            x: cr.x + cr.w - this.width,
+            x: cr.x + cr.w - this.getTargetWidth(),
             y: cr.y,
-            w: this.width,
+            w: this.getTargetWidth(),
             h: cr.h
         }
-        
-        if (thisCR.w !== this.canvasRect.w || thisCR.h !== this.canvasRect.h || !this.rendered) {
-            this.rendered = true;
-            this.offScreenCanvas.width = thisCR.w;
-            this.offScreenCanvas.height = thisCR.h;
-            super.setCanvasRect(thisCR);
-            this.renderColorbar();
-            return;
-            // console.log('rendering colorbar', thisCR.w, thisCR.h);
-        } 
 
         super.setCanvasRect(thisCR);
     }
 
     public renderColorbar() {
         if (!this.offScreenCanvasCtx) return;
-        
-        const w = this.canvasRect.w;
-        const h = this.canvasRect.h;
 
-        if (w === 0 || h === 0) return;
+        const w = this.cWidth;
+        const h = this.cHeight;
 
-        console.log("rendering colorbar")
+        // console.log("rendering colorbar")
 
         var iData = new ImageData(w, h);
 
@@ -1586,7 +1630,7 @@ export class Colorbar extends Figure {
         for(let row = 0; row < h; row++) {
             const rowIdx = h - row - 1;
             const z = rowIdx / (h - 1);
-            const rgba = Colormap.getColor(z, this.colormap);
+            const rgba = this.colormap.getColor(z);
 
             for(let col = 0; col < w; col++) {
                 const pos = (row * w + col) * 4;        // position in buffer based on x and y
@@ -1605,14 +1649,19 @@ export class Colorbar extends Figure {
         //
     }
 
+    // paint the colorbar
     protected paintHeatMap(e: IPaintEvent): void {
         if (this.offScreenCanvas.width === 0 || this.offScreenCanvas.height === 0) return;
+
+        e.bottomCtx.save();
+        e.bottomCtx.imageSmoothingEnabled = true;
 
         // paint colorbar here
         const r = this.getEffectiveRect();
         e.bottomCtx.drawImage(this.offScreenCanvas, 
-        0, 0, this.offScreenCanvas.width, this.offScreenCanvas.height,
+        0, 0, this.cWidth, this.cHeight,
         r.x, r.y, r.w, r.h);
+        e.bottomCtx.restore();
         // console.log(this.margin, this.parent?.margin);
     }
 
@@ -1620,27 +1669,71 @@ export class Colorbar extends Figure {
         // do nothing
     }
 
-    public mouseDown(e: IMouseEvent): void {
-        console.log('mouse down');
-        super.mouseDown(e);
+    // public mouseDown(e: IMouseEvent): void {
+    //     console.log('mouse down');
+    //     super.mouseDown(e);
+    // }
+
+    protected setContextMenu(): void {
+        this.contextMenu = new ColorbarContextMenu(this);
+    }
+    
+    public repaint(): void {
+        (this.parent as Figure).repaintItems();
+    }
+
+    public repaintFigure() {
+        (this.parent as Figure).repaint();
+    }
+
+    public renderHeatmaps() {
+        for (const heatmap of this.heatmapList) {
+            heatmap.recalculateImage();
+        }
+    }
+
+    // TODO fix.
+    public viewAll(): void {
+        for (const heatmap of this.heatmapList) {
+            const rng = this.range;
+            const m = heatmap.dataset.data;
+            const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
+            this.range = {x: rng.x, w: rng.w, y: -extreme, h: 2 * extreme};
+            this.rangeChanged(this.getInternalRange());
+        }
     }
 
     public rangeChanged(range: Rect): void {
         super.rangeChanged(range);
 
-        console.log("rangeChanged");
-
         var f = this.parent as Figure;
-        if (f.heatmap) {
+        if (f.panning || f.scaling) return;
 
-            const rng = this.range;
+        let repaint = false;
+
+        if (this.margin.left !== this.lastMargin.left || 
+            this.margin.right !== this.lastMargin.right ||
+            this.margin.top !== this.lastMargin.top ||
+            this.margin.bottom !== this.lastMargin.bottom) {
+
+            // recalculate canvas rect according to new margin
+
+            this.setCanvasRect(this.parentCanvasRect);
+            this.lastMargin = this.margin;
+            repaint = true;
+        }
+
+        for (const heatmap of this.heatmapList) {
+            const rng = this.range; // get the real range
 
             // TODO poresit jine scale colorbaru
-            f.heatmap.zRange = [rng.y, rng.y + rng.h];
-            f.heatmap.colormap = this.colormap;
-            f.heatmap.recalculateImage();
-            f.repaint();
+            heatmap.zRange = [rng.y, rng.y + rng.h];
+            // heatmap.colormap = this.colormap;
+            heatmap.recalculateImage();
+            repaint = true;
+        }
 
+        if (repaint) f.repaint();
             // if (this.yAxis.scale === f.xAxis.scale) {
             //     fig._range.x = this._range.x;
             //     fig._range.w = this._range.w;
@@ -1651,9 +1744,6 @@ export class Colorbar extends Figure {
             // }
             // fig.repaint();
 
-
-
-        }
 
     }
 
