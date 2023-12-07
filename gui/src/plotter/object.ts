@@ -146,6 +146,10 @@ export abstract class GraphicObject{
         }
     }
 
+    public clear() {
+        this.items = [];
+    }
+
     // public width() {
     //     return this.canvas?.width;
     // }

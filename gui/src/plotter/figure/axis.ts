@@ -9,7 +9,7 @@ export enum AxisType {
 export class Axis {
 
     public label: string;
-    public scale: string | NumberArray;  // lin, log, symlog, data provided as NumberArray
+    public scale: string | NumberArray;  // lin, lo, symlog, data provided as NumberArray
     public viewBounds: [number, number];   // bounds of view or [x0, x1]
     public autoscale: boolean;
     public inverted: boolean;

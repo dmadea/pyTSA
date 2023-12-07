@@ -33,9 +33,11 @@ function benchmark() {
     // console.timeEnd('Matrix arrays');
 }
 
-function abc(): void {
+// function loadFiles(e: Event, input: HTMLInputElement) {
 
-    Colormaps.getColormapsNames();
+// }
+
+function abc(): void {
 
     var leftPane = document.querySelector(".left") as HTMLDivElement;
     var splitbar = document.querySelector(".splitbar") as HTMLDivElement;
@@ -47,7 +49,7 @@ function abc(): void {
     var canvasDiv = document.getElementById("canvas-div") as HTMLDivElement;
     var scene = new SceneUser(canvasDiv);
     // var fig = scene.addFigure();
-    scene.testAddGrid();
+    // scene.testAddGrid();
     // fig.paint();
 
     var testbtn = document.getElementById('btnTest') as HTMLInputElement;
@@ -66,93 +68,13 @@ function abc(): void {
 
         scene.fig?.plotHeatmap(d, new Colormap(Colormaps.symgrad));
 
-
     });
 
     var button = document.getElementById('openFile') as HTMLInputElement;
     button.addEventListener("change", (ev) => {
-
-        if (!button.files) {
-            return;
-        }
-
-        var file = button.files[0];
-
-        var reader = new FileReader();
-
-        reader.addEventListener('load', function (e) {
-
-            if (typeof reader.result === 'string') {
-                console.time('load');
-                
-                let ext = file.name.split('.').pop()?.toLowerCase();
-
-                let dataset = loadData(reader.result, (ext === 'csv') ? ',' : '\t');
-                if (ext === 'csv') {
-                    dataset?.transpose();
-                }
-
-                if (dataset && scene.fig){
-                    // dataset.data.log();
-                    scene.fig.clearPlots();
-                    // scene.fig.addColorbar();
-                    dataset.transpose(); 
-                    // dataset.data.log();
-
-                    // console.log(dataset);
-                    let heatmap = scene.fig.plotHeatmap(dataset, new Colormap(Colormaps.symgrad));
-                    scene.colorbar?.linkHeatMap(heatmap);
-
-                    let xdiff, ydiff, xOffset, yOffset;
-                    
-                    if (!heatmap.isXRegular) {
-                        xdiff = 1;
-                        xOffset = 0;
-                    } else {
-                        xdiff = (dataset.x[dataset.x.length - 1] - dataset.x[0]) / (dataset.x.length - 1);
-                        xOffset = dataset.x[0];
-                    }
-            
-                    // y axis
-            
-                    if (!heatmap.isYRegular) {
-                        ydiff = 1;
-                        yOffset = 0;
-                    } else {
-                        ydiff = (dataset.y[dataset.y.length - 1] - dataset.y[0]) / (dataset.y.length - 1);
-                        yOffset = dataset.y[0];
-                    }
-
-                    scene.dLines?.setStickGrid(xdiff, xOffset, ydiff, yOffset);
-
-                    scene.fig.setViewBounds([dataset.x[0], dataset.x[dataset.x.length - 1]], [dataset.y[0], dataset.y[dataset.y.length - 1]]);
-
-                    // for (let i = 0; i < dataset.x.length; i++) {
-                    //     var col = dataset.data.getCol(i);
-                    //     const color = Colormap.getColor(i / (dataset.x.length - 1), Colormap.symgrad);
-                    //     scene.figy?.plotLine(dataset.y, col, Colormap.getStringColor(color), [], 1)
-                    // }
-                    
-                    // scene.figx?.clearPlots();
-                    // for (let i = 0; i < dataset.y.length; i+= 2) {
-                    //     var row = dataset.data.getRow(i);
-                    //     const color = Colormap.getStringColor(i / (dataset.y.length - 1), Colormap.jet);
-                    //     scene.figx?.plotLine(dataset.x, row, color, [], 1)
-                    // }
-
-                    // scene.repaint();
-                }
-                console.timeEnd('load');
-            }
-
-        });
-
-        if (file) {
-
-            reader.readAsBinaryString(file);
-        }
+        if (!button.files) return;
+        scene.loadFiles(button.files);
     });
-
 
 }
 

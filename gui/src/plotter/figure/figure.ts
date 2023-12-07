@@ -12,7 +12,7 @@ import { ColorbarContextMenu, FigureContextMenu } from "./figurecontextmenu";
 // import { Colorbar } from "./colorbar";
 
 
-interface ILinePlot {
+export interface ILinePlot {
     x: NumberArray,
     y: NumberArray,
     color: string,
@@ -24,7 +24,7 @@ interface ILinePlot {
 
 export class Figure extends GraphicObject {
 
-    public title: string = '';
+    public title: string = "";
     public showTicks: string[] =  ['left', 'right', 'bottom', 'top'];        // ['top', 'bottom', 'left', 'right']
     public showTickNumbers: string[] =  ['left', 'right', 'bottom', 'top'];  // ['top', 'bottom', 'left', 'right']
     public axisAlignment: Orientation = Orientation.Horizontal;   // could be vertical
@@ -1048,6 +1048,8 @@ export class Figure extends GraphicObject {
         let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
         // console.log(textOffset);
 
+
+
         e.bottomCtx.beginPath();
 
         for (let i = 0; i < xticks.length; i++) {
@@ -1116,6 +1118,13 @@ export class Figure extends GraphicObject {
             const midPointX = r.x + r.w / 2;
             e.bottomCtx.fillText(xLabel, midPointX, r.y + r.h + this.requiredMargin.bottom + textOffset);
             this.requiredMargin.bottom += textMaxHeight + textOffset;
+        }
+
+        // draw title labels
+        if (this.title !== "") {
+            const midPointX = r.x + r.w / 2;
+            e.bottomCtx.fillText(this.title, midPointX, r.y - this.requiredMargin.top - textOffset);
+            this.requiredMargin.top += textMaxHeight + textOffset;
         }
                 
         // draw y ticks

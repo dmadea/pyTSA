@@ -29,6 +29,11 @@ export class Grid extends GraphicObject {
         super(parent, canvasRect, margin);
         this.positions = [];
     }
+
+    public clear(): void {
+        super.clear();
+        this.positions = [];
+    }
     
     remove(item: GraphicObject){
         let idx = this.items.indexOf(item);
@@ -58,6 +63,8 @@ export class Grid extends GraphicObject {
     }
 
     public recalculateGrid(){
+        if (this.items.length === 0) return;
+
         let ncols = Math.max(...this.positions.map(p => (p.col))) + 1;
         let nrows = Math.max(...this.positions.map(p => (p.row))) + 1;
 

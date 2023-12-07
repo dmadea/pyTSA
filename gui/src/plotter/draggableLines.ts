@@ -222,7 +222,7 @@ export class DraggableLines extends GraphicObject {
         (this.parent as Figure).preventMouseEvents(false, false);
     }
 
-    private positionChanged(xChanged: boolean, yChanged: boolean) {
+    public positionChanged(xChanged: boolean, yChanged: boolean) {
         const f = this.parent as Figure;
         const xT = f.xAxis.getTransform();
         const yT = f.yAxis.getTransform();
@@ -234,6 +234,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.x = lf.xAxis.getInverseTransform()(xT(this.position.x));
             }
+            // line.fireEvent(xChanged, yChanged);
             lf.repaintItems();
         }
         for (const line of this.yLinks) {
@@ -243,6 +244,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.y = lf.yAxis.getInverseTransform()(yT(this.position.y));
             }
+            // line.fireEvent(xChanged, yChanged);
             lf.repaintItems();
         }
         for (const line of this.xyLinks) {
@@ -252,6 +254,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.y = lf.yAxis.getInverseTransform()(xT(this.position.x));
             }
+            // line.fireEvent(xChanged, yChanged);
             lf.repaintItems();
         }
         for (const line of this.yxLinks) {
@@ -261,9 +264,17 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.x = lf.xAxis.getInverseTransform()(yT(this.position.y));
             }
+            // line.fireEvent(xChanged, yChanged);
             lf.repaintItems();
         }
 
+        this.fireEvent(xChanged, yChanged);
+    }
+
+    public fireEvent(xChanged: boolean, yChanged: boolean) {
+        const f = this.parent as Figure;
+        const xT = f.xAxis.getTransform();
+        const yT = f.yAxis.getTransform();
         for (const fun of this.positionChangedListeners) {
             let pos: IPositionChangedEvent = {
                 internalPosition: this.position,
