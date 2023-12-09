@@ -168,3 +168,7 @@ dist/
 .DS_Store
 
 out/
+
+*.csv
+*.exe
+.vscode/

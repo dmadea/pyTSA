@@ -105,7 +105,7 @@ class AxisContextMenu extends ContextMenu {
         });
 
         linscale.addEventListener("change", e => {
-            var num = parseFloat(linthresh.value);
+            var num = parseFloat(linscale.value);
             var num = (num === 0) ? 1 : num;
             this.axis.symlogLinscale = num;
             this.fig.repaint();
@@ -205,7 +205,10 @@ class ColorbarAxisContextMenu extends AxisContextMenu {
         var axisScale = this.addSelect("Scale", ...options);
         axisScale.addEventListener("change", e => {
             this.axis.scale = this.getScaleFromText(axisScale.selectedOptions[0].text);
-            this.fig.repaint();
+            const cbar = this.fig as Colorbar;
+            cbar.setHeatmapTransform();
+            cbar.heatmap?.recalculateImage();
+            cbar.repaintFigure();
         });
 
         var linthresh = this.addNumberInput("Linthresh", 1, 0, undefined, 0.1);
@@ -215,14 +218,22 @@ class ColorbarAxisContextMenu extends AxisContextMenu {
             var num = parseFloat(linthresh.value);
             var num = (num === 0) ? 1 : num;
             this.axis.symlogLinthresh = num;
-            this.fig.repaint();
+            if (this.axis.scale === 'symlog') {
+                const cbar = this.fig as Colorbar;
+                cbar.heatmap?.recalculateImage();
+                cbar.repaintFigure();
+            }
         });
 
         linscale.addEventListener("change", e => {
-            var num = parseFloat(linthresh.value);
+            var num = parseFloat(linscale.value);
             var num = (num === 0) ? 1 : num;
             this.axis.symlogLinscale = num;
-            this.fig.repaint();
+            if (this.axis.scale === 'symlog') {
+                const cbar = this.fig as Colorbar;
+                cbar.heatmap?.recalculateImage();
+                cbar.repaintFigure();
+            }
         });
 
         this.addUpdateUICallback(() => {

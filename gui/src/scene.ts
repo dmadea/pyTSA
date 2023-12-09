@@ -55,6 +55,7 @@ export class SceneUser extends Scene {
             const file = files[i];
             const reader = new FileReader();
             const index = i;
+            console.time('start loading');
             reader.addEventListener('load', function (e) {
 
                 if (!(typeof reader.result === 'string')) return;
@@ -62,6 +63,8 @@ export class SceneUser extends Scene {
                 const ext = file.name.split('.').pop()?.toLowerCase();
 
                 const dataset = loadData(reader.result, (ext === 'csv') ? ',' : '\t');
+                console.timeEnd('start loading');
+
                 if (ext === 'txt') {
                     dataset?.transpose();
                 }

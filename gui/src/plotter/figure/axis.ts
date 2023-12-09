@@ -9,12 +9,12 @@ export enum AxisType {
 export class Axis {
 
     public label: string;
-    public scale: string | NumberArray;  // lin, lo, symlog, data provided as NumberArray
+    private _scale: string | NumberArray;  // lin, lo, symlog, data provided as NumberArray
     public viewBounds: [number, number];   // bounds of view or [x0, x1]
     public autoscale: boolean;
     public inverted: boolean;
-    public symlogLinthresh: number; // Defines the range (-x, x), within which the plot is linear.
-    public symlogLinscale: number;  // number of decades to use for each half of the linear range
+    private _symlogLinthresh: number; // Defines the range (-x, x), within which the plot is linear.
+    private _symlogLinscale: number;  // number of decades to use for each half of the linear range
     public displayedSignificantFigures: number = 2;
     private figure: Figure;
     
@@ -25,12 +25,42 @@ export class Axis {
             this.figure = figure;
             this.axisType = axisType;
             this.label = label ?? '';
-            this.scale = scale ?? 'lin';
+            this._scale = scale ?? 'lin';
             this.viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];
             this.autoscale = autoscale ?? true;
             this.inverted = inverted ?? false;
-            this.symlogLinscale = symlogLinscale ?? 1;
-            this.symlogLinthresh = symlogLinthresh ?? 1;
+            this._symlogLinscale = symlogLinscale ?? 1;
+            this._symlogLinthresh = symlogLinthresh ?? 1;
+    }
+
+    get scale() {
+        return this._scale;
+    }
+
+    set scale(scale: string | NumberArray) {
+        const prevRng = this.figure.range;
+        this._scale = scale;
+        this.figure.range = prevRng;
+    }
+
+    get symlogLinthresh () {
+        return this._symlogLinthresh;
+    }
+
+    set symlogLinthresh (val: number) {
+        const prevRng = this.figure.range;
+        this._symlogLinthresh = val;
+        this.figure.range = prevRng;
+    }
+
+    get symlogLinscale () {
+        return this._symlogLinscale;
+    }
+
+    set symlogLinscale (val: number) {
+        const prevRng = this.figure.range;
+        this._symlogLinscale = val;
+        this.figure.range = prevRng;
     }
 
     public getInternalRange() {

@@ -77,6 +77,11 @@ export abstract class GraphicObject{
         
     }
 
+    protected setContextMenu() {
+        // to be implemented ...
+        // this.contextMenu = new ContextMenu();
+    }
+
     public setParent(parent: GraphicObject | null) {
         this.parent = parent;
         if (this.parent) {

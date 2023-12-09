@@ -17,6 +17,7 @@ export class HeatMap {
     public dataset: Dataset;
     public colormap: Colormap;
     public zRange: [number | null, number | null] = [null, null];  // min, max
+    public transform?: (zVal: number) => number;
 
     get isXRegular() {
         return this._isXRegular;
@@ -89,6 +90,10 @@ export class HeatMap {
         const zlim1 = (this.zRange[1] === null) ? m.max() : this.zRange[1];
         const limdiff = zlim1 - zlim0;
 
+        // if (!this.transform) {
+
+        // }
+
         // const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
 
         const w = this.imageData.width;
@@ -105,8 +110,8 @@ export class HeatMap {
 
                 const z = m.get(rowIdx, colIdx);
                 // console.log('row', row, 'col', col, z, m.isCContiguous);
+                let zScaled = (this.transform) ? this.transform(z) : (z - zlim0) / limdiff; 
 
-                const zScaled = (z - zlim0) / limdiff; 
                 // interpolate the rgba values
                 // console.log(zScaled);
 

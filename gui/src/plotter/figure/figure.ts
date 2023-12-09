@@ -21,6 +21,26 @@ export interface ILinePlot {
     zValue: number
 }
 
+export enum Shape {
+    Rectangle,
+    Circle,
+    Pentagon,
+    Triangle
+}
+
+export interface IScatterPlot {
+    x: NumberArray,
+    y: NumberArray,
+    fillColor: string | null,
+    edgeColor: string | null,
+    edgelw: number,
+    shape: Shape,
+    ld: number[],  // line dash, exmaple [4, 2], no dash: []
+    lw: number | null,  // line width of the connecting line
+    s: number, // size of the scatter shape
+    zValue: number
+}
+
 
 export class Figure extends GraphicObject {
 
@@ -460,8 +480,8 @@ export class Figure extends GraphicObject {
     }
 
     public rangeChanged(range: Rect): void {
-        this.xAxis.autoscale = false;
-        this.yAxis.autoscale = false;
+        // this.xAxis.autoscale = false;
+        // this.yAxis.autoscale = false;
         for (const fig of this.xRangeLinks) {
             if (this.xAxis.scale === fig.xAxis.scale) {
                 fig._range.x = this._range.x;
@@ -767,7 +787,8 @@ export class Figure extends GraphicObject {
             return;
         }
 
-        this.autoscale();
+        if (!this.panning && !this.scaling) this.autoscale();
+
         const yIT = this.yAxis.getInverseTransform();
         const xIT = this.xAxis.getInverseTransform();
 
@@ -1531,12 +1552,12 @@ export class Figure extends GraphicObject {
 export class Colorbar extends Figure {
 
     private _colormap: Colormap;
-    private _width: number = 20;  // with of the colorbar (effective rectagle) in px
+    private readonly _width: number = 20;  // with of the colorbar (effective rectagle) in px
 
     public offScreenCanvas: OffscreenCanvas;
     protected offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
     private parentCanvasRect: Rect;
-    private heatmapList: HeatMap[] = [];
+    // private heatmapList: HeatMap[] = [];
 
     private cWidth = 1;
     private cHeight = 500; // 500 pixels to draw the colormap
@@ -1589,10 +1610,22 @@ export class Colorbar extends Figure {
     //     // do nothing
     // }
 
+    public setHeatmapTransform() {
+        if (!this.heatmap) return;
+
+        const yIT = this.yAxis.getInverseTransform();
+        this.heatmap.transform = (zVal: number) => {
+            const _rng = this.getInternalRange();
+
+            return (yIT(zVal) - _rng.y) / _rng.h;
+        };
+    }
+
     public linkHeatMap(heatmap: HeatMap) {
-        if (!this.heatmapList.includes(heatmap)) {
-            this.heatmapList.push(heatmap);
+        if (this.heatmap !== heatmap) {
+            this.heatmap = heatmap;
             heatmap.colormap = this.colormap; // link the colormap of the colorbar to that of heatmap
+            this.setHeatmapTransform();
 
             // set range that corresponds to colorbar
 
@@ -1615,7 +1648,7 @@ export class Colorbar extends Figure {
 
         // cr is parent canvas rectangle
 
-        var thisCR: Rect = {
+        const thisCR: Rect = {
             x: cr.x + cr.w - this.getTargetWidth(),
             y: cr.y,
             w: this.getTargetWidth(),
@@ -1696,20 +1729,16 @@ export class Colorbar extends Figure {
     }
 
     public renderHeatmaps() {
-        for (const heatmap of this.heatmapList) {
-            heatmap.recalculateImage();
-        }
+        this.heatmap?.recalculateImage();
     }
 
-    // TODO fix.
     public viewAll(): void {
-        for (const heatmap of this.heatmapList) {
-            const rng = this.range;
-            const m = heatmap.dataset.data;
-            const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
-            this.range = {x: rng.x, w: rng.w, y: -extreme, h: 2 * extreme};
-            this.rangeChanged(this.getInternalRange());
-        }
+        if (!this.heatmap) return;
+        const rng = this.range;
+        const m = this.heatmap.dataset.data;
+        const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
+        this.range = {x: rng.x, w: rng.w, y: -extreme, h: 2 * extreme};
+        this.rangeChanged(this.getInternalRange());
     }
 
     public rangeChanged(range: Rect): void {
@@ -1732,13 +1761,13 @@ export class Colorbar extends Figure {
             repaint = true;
         }
 
-        for (const heatmap of this.heatmapList) {
-            const rng = this.range; // get the real range
+        if (this.heatmap){
+            // const rng = this.range; // get the real range
 
-            // TODO poresit jine scale colorbaru
-            heatmap.zRange = [rng.y, rng.y + rng.h];
+            // // TODO poresit jine scale colorbaru
+            // this.heatmap.zRange = [rng.y, rng.y + rng.h];
             // heatmap.colormap = this.colormap;
-            heatmap.recalculateImage();
+            this.heatmap.recalculateImage();
             repaint = true;
         }
 
