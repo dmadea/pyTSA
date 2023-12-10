@@ -24,6 +24,11 @@ export interface ITouchEvent {
     y: number  // canvas y coordinate scaled by display ratio
 }
 
+export interface Wasm {
+    memory: WebAssembly.Memory,
+    exports: WebAssembly.Exports
+}
+
 export abstract class GraphicObject{
     protected items: GraphicObject[];
     public parent: GraphicObject | null; // = null;
@@ -39,6 +44,7 @@ export abstract class GraphicObject{
     // public effRect: Rect         // canvas rectangle minus margins
 
     public contextMenu?: ContextMenu;
+    public wasm?: Wasm;
 
     // https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
     public cursors = {

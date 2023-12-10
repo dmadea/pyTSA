@@ -38,6 +38,29 @@ export class SceneUser extends Scene {
         return figure;
     }
 
+    public testWasmLoad(buffer: ArrayBuffer) {
+        if (!this.wasm) return;
+
+        console.log(buffer);
+
+        var view = new Uint8Array(this.wasm.memory.buffer);
+        console.log(view);
+
+        const dataPtr = 0;
+        view.set(new Uint8Array(buffer), dataPtr);
+
+        const byteLength = buffer.byteLength;
+
+        var f = this.wasm.exports._Z5abcdePcm as CallableFunction;
+        var num = f(dataPtr, byteLength);
+
+
+        console.log(num);
+
+
+
+    }
+
     public loadFiles(files: FileList) {
 
         if(!files) return;
@@ -57,6 +80,10 @@ export class SceneUser extends Scene {
             const index = i;
             console.time('start loading');
             reader.addEventListener('load', function (e) {
+
+                if (reader.result instanceof ArrayBuffer){
+                    t.testWasmLoad(reader.result)
+                }
 
                 if (!(typeof reader.result === 'string')) return;
 
@@ -81,7 +108,8 @@ export class SceneUser extends Scene {
                     t.processDatasets(names);
                 }
             });
-            reader.readAsBinaryString(file);
+            // reader.readAsBinaryString(file);
+            reader.readAsArrayBuffer(file);
         }
     }
 

@@ -18,6 +18,11 @@ module.exports = {
         // use: [MiniCssExtractPlugin.loader, 'css-loader'],
         use: ["style-loader", "css-loader"],
       },
+      {  // this worked https://stackoverflow.com/questions/70420273/how-can-i-make-webpack-embed-my-wasm-for-use-in-a-web-worker
+        test: /\.wasm$/,
+        type: "asset/inline"
+        // use: "arraybuffer-loader",
+      },
     ],
   },
   resolve: {
@@ -39,4 +44,17 @@ module.exports = {
     compress: true,
     port: 4000,
   },
+  // runtimeCompiler: true,
+  // externals: {
+  //   experiments: {
+  //     asyncWebAssembly: true,
+  //   },
+  // },
+  // configureWebpack: {
+  //   externals: {
+  //     experiments: {
+  //       asyncWebAssembly: true,
+  //     },
+  //   },
+  // }
 };

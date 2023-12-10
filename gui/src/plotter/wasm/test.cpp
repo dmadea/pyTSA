@@ -2,7 +2,7 @@
 #include <vector>
 // #include <cstdio>
 #include <iostream>
-#include <string> 
+// #include <string> 
 #include <fstream>
 #include <sstream>
 
@@ -10,13 +10,12 @@
 using namespace std::chrono;
 using namespace std;
 
-#include <string.h>
-#include <stdio.h>
-#include <memory>
+// #include <string.h>
+// #include <stdio.h>
+// #include <memory>
 
-#include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
+// #include <stdlib.h>
 
 
 // from https://github.com/ben-strasser/fast-cpp-csv-parser/blob/master/csv.h
@@ -122,7 +121,8 @@ void parse_double(const char *col, double &x) {
 }
 
 int main() {
-    std::cout << "Hello Word" << std::endl;
+    char a = '\0';
+    std::cout << "Hello Word" << a << std::endl;
 
     size_t n = 0;
     // std::string fname = "FLD_DMRK23-3E+MB in MeOH.csv";
@@ -149,6 +149,7 @@ int main() {
     // const size_t Size = 256;
     // char chunk[Size];
     std::string line;
+    std::istringstream s;
 
     int ncols = -1;
 

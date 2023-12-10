@@ -1,6 +1,12 @@
 import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 // import { Rect } from "./types";
 
+import wasmData from "./wasm/hello.wasm";
+// import * as Module from "./wasm/hello";
+
+interface Hello extends CallableFunction {
+    (): number;
+}
 
 export class Scene extends GraphicObject {
 
@@ -105,6 +111,79 @@ export class Scene extends GraphicObject {
         secCanvas.addEventListener("touchstart", e => this.touchStart(e));
         secCanvas.addEventListener("touchmove", e => this.touchMove(e));
         secCanvas.addEventListener("touchend", e => this.touchEnd(e));
+        this.initWasm();
+    }
+
+    public test() {
+        if (!this.wasm) return;
+
+        var f = this.wasm.exports._Z5helloPim as CallableFunction;
+        var malloc = this.wasm.exports._Z7_mallocm as CallableFunction;
+        var free = this.wasm.exports._Z5_freePv as CallableFunction;
+
+
+        var len = 100;
+        var ptr = malloc(len);
+        console.log(ptr);
+
+        var arr = new Int32Array(this.wasm.memory.buffer, ptr, len);
+        for (let i = 0; i < len; i++) {
+            arr[i] = i;
+        }
+        console.log(arr);
+        f(ptr, len);
+        console.log(arr);
+
+        free(ptr);
+
+
+        // var ptr = f();
+        // var arr = new Uint8Array(this.wasm.memory.buffer, ptr, 10);
+
+        // var string = new TextDecoder()
+        // console.log(arr);
+
+
+
+    }
+
+    public initWasm() {
+        // WebAssembly.Instance
+
+        var memory = new WebAssembly.Memory({
+            initial: 1024,
+            maximum: 1024
+        })
+
+        var opt = {
+            js: {
+                mem: memory
+            },
+            env: {
+                emscripten_resize_heap: memory.grow,
+                // wasi_snapshot_preview1:  {
+                //     proc_exit: (a: number) => undefined,
+                //     fd_close: (a: number) => 1,
+                //     environ_sizes_get: (a: number, b: number) => 1,
+                //     environ_get: (a: number, b: number) => 1
+                // }
+            }
+        }   
+
+        WebAssembly.instantiateStreaming(fetch(wasmData), opt).then(result => {
+            const exports = result.instance.exports;
+
+            this.wasm = {
+                memory: exports.memory as WebAssembly.Memory,
+                exports
+            }
+            console.log(this.wasm);
+
+            this.test();
+
+        });
+
+
     }
 
     public resize(): void {
