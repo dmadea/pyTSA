@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <emscripten.h>
-#include <string> 
-#include <sstream>
-#include <string.h>
+// #include <string> 
+// #include <sstream>
+// #include <string.h>
 // emcc -O3  hello.cpp -o hello.wasm  -s STANDALONE_WASM --no-entry
 
 int main() {
@@ -27,8 +27,8 @@ void hello(int * arr, size_t n) {
 EMSCRIPTEN_KEEPALIVE
 int abcde(char * buffer, size_t size) {
 
-    std::string text(buffer, size);
-    std::istringstream iss(text);
+    // std::string text(buffer, size);
+    // std::istringstream iss(text);
 
     // char * p = buffer;
 
@@ -38,8 +38,8 @@ int abcde(char * buffer, size_t size) {
     //     ++p;
     // }
     // ++p;
-
-    return text.length();
+    return 0;
+    // return text.length();
 
 }
 

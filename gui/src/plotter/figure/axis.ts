@@ -19,9 +19,11 @@ export class Axis {
     private figure: Figure;
     
     public axisType: AxisType;
+    public keepCentered: boolean;
+
 
     constructor (figure: Figure, axisType: AxisType, label?: string, scale?: string | NumberArray, viewBounds?: [number, number],
-        autoscale?: boolean, inverted?: boolean, symlogLinthresh?: number, symlogLinscale?: number) {
+        autoscale?: boolean, inverted?: boolean, symlogLinthresh?: number, symlogLinscale?: number, keepCentered?: boolean) {
             this.figure = figure;
             this.axisType = axisType;
             this.label = label ?? '';
@@ -31,6 +33,7 @@ export class Axis {
             this.inverted = inverted ?? false;
             this._symlogLinscale = symlogLinscale ?? 1;
             this._symlogLinthresh = symlogLinthresh ?? 1;
+            this.keepCentered = keepCentered ?? false;
     }
 
     get scale() {

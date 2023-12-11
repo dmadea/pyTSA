@@ -2,6 +2,7 @@ import { Colormap, Colormaps, ILut } from "../color";
 import { Figure } from "./figure";
 import { NumberArray } from "../types";
 import { Dataset, isclose } from "../utils";
+import { IPaintEvent } from "../object";
 
 
 
@@ -17,7 +18,7 @@ export class HeatMap {
     public dataset: Dataset;
     public colormap: Colormap;
     public zRange: [number | null, number | null] = [null, null];  // min, max
-    public transform?: (zVal: number) => number;
+    public transform?: (zVal: number) => number;  // z trasform
 
     get isXRegular() {
         return this._isXRegular;
@@ -79,6 +80,64 @@ export class HeatMap {
         return this.offScreenCanvas;
     }
 
+    // works also for different scales, but it is extremely slow
+    public plot2mainCanvas(e: IPaintEvent, ){
+
+        const r = this.figure.getEffectiveRect();
+        const rng = this.figure.getInternalRange();
+
+        const iData = new ImageData(r.w, r.h);
+
+        const m = this.dataset.data;
+
+        const zlim0 = (this.zRange[0] === null) ? m.min() : this.zRange[0];
+        const zlim1 = (this.zRange[1] === null) ? m.max() : this.zRange[1];
+        const limdiff = zlim1 - zlim0;
+
+        const w = iData.width;
+        const h = iData.height;
+
+        const xT = this.figure.xAxis.getTransform();
+        const yT = this.figure.yAxis.getTransform();
+
+        // C-contiguous buffer
+        for(let row = 0; row < h; row++) {
+            for(let col = 0; col < w; col++) {
+                const pos = (row * w + col) * 4;        // position in buffer based on x and y
+
+                // y axis is inverted in default because of different coordinate system
+                const rowIdx = this.figure.yAxis.inverted ? row : h - row - 1;
+                const colIdx = this.figure.xAxis.inverted ? w - col - 1 : col;
+
+                // map pixel position to actual coordinae
+                let xrel = colIdx / (w - 1);
+                let x = rng.x + xrel * rng.w;
+                let yrel = rowIdx / (h - 1);
+                let y = rng.y + yrel * rng.h;
+                
+                x = xT(x);
+                y = yT(y);
+
+                // find nearest indiced
+                const xIdx = this.dataset.x.nearestIndex(x);
+                const yIdx = this.dataset.y.nearestIndex(y);
+
+                const z = m.get(yIdx, xIdx);
+                // console.log('row', row, 'col', col, z, m.isCContiguous);
+                const zrel = (this.transform) ? this.transform(z) : (z - zlim0) / limdiff; 
+
+                const rgba = this.colormap.getColor(zrel);
+
+                iData.data[pos] = rgba[0];              // some R value [0, 255]
+                iData.data[pos+1] = rgba[1];              // some G value
+                iData.data[pos+2] = rgba[2];              // some B value
+                iData.data[pos+3] = rgba[3];                  // set alpha channel
+            }
+        }
+
+        e.bottomCtx.putImageData(iData, r.x, r.y);
+    }
+
     public recalculateImage(){
         if (!this.offScreenCanvasCtx) {
             return;
@@ -110,12 +169,12 @@ export class HeatMap {
 
                 const z = m.get(rowIdx, colIdx);
                 // console.log('row', row, 'col', col, z, m.isCContiguous);
-                let zScaled = (this.transform) ? this.transform(z) : (z - zlim0) / limdiff; 
+                let zrel = (this.transform) ? this.transform(z) : (z - zlim0) / limdiff; 
 
                 // interpolate the rgba values
                 // console.log(zScaled);
 
-                const rgba = this.colormap.getColor(zScaled);
+                const rgba = this.colormap.getColor(zrel);
 
                 this.imageData.data[pos] = rgba[0];              // some R value [0, 255]
                 this.imageData.data[pos+1] = rgba[1];              // some G value

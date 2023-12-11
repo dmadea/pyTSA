@@ -217,8 +217,6 @@ export class Figure extends GraphicObject {
     }
 
     public mapRange2Canvas(p: Point): Point{
-        // rewrite for vertical-aligned axis
-        // let r = this.effRect;
         const r = this.getEffectiveRect();
         let xrel = (p.x - this._range.x) / this._range.w;
         let yrel = (p.y - this._range.y) / this._range.h;
@@ -387,19 +385,24 @@ export class Figure extends GraphicObject {
                     let h = r.h;
                     
                     let xSign = this.xAxis.inverted ? 1 : -1;
-                    let ySign = this.yAxis.inverted ? -1 : 1;
+                    const ySign = this.yAxis.inverted ? -1 : 1;
         
                     if (va) {
                         [w, h] = [h, w];
                         xSign *= -1;
                     }
         
-                    let xRatio = this.lastRange.w / w;
-                    let yRatio = this.lastRange.h / h;
+                    const xRatio = this.lastRange.w / w;
+                    const yRatio = this.lastRange.h / h;
+
+                    let [dx, dy] = [xSign * dist.x * xRatio, ySign * dist.y * yRatio];
+                    
+                    dx = this.xAxis.keepCentered ? 0 : dx;
+                    dy = this.yAxis.keepCentered ? 0 : dy;
         
                     let newRect: Rect = {
-                        x: this.lastRange.x + xSign * dist.x * xRatio, 
-                        y: this.lastRange.y + ySign * dist.y * yRatio,
+                        x: this.lastRange.x + dx, 
+                        y: this.lastRange.y + dy,
                         w: this.lastRange.w,
                         h: this.lastRange.h
                     };
@@ -426,7 +429,19 @@ export class Figure extends GraphicObject {
                         w: this.lastRange.w / xZoom,
                         h: this.lastRange.h * yZoom
                     };
-        
+
+                    if (this.xAxis.keepCentered) {
+                        const extreme = Math.max(Math.abs(this.lastRange.x), Math.abs(this.lastRange.x + this.lastRange.w));
+                        newRect.x = -extreme / xZoom;
+                        newRect.w = -2*newRect.x;
+                    }
+
+                    if (this.yAxis.keepCentered) {
+                        const extreme = Math.max(Math.abs(this.lastRange.y), Math.abs(this.lastRange.y + this.lastRange.h));
+                        newRect.y = -extreme / yZoom;
+                        newRect.h = -2*newRect.y;
+                    }
+
                     this._range = this.getBoundedRange(newRect, false);
                     rangeChanged = true;
                 }
@@ -683,6 +698,8 @@ export class Figure extends GraphicObject {
 
         e.bottomCtx.imageSmoothingEnabled = false;
 
+        // this.heatmap.plot2mainCanvas(e);
+
         const x = this.heatmap.dataset.x;
         const y = this.heatmap.dataset.y;
 
@@ -707,7 +724,7 @@ export class Figure extends GraphicObject {
         0, 0, this.heatmap.width(), this.heatmap.height(),
         p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
 
-        // console.log('Heatmap paint');
+        console.log('Heatmap paint');
 
     }
 
@@ -1582,6 +1599,7 @@ export class Colorbar extends Figure {
         this.xAxis.scale = 'lin';
         this.yAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
         this.yAxis.scale = 'lin';
+        this.yAxis.keepCentered = true;
         this.items = [];
         this.linePlots = [];
         this.lastMargin = this.margin;
@@ -1762,26 +1780,11 @@ export class Colorbar extends Figure {
         }
 
         if (this.heatmap){
-            // const rng = this.range; // get the real range
-
-            // // TODO poresit jine scale colorbaru
-            // this.heatmap.zRange = [rng.y, rng.y + rng.h];
-            // heatmap.colormap = this.colormap;
             this.heatmap.recalculateImage();
             repaint = true;
         }
 
         if (repaint) f.repaint();
-            // if (this.yAxis.scale === f.xAxis.scale) {
-            //     fig._range.x = this._range.x;
-            //     fig._range.w = this._range.w;
-            // } else {
-            //     const r = this.range;
-            //     const fr = fig.range;
-            //     fig.range = {x: r.x, y: fr.y, w: r.w, h: fr.h};
-            // }
-            // fig.repaint();
-
 
     }
 

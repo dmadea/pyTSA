@@ -16,6 +16,7 @@ export class SceneUser extends Scene {
     public colorbar: Colorbar | null = null;
 
     public datasets: Dataset[] = [];
+
     public figHeatmaps: Figure[] = [];
     public dLinesArr: DraggableLines[] = [];
 
@@ -108,8 +109,8 @@ export class SceneUser extends Scene {
                     t.processDatasets(names);
                 }
             });
-            // reader.readAsBinaryString(file);
-            reader.readAsArrayBuffer(file);
+            reader.readAsBinaryString(file);
+            // reader.readAsArrayBuffer(file);
         }
     }
 

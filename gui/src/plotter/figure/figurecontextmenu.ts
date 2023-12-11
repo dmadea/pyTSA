@@ -68,6 +68,12 @@ class AxisContextMenu extends ContextMenu {
             if (autoscale.checked) this.fig.repaint();
         });
 
+        var keepcentered = this.addCheckBox("Keep centered");
+        keepcentered.addEventListener("change", e => {
+            // keep the range centered
+            this.axis.keepCentered = keepcentered.checked;
+        });
+
         var inverted = this.addCheckBox("Inverted");
         inverted.addEventListener("change", e => {
             this.axis.inverted = inverted.checked;
@@ -118,6 +124,7 @@ class AxisContextMenu extends ContextMenu {
             axisScale.selectedOptions[0].text = this.getTextFromScale(this.axis.scale);
             linthresh.value = this.axis.symlogLinthresh.toString();
             linscale.value = this.axis.symlogLinscale.toString();
+            keepcentered.checked = this.axis.keepCentered;
         });
 
     }
@@ -191,6 +198,12 @@ class ColorbarAxisContextMenu extends AxisContextMenu {
         //     this.fig.repaint();
         // });
 
+        var keepcentered = this.addCheckBox("Keep centered");
+        keepcentered.addEventListener("change", e => {
+            // keep the range centered
+            this.axis.keepCentered = keepcentered.checked;
+        });
+
         var axLabel = this.addTextInput("Label", this.axis.label);
         axLabel.addEventListener("change", e => {
             this.axis.label = axLabel.value ?? "";
@@ -243,6 +256,8 @@ class ColorbarAxisContextMenu extends AxisContextMenu {
             axisScale.selectedOptions[0].text = this.getTextFromScale(this.axis.scale);
             linthresh.value = this.axis.symlogLinthresh.toString();
             linscale.value = this.axis.symlogLinscale.toString();
+            keepcentered.checked = this.axis.keepCentered;
+
         });
 
     }
@@ -290,6 +305,8 @@ export class ColorbarContextMenu extends ContextMenu {
             this.colorbar.renderHeatmaps();
             this.colorbar.repaintFigure();
         });
+
+        
 
         this.addUpdateUICallback(() => {
             inverted.checked = this.colorbar.colormap.inverted;
