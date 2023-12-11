@@ -83,6 +83,13 @@ export abstract class GraphicObject{
         
     }
 
+    public setWasm(wasm: Wasm) {
+        this.wasm = wasm;
+        for (const item of this.items) {
+            item.wasm = wasm;
+        }
+    }
+
     protected setContextMenu() {
         // to be implemented ...
         // this.contextMenu = new ContextMenu();
@@ -95,6 +102,7 @@ export abstract class GraphicObject{
             this.bottomCtx = this.parent.bottomCtx;
             this.topCanvas = this.parent.topCanvas;
             this.topCtx = this.parent.topCtx;
+            this.wasm = this.parent.wasm;
         }
     }
 

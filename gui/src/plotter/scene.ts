@@ -1,7 +1,8 @@
 import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 // import { Rect } from "./types";
 
-import wasmData from "./wasm/hello.wasm";
+// import wasmData from "./wasm/hello.wasm";
+import wasmData from "./wasm/color.wasm";
 // import * as Module from "./wasm/hello";
 
 interface Hello extends CallableFunction {
@@ -117,24 +118,24 @@ export class Scene extends GraphicObject {
     public test() {
         if (!this.wasm) return;
 
-        var f = this.wasm.exports._Z5helloPim as CallableFunction;
-        var malloc = this.wasm.exports._Z7_mallocm as CallableFunction;
-        var free = this.wasm.exports._Z5_freePv as CallableFunction;
+        // var f = this.wasm.exports._Z5helloPim as CallableFunction;
+        // var malloc = this.wasm.exports._Z7_mallocm as CallableFunction;
+        // var free = this.wasm.exports._Z5_freePv as CallableFunction;
 
 
-        var len = 100;
-        var ptr = malloc(len);
-        console.log(ptr);
+        // var len = 100;
+        // var ptr = malloc(len);
+        // console.log(ptr);
 
-        var arr = new Int32Array(this.wasm.memory.buffer, ptr, len);
-        for (let i = 0; i < len; i++) {
-            arr[i] = i;
-        }
-        console.log(arr);
-        f(ptr, len);
-        console.log(arr);
+        // var arr = new Int32Array(this.wasm.memory.buffer, ptr, len);
+        // for (let i = 0; i < len; i++) {
+        //     arr[i] = i;
+        // }
+        // console.log(arr);
+        // f(ptr, len);
+        // console.log(arr);
 
-        free(ptr);
+        // free(ptr);
 
 
         // var ptr = f();
@@ -161,6 +162,7 @@ export class Scene extends GraphicObject {
             },
             env: {
                 emscripten_resize_heap: memory.grow,
+                emscripten_notify_memory_growth: (delta: number) => console.log("memory has grown by ", delta)
                 // wasi_snapshot_preview1:  {
                 //     proc_exit: (a: number) => undefined,
                 //     fd_close: (a: number) => 1,
@@ -173,10 +175,11 @@ export class Scene extends GraphicObject {
         WebAssembly.instantiateStreaming(fetch(wasmData), opt).then(result => {
             const exports = result.instance.exports;
 
-            this.wasm = {
+            this.setWasm({
                 memory: exports.memory as WebAssembly.Memory,
                 exports
-            }
+            });
+
             console.log(this.wasm);
 
             this.test();

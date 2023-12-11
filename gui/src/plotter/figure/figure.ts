@@ -1780,6 +1780,8 @@ export class Colorbar extends Figure {
         }
 
         if (this.heatmap){
+            var rng = this.getInternalRange();
+            this.heatmap.zRange = [rng.y, rng.y + rng.h];
             this.heatmap.recalculateImage();
             repaint = true;
         }

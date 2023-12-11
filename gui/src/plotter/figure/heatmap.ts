@@ -2,9 +2,12 @@ import { Colormap, Colormaps, ILut } from "../color";
 import { Figure } from "./figure";
 import { NumberArray } from "../types";
 import { Dataset, isclose } from "../utils";
-import { IPaintEvent } from "../object";
+import { IPaintEvent, Wasm } from "../object";
 
-
+interface LutPtr {
+    posPtr: number,
+    lutPtr: number
+}
 
 export class HeatMap {
 
@@ -19,6 +22,11 @@ export class HeatMap {
     public colormap: Colormap;
     public zRange: [number | null, number | null] = [null, null];  // min, max
     public transform?: (zVal: number) => number;  // z trasform
+
+    private dataPtr: number | null = null;
+    private iDataPtr: number | null = null;
+    private matrixBuf?: Float32Array;
+    private lutPtr?: LutPtr; 
 
     get isXRegular() {
         return this._isXRegular;
@@ -138,10 +146,101 @@ export class HeatMap {
         e.bottomCtx.putImageData(iData, r.x, r.y);
     }
 
+    private recalcImageNative() {
+
+        if (!this.offScreenCanvasCtx) {
+            return;
+        }
+
+        console.time("recalcImageNative");
+
+
+        const w = this.figure.wasm;
+
+        if (!w) return;
+        var view = new Uint8Array(w.memory.buffer);
+
+        var malloc = w.exports._Z7_mallocm as CallableFunction;
+        var free = w.exports._Z5_freePv as CallableFunction;
+        var recalcNative = w.exports._Z16recalculateImagePhPfmmS0_S_mff as CallableFunction;
+        // var getColor = w.exports._Z8getColorfPfPhmS0_ as CallableFunction;
+
+        // float recalculateImage(const float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
+
+        // copy data to wasm memory
+        if (!this.dataPtr) {
+
+            // console.time("copy data");
+
+            const n = this.dataset.data.length;
+
+            this.dataPtr = malloc(n * 4);
+            this.matrixBuf = new Float32Array(w.memory.buffer, this.dataPtr as number, n)
+            for (let i = 0; i < n; i++) {
+                this.matrixBuf[i] = this.dataset.data[i];
+            }
+
+            this.iDataPtr = malloc(n * 4); // create an image data buffer
+            this.imageData = new ImageData(new Uint8ClampedArray(w.memory.buffer, this.iDataPtr as number, n * 4),
+             this.dataset.data.ncols,
+              this.dataset.data.nrows)
+
+            console.log(this.dataPtr, "data copied");
+            // console.timeEnd("copy data");
+
+        }
+
+        if (this.lutPtr) {
+            free(this.lutPtr.lutPtr);
+            free(this.lutPtr.posPtr);
+        }
+
+        // copy lut to wasm memory
+        const lutN = this.colormap.lut.length;
+        this.lutPtr = {
+            posPtr: malloc(lutN * 4),
+            lutPtr: malloc(lutN * 4)
+        }
+
+        const [pos, data] = this.colormap.getLut2Wasm(w.memory.buffer, this.lutPtr.posPtr, this.lutPtr.lutPtr);
+
+        // float recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
+
+        recalcNative(this.iDataPtr, this.dataPtr, this.dataset.data.nrows, this.dataset.data.ncols, this.lutPtr.posPtr, this.lutPtr.lutPtr, lutN,
+            this.zRange[0], this.zRange[1])
+
+        this.offScreenCanvasCtx.putImageData(this.imageData, 0, 0);
+
+        // console.log(pos, data, this.lutPtr,  "data copied");
+
+        // var view = new Uint8Array(w.memory.buffer, this.lutPtr.posPtr);
+        // console.log(view);
+        // float recalculateImage(const float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
+        // var val = recalcNative(this.dataPtr, this.dataset.data.nrows, this.dataset.data.ncols, this.lutPtr.posPtr, this.lutPtr.lutPtr, lutN);
+        // console.log(val, "value from wasm", this.dataset.data.length);
+
+        // void getColor(float position, float * pos, unsigned char * lut, size_t nlut, unsigned char * result) {
+        // console.log(pos);
+        // var ptr = malloc(4);
+        // getColor(0.93, this.lutPtr.posPtr, this.lutPtr.lutPtr, lutN, ptr);
+        // var arr = new Uint8Array(w.memory.buffer, ptr, 4);
+        // console.log(arr);
+        // free(ptr);
+
+        console.timeEnd("recalcImageNative");
+    }
+
     public recalculateImage(){
         if (!this.offScreenCanvasCtx) {
             return;
         }
+
+        if (this.figure.wasm) {
+            this.recalcImageNative();
+            return;
+        }
+
+        console.time("recalculateImage");
 
         const m = this.dataset.data;
 
@@ -183,6 +282,11 @@ export class HeatMap {
             }
         }
 
+        console.timeEnd("recalculateImage");
+        // console.time("putImageData");
+
         this.offScreenCanvasCtx.putImageData(this.imageData, 0, 0);
+        // console.timeEnd("putImageData");
+
     }
 }
