@@ -2,11 +2,17 @@ import { Colormap, Colormaps, ILut } from "../color";
 import { Figure } from "./figure";
 import { NumberArray } from "../types";
 import { Dataset, isclose } from "../utils";
-import { IPaintEvent, Wasm } from "../object";
+import { IPaintEvent } from "../object";
 
 interface LutPtr {
     posPtr: number,
     lutPtr: number
+}
+
+interface RecalcImageNative extends CallableFunction {
+    //  void recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut,
+    // float zlim0, float zlim1);
+(iDataPtr: number, matrixPtr: number, rows: number, cols: number, posPtr: number, lutPtr: number, nlut: number, zlim0: number, zlim1: number): undefined
 }
 
 export class HeatMap {
@@ -105,8 +111,8 @@ export class HeatMap {
         const w = iData.width;
         const h = iData.height;
 
-        const xT = this.figure.xAxis.getTransform();
-        const yT = this.figure.yAxis.getTransform();
+        const xT = this.figure.xAxis.transform;
+        const yT = this.figure.yAxis.transform;
 
         // C-contiguous buffer
         for(let row = 0; row < h; row++) {
@@ -160,9 +166,9 @@ export class HeatMap {
         if (!w) return;
         var view = new Uint8Array(w.memory.buffer);
 
-        var malloc = w.exports._Z7_mallocm as CallableFunction;
-        var free = w.exports._Z5_freePv as CallableFunction;
-        var recalcNative = w.exports._Z16recalculateImagePhPfmmS0_S_mff as CallableFunction;
+        var malloc = w.exports._malloc as CallableFunction;
+        var free = w.exports._free as CallableFunction;
+        var RecalcImageNative = w.exports.recalculateImage as RecalcImageNative;
         // var getColor = w.exports._Z8getColorfPfPhmS0_ as CallableFunction;
 
         // float recalculateImage(const float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
@@ -176,9 +182,16 @@ export class HeatMap {
 
             this.dataPtr = malloc(n * 4);
             this.matrixBuf = new Float32Array(w.memory.buffer, this.dataPtr as number, n)
-            for (let i = 0; i < n; i++) {
-                this.matrixBuf[i] = this.dataset.data[i];
+
+            for (let i = 0; i < this.dataset.data.nrows; i++) {
+                for (let j = 0; j < this.dataset.data.ncols; j++) {
+                    this.matrixBuf[i * this.dataset.data.ncols + j] = this.dataset.data.get(i, j);
+                }
             }
+
+            // for (let i = 0; i < n; i++) {
+            //     this.matrixBuf[i] = this.dataset.data[i];
+            // }
 
             this.iDataPtr = malloc(n * 4); // create an image data buffer
             this.imageData = new ImageData(new Uint8ClampedArray(w.memory.buffer, this.iDataPtr as number, n * 4),
@@ -206,8 +219,8 @@ export class HeatMap {
 
         // float recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
 
-        recalcNative(this.iDataPtr, this.dataPtr, this.dataset.data.nrows, this.dataset.data.ncols, this.lutPtr.posPtr, this.lutPtr.lutPtr, lutN,
-            this.zRange[0], this.zRange[1])
+        RecalcImageNative(this.iDataPtr as number, this.dataPtr as number, this.dataset.data.nrows, this.dataset.data.ncols, this.lutPtr.posPtr, this.lutPtr.lutPtr, lutN,
+            this.zRange[0] as number, this.zRange[1] as number);
 
         this.offScreenCanvasCtx.putImageData(this.imageData, 0, 0);
 

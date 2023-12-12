@@ -65,7 +65,7 @@ export class Figure extends GraphicObject {
     
     // private fields
     
-    private _range: Rect;  // in case of scale of data, the range will be just indexes of data it is bound to
+    public internalRange: Rect;  // in case of scale of data, the range will be just indexes of data it is bound to
 
     private lastMouseDownPos: Point;
     private mousePos: Point | null;
@@ -112,12 +112,12 @@ export class Figure extends GraphicObject {
             bottom: 60
         };
         this.requiredMargin = {left: 0, right: 0, top: 0, bottom: 0};
-        this._range = {x: -1, y: -1, w: 2, h: 2};
+        this.internalRange = {x: -1, y: -1, w: 2, h: 2};
         // this.steps = NumberArray.fromArray([1, 2, 2.5, 5]);
         this.steps = NumberArray.fromArray([1, 2, 5]);
         this.lastMouseDownPos = {x: 0, y: 0};
         this.mousePos = {x: 0, y: 0};
-        this.lastRange = {...this._range};
+        this.lastRange = {...this.internalRange};
 
         // this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
         // this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
@@ -148,39 +148,36 @@ export class Figure extends GraphicObject {
 
     public setViewBounds(xAxisBounds?: [number, number], yAxisBounds?: [number, number]) {
         if (xAxisBounds) {
-            const xIT = this.xAxis.getInverseTransform();
+            const xIT = this.xAxis.invTransform;
             this.xAxis.viewBounds = [xIT(xAxisBounds[0]), xIT(xAxisBounds[1])];
         }
 
         if (yAxisBounds) {
-            const yIT = this.yAxis.getInverseTransform();
+            const yIT = this.yAxis.invTransform;
             this.yAxis.viewBounds = [yIT(yAxisBounds[0]), yIT(yAxisBounds[1])];
         }
     }
 
     get range() {
-        const xT = this.xAxis.getTransform();
-        const yT = this.yAxis.getTransform();
-
-        const x = xT(this._range.x);
-        const y = yT(this._range.y);
+        const xRng = this.xAxis.range;
+        const yRng = this.yAxis.range;
 
         return {
-            x,
-            y,
-            w: xT(this._range.x + this._range.w) - x,
-            h: yT(this._range.y + this._range.h) - y,
+            x: xRng[0],
+            y: yRng[0],
+            w: xRng[1],
+            h: yRng[1]
         }
     }
 
     set range(newRange: Rect) {
-        const xIT = this.xAxis.getInverseTransform();
-        const yIT = this.yAxis.getInverseTransform();
+        const xIT = this.xAxis.invTransform;
+        const yIT = this.yAxis.invTransform;
 
         const x = xIT(newRange.x);
         const y = yIT(newRange.y);
 
-        this._range = {
+        this.internalRange = {
             x,
             y,
             w: xIT(newRange.x + newRange.w) - x,
@@ -189,7 +186,7 @@ export class Figure extends GraphicObject {
     }
 
     public getInternalRange() {
-        return this._range;
+        return this.internalRange;
     }
 
 
@@ -203,23 +200,23 @@ export class Figure extends GraphicObject {
             xrel = this.yAxis.inverted ? xrel : 1 - xrel;
             yrel = this.xAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
             return {
-                x: this._range.x + yrel * this._range.w,
-                y: this._range.y + xrel * this._range.h
+                x: this.internalRange.x + yrel * this.internalRange.w,
+                y: this.internalRange.y + xrel * this.internalRange.h
             }
         } else {
             xrel = this.xAxis.inverted ? 1 - xrel : xrel;
             yrel = this.yAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
             return {
-                x: this._range.x + xrel * this._range.w,
-                y: this._range.y + yrel * this._range.h
+                x: this.internalRange.x + xrel * this.internalRange.w,
+                y: this.internalRange.y + yrel * this.internalRange.h
             }
         }
     }
 
     public mapRange2Canvas(p: Point): Point{
         const r = this.getEffectiveRect();
-        let xrel = (p.x - this._range.x) / this._range.w;
-        let yrel = (p.y - this._range.y) / this._range.h;
+        let xrel = (p.x - this.internalRange.x) / this.internalRange.w;
+        let yrel = (p.y - this.internalRange.y) / this.internalRange.h;
 
         xrel = this.xAxis.inverted ? 1 - xrel : xrel;
         yrel = this.yAxis.inverted ? yrel : 1 - yrel;  // y axis is inverted in default
@@ -289,10 +286,10 @@ export class Figure extends GraphicObject {
     }
 
     public viewAll() {
-        const lastRng = {...this._range};
+        const lastRng = {...this.internalRange};
         this.autoscale(true);
-        if (this._range.x !== lastRng.x || this._range.y !== lastRng.y || this._range.w !== lastRng.w || this._range.h !== lastRng.h) {
-            this.rangeChanged(this._range);
+        if (this.internalRange.x !== lastRng.x || this.internalRange.y !== lastRng.y || this.internalRange.w !== lastRng.w || this.internalRange.h !== lastRng.h) {
+            this.rangeChanged(this.internalRange);
             this.repaint();
         }
     }
@@ -348,7 +345,7 @@ export class Figure extends GraphicObject {
         }
 
         this.lastMouseDownPos = {x: e.x, y: e.y};
-        this.lastRange = {...this._range};
+        this.lastRange = {...this.internalRange};
         
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
 
@@ -407,7 +404,7 @@ export class Figure extends GraphicObject {
                         h: this.lastRange.h
                     };
         
-                    this._range = this.getBoundedRange(newRect, true);
+                    this.internalRange = this.getBoundedRange(newRect, true);
                     rangeChanged = true;
                 }
                 // analogous as in pyqtgraph
@@ -442,12 +439,12 @@ export class Figure extends GraphicObject {
                         newRect.h = -2*newRect.y;
                     }
 
-                    this._range = this.getBoundedRange(newRect, false);
+                    this.internalRange = this.getBoundedRange(newRect, false);
                     rangeChanged = true;
                 }
 
                 if (rangeChanged){
-                    this.rangeChanged(this._range);
+                    this.rangeChanged(this.internalRange);
 
                 }
             }
@@ -499,8 +496,8 @@ export class Figure extends GraphicObject {
         // this.yAxis.autoscale = false;
         for (const fig of this.xRangeLinks) {
             if (this.xAxis.scale === fig.xAxis.scale) {
-                fig._range.x = this._range.x;
-                fig._range.w = this._range.w;
+                fig.internalRange.x = this.internalRange.x;
+                fig.internalRange.w = this.internalRange.w;
             } else {
                 const r = this.range;
                 const fr = fig.range;
@@ -510,8 +507,8 @@ export class Figure extends GraphicObject {
         }
         for (const fig of this.yRangeLinks) {
             if (this.yAxis.scale === fig.yAxis.scale) {
-                fig._range.y = this._range.y;
-                fig._range.h = this._range.h;
+                fig.internalRange.y = this.internalRange.y;
+                fig.internalRange.h = this.internalRange.h;
             } else {
                 const r = this.range;
                 const fr = fig.range;
@@ -521,8 +518,8 @@ export class Figure extends GraphicObject {
         }
         for (const fig of this.xyRangeLinks) {
             if (this.xAxis.scale === fig.yAxis.scale) {
-                fig._range.y = this._range.x;
-                fig._range.h = this._range.w;
+                fig.internalRange.y = this.internalRange.x;
+                fig.internalRange.h = this.internalRange.w;
             } else {
                 const r = this.range;
                 const fr = fig.range;
@@ -532,8 +529,8 @@ export class Figure extends GraphicObject {
         }
         for (const fig of this.yxRangeLinks) {
             if (this.yAxis.scale === fig.xAxis.scale) {
-                fig._range.x = this._range.y;
-                fig._range.w = this._range.h;
+                fig.internalRange.x = this.internalRange.y;
+                fig.internalRange.w = this.internalRange.h;
             } else {
                 const r = this.range;
                 const fr = fig.range;
@@ -655,7 +652,7 @@ export class Figure extends GraphicObject {
 
         // set range to heatmap
 
-        this._range = {x, y, w, h};
+        this.internalRange = {x, y, w, h};
 
         this.repaint();
         return this.heatmap;
@@ -740,7 +737,7 @@ export class Figure extends GraphicObject {
         const fx = 0.05;  // autoscale margins
 
         if (this.yAxis.autoscale || forceAutoscale) {
-            const yIT = this.yAxis.getInverseTransform();
+            const yIT = this.yAxis.invTransform;
             const mins = [];
             const maxs = [];
             for (const plot of this.linePlots) {
@@ -764,12 +761,12 @@ export class Figure extends GraphicObject {
             y0 = Math.max(this.yAxis.viewBounds[0], y0 - fy * diff);
             y1 = Math.min(this.yAxis.viewBounds[1], y1 + fy * diff);
 
-            this._range.y = y0;
-            this._range.h = y1 - y0;
+            this.internalRange.y = y0;
+            this.internalRange.h = y1 - y0;
         }
 
         if (this.xAxis.autoscale || forceAutoscale) {
-            const xIT = this.xAxis.getInverseTransform();
+            const xIT = this.xAxis.invTransform;
             const mins = [];
             const maxs = [];
             for (const plot of this.linePlots) {
@@ -792,8 +789,8 @@ export class Figure extends GraphicObject {
             x0 = Math.max(this.xAxis.viewBounds[0], x0 - fx * diff);
             x1 = Math.min(this.xAxis.viewBounds[1], x1 + fx * diff);
 
-            this._range.x = x0;
-            this._range.w = x1 - x0;
+            this.internalRange.x = x0;
+            this.internalRange.w = x1 - x0;
         }
         // console.log(this._range);
     }
@@ -806,8 +803,8 @@ export class Figure extends GraphicObject {
 
         if (!this.panning && !this.scaling) this.autoscale();
 
-        const yIT = this.yAxis.getInverseTransform();
-        const xIT = this.xAxis.getInverseTransform();
+        const yIT = this.yAxis.invTransform;
+        const xIT = this.xAxis.invTransform;
 
         e.bottomCtx.save();
 
@@ -836,7 +833,7 @@ export class Figure extends GraphicObject {
                 const x = (xDataScale) ? i : xIT(plot.x[i]);
                 const p = this.mapRange2Canvas({x, y: yIT(plot.y[i])});
                 e.bottomCtx.lineTo(p.x, p.y);
-                if (x > this._range.x + this._range.w) break;
+                if (x > this.internalRange.x + this.internalRange.w) break;
             }
 
             e.bottomCtx.stroke();
@@ -880,8 +877,8 @@ export class Figure extends GraphicObject {
 
         // plot postion
 
-        const xIT = this.xAxis.getTransform();
-        const yIT = this.yAxis.getTransform();
+        const xIT = this.xAxis.transform;
+        const yIT = this.yAxis.transform;
         if (this.mousePos) {
             const p = this.mapCanvas2Range(this.mousePos);
             var text = `x: ${formatNumber(xIT(p.x), 4)}, y: ${formatNumber(yIT(p.y), 4)}`;
@@ -1414,13 +1411,13 @@ export class Figure extends GraphicObject {
             [fx, fy] = [fy, fx];
         }
         if (axis.axisType === AxisType.xAxis) {
-            coor = this._range.x;
-            size = this._range.w;
+            coor = this.internalRange.x;
+            size = this.internalRange.w;
             prefMajorBins = Math.max(Math.round(fx * w / dpr), 2);
             prefMinorBins = Math.round(w * fMinor);
         } else {
-            coor = this._range.y;
-            size = this._range.h;
+            coor = this.internalRange.y;
+            size = this.internalRange.h;
             prefMajorBins = Math.max(Math.round(fy * h / dpr), 2);
             prefMinorBins = Math.round(h * fMinor);
         }
@@ -1467,7 +1464,7 @@ export class Figure extends GraphicObject {
                 }
 
                 if (logScale) {
-                    const axT = axis.getTransform();
+                    const axT = axis.transform;
 
                     var getTransformedTicks = (startValue: number, endValue: number): [NumberArray, NumberArray, NumberArray] => {
 
@@ -1620,7 +1617,7 @@ export class Colorbar extends Figure {
         this._colormap = colormap;
         // this._colormap.inverted = inv;
         this.renderColorbar();
-        this.renderHeatmaps();
+        this.renderHeatmap();
         this.repaintFigure();
     }
 
@@ -1631,7 +1628,7 @@ export class Colorbar extends Figure {
     public setHeatmapTransform() {
         if (!this.heatmap) return;
 
-        const yIT = this.yAxis.getInverseTransform();
+        const yIT = this.yAxis.invTransform;
         this.heatmap.transform = (zVal: number) => {
             const _rng = this.getInternalRange();
 
@@ -1746,7 +1743,7 @@ export class Colorbar extends Figure {
         (this.parent as Figure).repaint();
     }
 
-    public renderHeatmaps() {
+    public renderHeatmap() {
         this.heatmap?.recalculateImage();
     }
 

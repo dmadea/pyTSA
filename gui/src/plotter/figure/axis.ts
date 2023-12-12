@@ -21,6 +21,9 @@ export class Axis {
     public axisType: AxisType;
     public keepCentered: boolean;
 
+    // public transform: (num: number) => number = num => num;
+    // public invTransform: (num: number) => number = num => num; 
+    // private _range: [number, number];
 
     constructor (figure: Figure, axisType: AxisType, label?: string, scale?: string | NumberArray, viewBounds?: [number, number],
         autoscale?: boolean, inverted?: boolean, symlogLinthresh?: number, symlogLinscale?: number, keepCentered?: boolean) {
@@ -34,6 +37,54 @@ export class Axis {
             this._symlogLinscale = symlogLinscale ?? 1;
             this._symlogLinthresh = symlogLinthresh ?? 1;
             this.keepCentered = keepCentered ?? false;
+            // this._range = this.axisType === AxisType.xAxis ?
+    }
+
+    get internalRange(): [number, number] {
+        const rng = this.figure.getInternalRange();
+        return (this.axisType === AxisType.xAxis) ? [rng.x, rng.w] : [rng.y, rng.h];
+    }
+
+    set internalRange(range: [number, number]) {
+        if (this.axisType === AxisType.xAxis) {
+            this.figure.internalRange.x = range[0];
+            this.figure.internalRange.w = range[1];
+        } else {    
+            this.figure.internalRange.y = range[0];
+            this.figure.internalRange.h = range[1];
+        }
+    }
+
+    get range(): [number, number] {
+        const rng = this.figure.internalRange;
+        if (this.axisType === AxisType.xAxis) {
+            const coordinate = this.transform(rng.x);
+            return [coordinate, this.transform(rng.x + rng.w) - coordinate];
+        } else {
+            const coordinate = this.transform(rng.y);
+            return [coordinate, this.transform(rng.y + rng.h) - coordinate];
+        }
+    }
+
+    set range(range: [number, number]) {
+        const t_coor = this.invTransform(range[0]);
+        const t_size = this.invTransform(range[0] + range[1]) - t_coor;
+        // const iRange = this.figure.getInternalRange();
+        if (this.axisType === AxisType.xAxis) {
+            this.figure.internalRange.x = t_coor;
+            this.figure.internalRange.w = t_size;
+        } else {
+            this.figure.internalRange.y = t_coor;
+            this.figure.internalRange.h = t_size;
+        }
+    }
+
+    get transform() {
+        return this.getTransform();
+    }
+
+    get invTransform() {
+        return this.getInverseTransform();
     }
 
     get scale() {
@@ -41,9 +92,11 @@ export class Axis {
     }
 
     set scale(scale: string | NumberArray) {
-        const prevRng = this.figure.range;
-        this._scale = scale;
-        this.figure.range = prevRng;
+        if (scale !== this._scale) {
+            const prevRange = this.range;
+            this._scale = scale;
+            this.range = prevRange;
+        }
     }
 
     get symlogLinthresh () {
@@ -51,9 +104,9 @@ export class Axis {
     }
 
     set symlogLinthresh (val: number) {
-        const prevRng = this.figure.range;
+        const prevRange = this.range;
         this._symlogLinthresh = val;
-        this.figure.range = prevRng;
+        this.range = prevRange;
     }
 
     get symlogLinscale () {
@@ -61,17 +114,13 @@ export class Axis {
     }
 
     set symlogLinscale (val: number) {
-        const prevRng = this.figure.range;
+        const prevRange = this.range;
         this._symlogLinscale = val;
-        this.figure.range = prevRng;
-    }
-
-    public getInternalRange() {
-
+        this.range = prevRange;
     }
 
     // transforms from dummy axis value to real value
-    public getTransform(): (num: number) => number {
+    private getTransform(): (num: number) => number {
         switch (this.scale) {
             case 'lin': {
                 return (num: number) => num;
@@ -106,7 +155,7 @@ export class Axis {
     }
 
     // transforms from real data to dummy axis value
-    public getInverseTransform(): (num: number) => number {
+    private getInverseTransform(): (num: number) => number {
         switch (this.scale) {
             case 'lin': {
                 return (num: number) => num;

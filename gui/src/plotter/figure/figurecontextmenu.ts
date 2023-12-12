@@ -103,6 +103,7 @@ class AxisContextMenu extends ContextMenu {
         var linthresh = this.addNumberInput("Linthresh", 1, 0, undefined, 0.1);
         var linscale = this.addNumberInput("Linscale", 1, 0, undefined, 0.1);
 
+        // TODO invalid value 
         linthresh.addEventListener("change", e => {
             var num = parseFloat(linthresh.value);
             var num = (num === 0) ? 1 : num;
@@ -292,7 +293,7 @@ export class ColorbarContextMenu extends ContextMenu {
             var opt = colormap.selectedOptions[0].text;
             this.colorbar.colormap.lut = Colormaps.getLut(opt);
             this.colorbar.renderColorbar();
-            this.colorbar.renderHeatmaps();
+            this.colorbar.renderHeatmap();
             this.colorbar.repaintFigure();
 
         });
@@ -302,11 +303,9 @@ export class ColorbarContextMenu extends ContextMenu {
             // invert the colormap
             this.colorbar.colormap.inverted = inverted.checked;
             this.colorbar.renderColorbar();
-            this.colorbar.renderHeatmaps();
+            this.colorbar.renderHeatmap();
             this.colorbar.repaintFigure();
         });
-
-        
 
         this.addUpdateUICallback(() => {
             inverted.checked = this.colorbar.colormap.inverted;

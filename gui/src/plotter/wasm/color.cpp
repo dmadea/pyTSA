@@ -9,6 +9,8 @@ int main() {
     return 0;
 }
 
+// emcc -O3  color.cpp -o color.wasm  -s STANDALONE_WASM --no-entry -s ALLOW_MEMORY_GROWTH -s MAXIMUM_MEMORY=1GB
+
 // if (this.inverted) position = 1 - position;
 
 
@@ -28,6 +30,14 @@ int main() {
 //     x * colormap[i+1].a + (1 - x) * colormap[i].a
 // ];
 
+extern "C" {
+ void recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut,
+                float zlim0, float zlim1);
+
+void * _malloc(size_t n);
+void _free(void * ptr);
+}
+
 
 // EMSCRIPTEN_KEEPALIVE
 void getColor(float position, float * pos, unsigned char * lut, size_t nlut, unsigned char * result) {
@@ -46,10 +56,18 @@ void getColor(float position, float * pos, unsigned char * lut, size_t nlut, uns
         return;
     }
 
-    int i = 0;
-    for (; i < nlut - 1; i++) {
-        if (pos[i] <= position && position <= pos[i + 1]) {
-            break;
+    int i = (int)(position * (nlut - 1));   // calculate estimate of the index
+    if (pos[i] > position) { // decrement
+        for (; i >= 0; i--) {
+            if (pos[i] <= position && position <= pos[i + 1]) {
+                break;
+            }
+        }
+    } else if (pos[i + 1] < position) {  // increment
+        for (; i < nlut - 1; i++) {
+            if (pos[i] <= position && position <= pos[i + 1]) {
+                break;
+            }
         }
     }
 
@@ -74,15 +92,17 @@ void recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t
 
     for(size_t row = 0; row < rows; row++) {
         for(size_t col = 0; col < cols; col++) {
-            size_t i = (row * cols + col) * 4;        // position in buffer based on x and y
+
+            size_t i = row * cols + col;        // position in a C-contiguous data matrix
             
             // y axis is inverted in default because of different coordinate system
             // const rowIdx = this.figure.yAxis.inverted ? row : h - row - 1;
             // const colIdx = this.figure.xAxis.inverted ? w - col - 1 : col;
-            float z = matrix[row * cols + col];
+            float z = matrix[i];
             float zrel = (z - zlim0) / zdiff;
 
-            getColor(zrel, pos, lut, nlut, iData + i);
+            unsigned char *iDataPos = iData + 4 * i; // position in a buffer
+            getColor(zrel, pos, lut, nlut, iDataPos);
 
 
             // const z = m.get(rowIdx, colIdx);

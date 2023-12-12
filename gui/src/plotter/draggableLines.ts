@@ -224,15 +224,15 @@ export class DraggableLines extends GraphicObject {
 
     public positionChanged(xChanged: boolean, yChanged: boolean) {
         const f = this.parent as Figure;
-        const xT = f.xAxis.getTransform();
-        const yT = f.yAxis.getTransform();
+        const xT = f.xAxis.transform;
+        const yT = f.yAxis.transform;
 
         for (const line of this.xLinks) {
             const lf = line.parent as Figure;
             if (lf.xAxis.scale === f.xAxis.scale) {
                 line.position.x = this.position.x;
             } else {
-                line.position.x = lf.xAxis.getInverseTransform()(xT(this.position.x));
+                line.position.x = lf.xAxis.invTransform(xT(this.position.x));
             }
             // line.fireEvent(xChanged, yChanged);
             lf.repaintItems();
@@ -242,7 +242,7 @@ export class DraggableLines extends GraphicObject {
             if (lf.yAxis.scale === f.yAxis.scale) {
                 line.position.y = this.position.y;
             } else {
-                line.position.y = lf.yAxis.getInverseTransform()(yT(this.position.y));
+                line.position.y = lf.yAxis.invTransform(yT(this.position.y));
             }
             // line.fireEvent(xChanged, yChanged);
             lf.repaintItems();
@@ -252,7 +252,7 @@ export class DraggableLines extends GraphicObject {
             if (lf.yAxis.scale === f.xAxis.scale) {
                 line.position.y = this.position.x;
             } else {
-                line.position.y = lf.yAxis.getInverseTransform()(xT(this.position.x));
+                line.position.y = lf.yAxis.invTransform(xT(this.position.x));
             }
             // line.fireEvent(xChanged, yChanged);
             lf.repaintItems();
@@ -262,7 +262,7 @@ export class DraggableLines extends GraphicObject {
             if (lf.xAxis.scale === f.yAxis.scale) {
                 line.position.x = this.position.y;
             } else {
-                line.position.x = lf.xAxis.getInverseTransform()(yT(this.position.y));
+                line.position.x = lf.xAxis.invTransform(yT(this.position.y));
             }
             // line.fireEvent(xChanged, yChanged);
             lf.repaintItems();
@@ -273,8 +273,8 @@ export class DraggableLines extends GraphicObject {
 
     public fireEvent(xChanged: boolean, yChanged: boolean) {
         const f = this.parent as Figure;
-        const xT = f.xAxis.getTransform();
-        const yT = f.yAxis.getTransform();
+        const xT = f.xAxis.transform;
+        const yT = f.yAxis.transform;
         for (const fun of this.positionChangedListeners) {
             let pos: IPositionChangedEvent = {
                 internalPosition: this.position,
@@ -368,7 +368,7 @@ export class DraggableLines extends GraphicObject {
             e.topCtx.textBaseline = 'middle'; // horizontal alignment
             e.topCtx.font = f.tickValuesFont;
 
-            const num = (va) ? f.xAxis.getTransform()(this.position.x) : f.yAxis.getTransform()(this.position.y);
+            const num = (va) ? f.xAxis.transform(this.position.x) : f.yAxis.transform(this.position.y);
 
             const text = formatNumber(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
             const textSize = e.topCtx.measureText(text);
@@ -400,7 +400,7 @@ export class DraggableLines extends GraphicObject {
         if (this.showText) {
             const yText = r.y + this.textPosition;
 
-            const num = (va) ? f.yAxis.getTransform()(this.position.y) : f.xAxis.getTransform()(this.position.x);
+            const num = (va) ? f.yAxis.transform(this.position.y) : f.xAxis.transform(this.position.x);
 
             e.topCtx.save();
             e.topCtx.translate(p0.x, yText);
