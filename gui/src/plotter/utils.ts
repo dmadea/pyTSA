@@ -20,6 +20,13 @@ export class Dataset {
         this.data.transpose();
         return this;
     }
+
+    public getNearestValue(x: number, y: number): number {
+        const row = this.y.nearestIndex(y);
+        const col = this.x.nearestIndex(x);
+
+        return this.data.get(row, col);
+    }
 }
 
 export function determineSigFigures(num: number): number {

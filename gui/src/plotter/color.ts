@@ -137,8 +137,7 @@ export class Colormap {
         }
     
         for (var i = 0; i < colormap.length - 1; i++) {
-            if (colormap[i].pos === position) break;
-            if (colormap[i].pos < position && position <= colormap[i + 1].pos){
+            if (colormap[i].pos <= position && position <= colormap[i + 1].pos){
                 break;
             }
         }

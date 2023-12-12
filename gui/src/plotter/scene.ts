@@ -2,7 +2,7 @@ import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 // import { Rect } from "./types";
 
 // import wasmData from "./wasm/hello.wasm";
-import wasmData from "./wasm/color.wasm";
+import wasmData from "./wasm/bin/color.wasm";
 // import * as Module from "./wasm/hello";
 
 interface Hello extends CallableFunction {

@@ -185,11 +185,6 @@ export class Figure extends GraphicObject {
         }
     }
 
-    public getInternalRange() {
-        return this.internalRange;
-    }
-
-
     public mapCanvas2Range(p: Point): Point{
         // const r = this.effRect;
         const r = this.getEffectiveRect();
@@ -879,9 +874,16 @@ export class Figure extends GraphicObject {
 
         const xIT = this.xAxis.transform;
         const yIT = this.yAxis.transform;
+        const figs = 4;
         if (this.mousePos) {
             const p = this.mapCanvas2Range(this.mousePos);
-            var text = `x: ${formatNumber(xIT(p.x), 4)}, y: ${formatNumber(yIT(p.y), 4)}`;
+            var text = `x: ${formatNumber(xIT(p.x), figs)}, y: ${formatNumber(yIT(p.y), figs)}`;
+
+            if (this.heatmap) {
+                // add z value
+                var val = this.heatmap.dataset.getNearestValue(xIT(p.x), yIT(p.y));
+                text += `, z: ${formatNumber(val, figs)}`
+            }
         } else {
             var text = "";
         };
@@ -1630,9 +1632,9 @@ export class Colorbar extends Figure {
 
         const yIT = this.yAxis.invTransform;
         this.heatmap.transform = (zVal: number) => {
-            const _rng = this.getInternalRange();
+            const _rng = this.yAxis.internalRange;
 
-            return (yIT(zVal) - _rng.y) / _rng.h;
+            return (yIT(zVal) - _rng[0]) / _rng[1];
         };
     }
 
@@ -1644,11 +1646,10 @@ export class Colorbar extends Figure {
 
             // set range that corresponds to colorbar
 
-            const rng = this.range;
             const m = heatmap.dataset.data;
             const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
-            this.range = {x: rng.x, w: rng.w, y: -extreme, h: 2 * extreme};
-            this.rangeChanged(this.getInternalRange());
+            this.yAxis.range = [-extreme, 2 + extreme];
+            this.rangeChanged(this.internalRange);
         }
     }
 
@@ -1753,7 +1754,7 @@ export class Colorbar extends Figure {
         const m = this.heatmap.dataset.data;
         const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
         this.range = {x: rng.x, w: rng.w, y: -extreme, h: 2 * extreme};
-        this.rangeChanged(this.getInternalRange());
+        this.rangeChanged(this.internalRange);
     }
 
     public rangeChanged(range: Rect): void {
@@ -1777,8 +1778,7 @@ export class Colorbar extends Figure {
         }
 
         if (this.heatmap){
-            var rng = this.getInternalRange();
-            this.heatmap.zRange = [rng.y, rng.y + rng.h];
+            this.heatmap.zRange = this.yAxis.range;
             this.heatmap.recalculateImage();
             repaint = true;
         }

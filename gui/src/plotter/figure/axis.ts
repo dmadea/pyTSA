@@ -41,7 +41,7 @@ export class Axis {
     }
 
     get internalRange(): [number, number] {
-        const rng = this.figure.getInternalRange();
+        const rng = this.figure.internalRange;
         return (this.axisType === AxisType.xAxis) ? [rng.x, rng.w] : [rng.y, rng.h];
     }
 
@@ -96,6 +96,7 @@ export class Axis {
             const prevRange = this.range;
             this._scale = scale;
             this.range = prevRange;
+            console.log(this.range);
         }
     }
 
@@ -121,7 +122,7 @@ export class Axis {
 
     // transforms from dummy axis value to real value
     private getTransform(): (num: number) => number {
-        switch (this.scale) {
+        switch (this._scale) {
             case 'lin': {
                 return (num: number) => num;
             }
@@ -156,12 +157,12 @@ export class Axis {
 
     // transforms from real data to dummy axis value
     private getInverseTransform(): (num: number) => number {
-        switch (this.scale) {
+        switch (this._scale) {
             case 'lin': {
                 return (num: number) => num;
             }
             case 'log': {
-                return (num: number) => Math.log10(num);
+                return (num: number) => (num <= 0) ? -5 : Math.log10(num);
             }                
             case 'symlog': {
                 const linthresh = this.symlogLinthresh;

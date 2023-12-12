@@ -59,7 +59,7 @@ export class DraggableLines extends GraphicObject {
     constructor(parent: Figure, orientation: Orientation = Orientation.Vertical) {
         super(parent);
         this.orientation = orientation;
-        const rng = parent.getInternalRange();
+        const rng = parent.internalRange;
         this.position = {x: rng.x + rng.w / 2, y: rng.y + rng.h / 2};
         // this.lastMouseDownPos = {x: 0, y: 0};
         this.lastPosition = {...this.position};
@@ -163,7 +163,7 @@ export class DraggableLines extends GraphicObject {
                     xSign *= -1;
                 }
 
-                const rng = f.getInternalRange();
+                const rng = f.internalRange;
     
                 let xRatio = rng.w / w;
                 let yRatio = rng.h / h;

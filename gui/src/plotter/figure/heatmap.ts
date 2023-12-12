@@ -12,7 +12,7 @@ interface LutPtr {
 interface RecalcImageNative extends CallableFunction {
     //  void recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut,
     // float zlim0, float zlim1);
-(iDataPtr: number, matrixPtr: number, rows: number, cols: number, posPtr: number, lutPtr: number, nlut: number, zlim0: number, zlim1: number): undefined
+(DataPtr: number, LutPtr: number, ParamsPtr: number): undefined
 }
 
 export class HeatMap {
@@ -29,7 +29,7 @@ export class HeatMap {
     public zRange: [number | null, number | null] = [null, null];  // min, max
     public transform?: (zVal: number) => number;  // z trasform
 
-    private dataPtr: number | null = null;
+    private matrixDataPtr: number | null = null;
     private iDataPtr: number | null = null;
     private matrixBuf?: Float32Array;
     private lutPtr?: LutPtr; 
@@ -98,7 +98,7 @@ export class HeatMap {
     public plot2mainCanvas(e: IPaintEvent, ){
 
         const r = this.figure.getEffectiveRect();
-        const rng = this.figure.getInternalRange();
+        const rng = this.figure.internalRange;
 
         const iData = new ImageData(r.w, r.h);
 
@@ -164,24 +164,25 @@ export class HeatMap {
         const w = this.figure.wasm;
 
         if (!w) return;
-        var view = new Uint8Array(w.memory.buffer);
+        var u8view = new Uint8Array(w.memory.buffer);
+        var view = new DataView(w.memory.buffer)
 
         var malloc = w.exports._malloc as CallableFunction;
         var free = w.exports._free as CallableFunction;
-        var RecalcImageNative = w.exports.recalculateImage as RecalcImageNative;
+        var RecalcImageNative = w.exports._Z16recalculateImageP4DataP3LutP6Params as RecalcImageNative;
         // var getColor = w.exports._Z8getColorfPfPhmS0_ as CallableFunction;
 
         // float recalculateImage(const float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
 
         // copy data to wasm memory
-        if (!this.dataPtr) {
+        if (!this.matrixDataPtr) {
 
             // console.time("copy data");
 
             const n = this.dataset.data.length;
 
-            this.dataPtr = malloc(n * 4);
-            this.matrixBuf = new Float32Array(w.memory.buffer, this.dataPtr as number, n)
+            this.matrixDataPtr = malloc(n * 4);
+            this.matrixBuf = new Float32Array(w.memory.buffer, this.matrixDataPtr as number, n)
 
             for (let i = 0; i < this.dataset.data.nrows; i++) {
                 for (let j = 0; j < this.dataset.data.ncols; j++) {
@@ -198,7 +199,7 @@ export class HeatMap {
              this.dataset.data.ncols,
               this.dataset.data.nrows)
 
-            console.log(this.dataPtr, "data copied");
+            console.log(this.matrixDataPtr, "data copied");
             // console.timeEnd("copy data");
 
         }
@@ -217,28 +218,71 @@ export class HeatMap {
 
         const [pos, data] = this.colormap.getLut2Wasm(w.memory.buffer, this.lutPtr.posPtr, this.lutPtr.lutPtr);
 
-        // float recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
+        // typedef struct
+        // {
+        //     unsigned char * iData;  // pointer to Image Data
+        //     float * matrix;    // pointer to matrix data in in C-contiguous
+        //     unsigned int rows;
+        //     unsigned int cols;
+        // }
+        // Data;
 
-        RecalcImageNative(this.iDataPtr as number, this.dataPtr as number, this.dataset.data.nrows, this.dataset.data.ncols, this.lutPtr.posPtr, this.lutPtr.lutPtr, lutN,
-            this.zRange[0] as number, this.zRange[1] as number);
+        // generate Data struct
+        var Data = malloc(4 * 4);
+        view.setUint32(Data, this.iDataPtr as number, true);
+        view.setUint32(Data + 4, this.matrixDataPtr as number, true);
+        view.setUint32(Data + 8, this.dataset.data.nrows, true);
+        view.setUint32(Data + 12, this.dataset.data.ncols, true);
+
+        // typedef struct
+        // {
+        //     float * positions;    // pointer to positions of lut
+        //     unsigned char * lut;  // pointer to lut
+        //     unsigned int n;
+        //     bool inverted;
+        // }
+        // Lut;
+        var Lut = malloc(4 * 3 + 1);
+        view.setUint8(Lut, this.colormap.inverted ? 1 : 0);
+        view.setUint32(Lut + 1, this.lutPtr.posPtr, true);
+        view.setUint32(Lut + 5, this.lutPtr.lutPtr, true);
+        view.setUint32(Lut + 9, lutN, true);
+
+        // typedef struct
+        // {
+        //     bool xInverted;    // if x axis is inverted
+        //     bool yInverted;    // if y axis is inverted
+        //     float linthresh;
+        //     float linscale;
+        
+        //     float zmin;   // range on the colorbar
+        //     float zmax;   //
+        //     transform scale;
+        // }
+        // Params;
+        var r1 = this.zRange[0] as number;
+        var r2 = this.zRange[1] as number;
+
+        console.log(r1, r2);
+
+
+        var Params = malloc(22);
+        view.setUint8(Params, this.figure.xAxis.inverted ? 1 : 0);
+        view.setUint8(Params + 1, this.figure.yAxis.inverted ? 1 : 0);
+        view.setFloat32(Params + 2, 1, true);
+        view.setFloat32(Params + 6, 1, true);
+        view.setFloat32(Params + 10, r1, true);
+        view.setFloat32(Params + 14, r1 + r2, true);
+        view.setUint32(Params + 20, 0, true);
+
+
+        RecalcImageNative(Data, Lut, Params);
+
+        free(Params);
+        free(Lut);
+        free(Data);
 
         this.offScreenCanvasCtx.putImageData(this.imageData, 0, 0);
-
-        // console.log(pos, data, this.lutPtr,  "data copied");
-
-        // var view = new Uint8Array(w.memory.buffer, this.lutPtr.posPtr);
-        // console.log(view);
-        // float recalculateImage(const float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
-        // var val = recalcNative(this.dataPtr, this.dataset.data.nrows, this.dataset.data.ncols, this.lutPtr.posPtr, this.lutPtr.lutPtr, lutN);
-        // console.log(val, "value from wasm", this.dataset.data.length);
-
-        // void getColor(float position, float * pos, unsigned char * lut, size_t nlut, unsigned char * result) {
-        // console.log(pos);
-        // var ptr = malloc(4);
-        // getColor(0.93, this.lutPtr.posPtr, this.lutPtr.lutPtr, lutN, ptr);
-        // var arr = new Uint8Array(w.memory.buffer, ptr, 4);
-        // console.log(arr);
-        // free(ptr);
 
         console.timeEnd("recalcImageNative");
     }
