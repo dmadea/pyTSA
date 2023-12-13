@@ -12,9 +12,11 @@ int main() {
 }
 
 // emcc -O3  color.cpp -o ../bin/color.wasm  -s STANDALONE_WASM --no-entry -s ALLOW_MEMORY_GROWTH -s MAXIMUM_MEMORY=1GB
+// emcc -g  color.cpp -o ../bin/color.wasm  -s STANDALONE_WASM --no-entry -s ALLOW_MEMORY_GROWTH -s MAXIMUM_MEMORY=1GB
+
 
 extern "C" {
-bool abc(bool a);
+// bool abc(bool a);
 bool recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut,
                 float zlim0, float zlim1);
 
@@ -23,10 +25,19 @@ void _free(void * ptr);
 
 }
 
-EMSCRIPTEN_KEEPALIVE
-bool abc(bool a) {
-    return a;
-}
+// EMSCRIPTEN_KEEPALIVE
+// float abc(Test *p) {
+
+//     float xinv = (float) p->a;
+//     float yinv = (float) p->b;
+//     float _c = (float) p->c;
+//     float _d = (float) p->d;
+
+//     // return xinv + yinv;
+
+//     float sum = xinv + yinv + _c + _d + (float)p->e + p->f;
+//     return sum;
+// }
 
 
 // EMSCRIPTEN_KEEPALIVE
@@ -73,37 +84,33 @@ void getColor(float pos, Lut * lut, unsigned char * result) {
     result[3] = (unsigned char)(x * lut->lut[4 * (i + 1) + 3] + (1 - x) * lut->lut[4 * i + 3]);  // a
 }
 
-// inline float tr(float z, Params *params) {
+inline float tr(float z, Params *params) {
 
-//     switch (params->scale)
-//     {
-//     case LIN:
-//         return z;
-//     case LOG:
-//         return (z <= 0) ? -5.0f : log10(z);
-//     case SYMLOG:
-//         float ztr;
-//         if (abs(z) <= params->linthresh) {
-//             ztr = z;
-//         } else {
-//             bool negative = z < 0;
-//             ztr = params->linthresh * (1 + log10(abs(z) / params->linthresh) / params->linscale);
-//             if (negative)
-//                 ztr = -ztr;
-//         }
-//         return ztr;
-//     }
-// }
+    switch (params->scale)
+    {
+    case LIN:
+        return z;
+    case LOG:
+        return (z <= 0) ? -5.0f : log10(z);
+    case SYMLOG:
+        float ztr;
+        if (abs(z) <= params->linthresh) {
+            ztr = z;
+        } else {
+            bool negative = z < 0;
+            ztr = params->linthresh * (1 + log10(abs(z) / params->linthresh) / params->linscale);
+            if (negative)
+                ztr = -ztr;
+        }
+        return ztr;
+    }
+}
 
 
 EMSCRIPTEN_KEEPALIVE
-bool recalculateImage(Data * data, Lut * lut, Params * params, Test *test) {
+bool recalculateImage(Data * data, Lut * lut, Params * params) {
     
     float zdiff = params->zmax - params->zmin;
-    float a = test->a;
-    float b = test->b;
-    float c = test->c;
-
 
     for(size_t row = 0; row < data->rows; row++) {
         for(size_t col = 0; col < data->cols; col++) {
@@ -111,15 +118,13 @@ bool recalculateImage(Data * data, Lut * lut, Params * params, Test *test) {
             // size_t i = row * data->cols + col;        // position in a C-contiguous data matrix
             
             // y axis is inverted in default because of different coordinate system
-            int r = row; // params->yInverted ? row : data->rows - row - 1;
-            int c = col; // params->xInverted ? data->cols - col - 1 : col;
+            int r = params->yInverted ? row : data->rows - row - 1;
+            int c = params->xInverted ? data->cols - col - 1 : col;
 
             float z = data->matrix[r * data->cols + c];
 
             // transform
-            // float zrel = (tr(z, params) - params->zmin) / zdiff;
-            float zrel = (z - params->zmin) / zdiff;
-
+            float zrel = (tr(z, params) - params->zmin) / zdiff;
 
             unsigned char *iDataPos = data->iData + 4 * (row * data->cols + col);  // position in a buffer
             getColor(zrel, lut, iDataPos); // fill color to the buffer

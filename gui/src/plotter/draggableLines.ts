@@ -359,31 +359,55 @@ export class DraggableLines extends GraphicObject {
         const p0 = f.mapRange2Canvas((va) ? {x: this.position.x, y: 0} : {x: 0, y: this.position.y});
         e.topCtx.beginPath();
         e.topCtx.moveTo(r.x, p0.y);
+        e.topCtx.lineTo(r.x + r.w, p0.y);
+        e.topCtx.stroke();
 
         if (this.showText) {
-            const xText = r.x - this.textPosition + r.w;
-
-            e.topCtx.fillStyle = this.onHoverColor;
+            const num = (va) ? f.xAxis.transform(this.position.x) : f.yAxis.transform(this.position.y);
+            e.topCtx.save();
             e.topCtx.textAlign = 'right';  // vertical alignment
             e.topCtx.textBaseline = 'middle'; // horizontal alignment
             e.topCtx.font = f.tickValuesFont;
-
-            const num = (va) ? f.xAxis.transform(this.position.x) : f.yAxis.transform(this.position.y);
-
             const text = formatNumber(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
-            const textSize = e.topCtx.measureText(text);
-            const offset = 6;
-
-            e.topCtx.save()
-            drawTextWithGlow(text, xText, p0.y, e.topCtx, f.tickValuesFont);
+    
+            const _metrics = e.topCtx.measureText(text);
+            let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
+    
+            e.topCtx.fillStyle = "rgba(100, 100, 100, 0.9)";
+            e.topCtx.strokeStyle = "black";
+            e.topCtx.setLineDash([]);
+    
+            e.topCtx.fillRect(r.x - 4 / 3 *_metrics.width, p0.y - textOffset, 4 / 3 *_metrics.width, 2 * textOffset);  //  - 1.8 * textOffset
+            e.topCtx.strokeRect(r.x - 4 / 3 *_metrics.width, p0.y - textOffset, 4 / 3 *_metrics.width, 2 * textOffset);  //  - 1.8 * textOffset
+    
+            e.topCtx.fillStyle = "white";
+            e.topCtx.fillText(text, r.x - textOffset / 2, p0.y);
             e.topCtx.restore();
-
-            e.topCtx.lineTo(xText - textSize.width - offset, p0.y);
-            e.topCtx.moveTo(xText + offset, p0.y);
         }
 
-        e.topCtx.lineTo(r.x + r.w, p0.y);
-        e.topCtx.stroke();
+
+        // if (this.showText) {
+        //     const xText = r.x - this.textPosition + r.w;
+
+        //     e.topCtx.fillStyle = this.onHoverColor;
+        //     e.topCtx.textAlign = 'right';  // vertical alignment
+        //     e.topCtx.textBaseline = 'middle'; // horizontal alignment
+        //     e.topCtx.font = f.tickValuesFont;
+
+        //     const num = (va) ? f.xAxis.transform(this.position.x) : f.yAxis.transform(this.position.y);
+
+        //     const text = formatNumber(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
+        //     const textSize = e.topCtx.measureText(text);
+        //     const offset = 6;
+
+        //     e.topCtx.save()
+        //     drawTextWithGlow(text, xText, p0.y, e.topCtx, f.tickValuesFont);
+        //     e.topCtx.restore();
+
+        //     e.topCtx.lineTo(xText - textSize.width - offset, p0.y);
+        //     e.topCtx.moveTo(xText + offset, p0.y);
+        // }
+
     }
 
     private strokeVertical(e: IPaintEvent) {
@@ -396,34 +420,32 @@ export class DraggableLines extends GraphicObject {
         e.topCtx.beginPath();
         // f.calcEffectiveRect();
         e.topCtx.moveTo(p0.x, r.y + r.h);
+        e.topCtx.lineTo(p0.x, r.y);
+        e.topCtx.stroke();
 
         if (this.showText) {
-            const yText = r.y + this.textPosition;
-
             const num = (va) ? f.yAxis.transform(this.position.y) : f.xAxis.transform(this.position.x);
 
             e.topCtx.save();
-            e.topCtx.translate(p0.x, yText);
-            e.topCtx.rotate(-Math.PI / 2);
-            
-            e.topCtx.textAlign = 'right';  // vertical alignment
+            e.topCtx.textAlign = 'center';  // vertical alignment
             e.topCtx.textBaseline = 'middle'; // horizontal alignment
             e.topCtx.font = f.tickValuesFont;
-
             const text = formatNumber(num, 1 + ((va) ? f.yAxis.displayedSignificantFigures : f.xAxis.displayedSignificantFigures));
-            const textSize = e.topCtx.measureText(text);
-            
-            drawTextWithGlow(text, 0, 0, e.topCtx, f.tickValuesFont);
+
+            const _metrics = e.topCtx.measureText(text);
+            let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
+
+            e.topCtx.fillStyle = "rgba(100, 100, 100, 0.9)";
+            e.topCtx.strokeStyle = "black";
+            e.topCtx.setLineDash([]);
+
+            e.topCtx.fillRect(p0.x - _metrics.width / 1.5, r.y + r.h + 0, 4 / 3 * _metrics.width, 1.8 * textOffset);
+            e.topCtx.strokeRect(p0.x - _metrics.width / 1.5, r.y + r.h + 0, 4 / 3 * _metrics.width, 1.8 * textOffset);
+
+            e.topCtx.fillStyle = "white";
+            e.topCtx.fillText(text, p0.x, r.y + r.h + textOffset);
             e.topCtx.restore();
-
-            const offset = 6;
-
-            e.topCtx.lineTo(p0.x, yText + textSize.width + offset);
-            e.topCtx.moveTo(p0.x, yText - offset);
         }
-
-        e.topCtx.lineTo(p0.x, r.y);
-        e.topCtx.stroke();
     }
 
     public paint(e: IPaintEvent): void {

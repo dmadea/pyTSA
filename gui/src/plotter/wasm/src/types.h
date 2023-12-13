@@ -34,14 +34,17 @@ typedef struct
     float linscale;
     float zmin;   // range on the colorbar
     float zmax;   //
-    // unsigned int scale;
+    transform scale;
 }
 Params;
 
-typedef struct
-{
-    float a;
-    float b;
-    float c;   // range on the colorbar
-}
-Test;
+// typedef struct
+// {
+//     bool a;
+//     int e;
+//     bool b;
+//     bool c;
+//     float f;   // range on the colorbar
+//     bool d;
+// }
+// Test;

@@ -205,6 +205,11 @@ const TypeSize = {
 }
 
 
+// bools are storred in a struct very strangely,
+// as default bool take 4 bytes if they are fooled by a non-bool,
+// but if another bool is next, then the second byte used to store the second bool, for 3rd and 4th
+// the same is happening
+
 // returns a pointer
 export function putOptions(buffer: ArrayBuffer, options: [number | boolean | null, DataType][], malloc: (size: number) => number): number {
 
@@ -217,8 +222,11 @@ export function putOptions(buffer: ArrayBuffer, options: [number | boolean | nul
     const view = new DataView(buffer, structPtr, size);
 
     var offset = 0;
+    // var prevType: DataType | null  = null;
+    var numOfBools: number = 0;
 
-    for (const [opt, t] of options) {
+    for (let i = 0; i < options.length; i++) {
+        const [opt, t] = options[i];
         switch (t) {
             case DataType.uint32: {
                 view.setUint32(offset, opt as number, true);
@@ -242,7 +250,7 @@ export function putOptions(buffer: ArrayBuffer, options: [number | boolean | nul
             }
             case DataType.bool: {
                 var o = opt as boolean;
-                view.setInt32(offset, o ? 1 : 0, true);
+                view.setUint8(offset, o ? 1 : 0);
                 break;
             }
             case DataType.ptr: {
@@ -254,7 +262,16 @@ export function putOptions(buffer: ArrayBuffer, options: [number | boolean | nul
                 break;
             }
         }
-        offset += TypeSize[t];
+        if (i !== options.length - 1 && t === DataType.bool && options[i+1][1] === DataType.bool) {
+            offset += 1;
+            numOfBools++;
+            continue;
+        } else if (t == DataType.bool) {
+            offset += TypeSize.bool - numOfBools;
+            numOfBools = 0;
+        } else {
+            offset += TypeSize[t];
+        }
     }
     return structPtr;
 }

@@ -267,8 +267,9 @@ export class ContextMenu {
             x -= diffx + this.menu.offsetWidth;
         }
         if (mousey + this.menu.offsetHeight > document.body.offsetHeight) {
-            var diffy = (this.parentMenu) ? this.parentMenu.menu.offsetHeight : 0;
-            y -= diffy + this.menu.offsetHeight;
+            // var diffy = (this.parentMenu) ? this.parentMenu.menu.offsetHeight : 0;
+
+            y -= mousey + this.menu.offsetHeight - document.body.offsetHeight;
         }
 
         this.menu.style.cssText = `position: "block"; left: ${x}px; top: ${y}px`;

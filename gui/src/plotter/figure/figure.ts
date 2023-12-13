@@ -1346,7 +1346,7 @@ export class Figure extends GraphicObject {
 
         // make major ticks
         const bestMin = Math.ceil(coor / step) * step;
-        const nticks = 1 + (coor + size - bestMin) >> 0; // integer division
+        const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
         let majorTicks = new NumberArray(nticks);
         let majorTicksValues = new NumberArray(nticks);
     
@@ -1779,7 +1779,7 @@ export class Colorbar extends Figure {
         }
 
         if (this.heatmap){
-            this.heatmap.zRange = this.yAxis.range;
+            this.heatmap.zRange = this.yAxis.internalRange;
             this.heatmap.recalculateImage();
             repaint = true;
         }

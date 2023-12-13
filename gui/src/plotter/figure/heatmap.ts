@@ -12,7 +12,7 @@ interface LutPtr {
 interface RecalcImageNative extends CallableFunction {
     //  void recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut,
     // float zlim0, float zlim1);
-(DataPtr: number, LutPtr: number, ParamsPtr: number, test: number): undefined
+(DataPtr: number, LutPtr: number, ParamsPtr: number): undefined
 }
 
 interface Malloc extends CallableFunction {
@@ -170,11 +170,12 @@ export class HeatMap {
 
         if (!w) return;
         var u8view = new Uint8Array(w.memory.buffer);
-        var view = new DataView(w.memory.buffer)
+        var view = new DataView(w.memory.buffer);
 
         var malloc = w.exports._malloc as Malloc;
         var free = w.exports._free as CallableFunction;
-        var RecalcImageNative = w.exports._Z16recalculateImageP4DataP3LutP6ParamsP4Test as RecalcImageNative;
+        var RecalcImageNative = w.exports._Z16recalculateImageP4DataP3LutP6Params as RecalcImageNative;
+        // var test = w.exports._Z3abcP4Test as CallableFunction;
         // var getColor = w.exports._Z8getColorfPfPhmS0_ as CallableFunction;
 
         // float recalculateImage(const float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
@@ -195,18 +196,12 @@ export class HeatMap {
                 }
             }
 
-            // for (let i = 0; i < n; i++) {
-            //     this.matrixBuf[i] = this.dataset.data[i];
-            // }
-
             this.iDataPtr = malloc(n * 4); // create an image data buffer
             this.imageData = new ImageData(new Uint8ClampedArray(w.memory.buffer, this.iDataPtr as number, n * 4),
              this.dataset.data.ncols,
               this.dataset.data.nrows)
 
             console.log(this.matrixDataPtr, "data copied");
-            // console.timeEnd("copy data");
-
         }
 
         if (this.lutPtr) {
@@ -270,7 +265,16 @@ export class HeatMap {
         var r1 = this.zRange[0] as number;
         var r2 = this.zRange[1] as number;
 
-        console.log(r1, r1 + r2);
+        // console.log(r1, r1 + r2);
+
+        var scale;
+        if (this.colorbar?.yAxis.scale === 'lin') {
+            scale = 0;
+        } else if (this.colorbar?.yAxis.scale === 'log'){
+            scale = 1;
+        } else {
+            scale = 2;
+        }
 
         var Params = putOptions(w.memory.buffer, 
             [
@@ -280,17 +284,10 @@ export class HeatMap {
              [this.colorbar ? this.colorbar.yAxis.symlogLinscale : 1, DataType.float32],
              [r1, DataType.float32],
              [r1 + r2, DataType.float32],
-            //  [0, DataType.int32],
+             [scale, DataType.int32],
             ], malloc);
 
-        var Test = putOptions(w.memory.buffer, 
-            [
-                [1.5, DataType.float32],
-                [5, DataType.float32],
-                [-100, DataType.float32],
-            ], malloc);
-
-        RecalcImageNative(Data, Lut, Params, Test);
+        RecalcImageNative(Data, Lut, Params);
 
         free(Params);
         free(Lut);
@@ -306,10 +303,10 @@ export class HeatMap {
             return;
         }
 
-        if (this.figure.wasm) {
-            this.recalcImageNative();
-            return;
-        }
+        // if (this.figure.wasm) {
+        //     this.recalcImageNative();
+        //     return;
+        // }
 
         console.time("recalculateImage");
 
