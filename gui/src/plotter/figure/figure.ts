@@ -1641,6 +1641,7 @@ export class Colorbar extends Figure {
     public linkHeatMap(heatmap: HeatMap) {
         if (this.heatmap !== heatmap) {
             this.heatmap = heatmap;
+            this.heatmap.colorbar = this;
             heatmap.colormap = this.colormap; // link the colormap of the colorbar to that of heatmap
             this.setHeatmapTransform();
 

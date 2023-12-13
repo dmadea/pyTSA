@@ -19,7 +19,7 @@ typedef struct
 }
 Lut;
 
-typedef enum transform
+enum transform
 {
     LIN = 0,
     LOG = 1,
@@ -34,6 +34,14 @@ typedef struct
     float linscale;
     float zmin;   // range on the colorbar
     float zmax;   //
-    transform scale;
+    // unsigned int scale;
 }
 Params;
+
+typedef struct
+{
+    float a;
+    float b;
+    float c;   // range on the colorbar
+}
+Test;

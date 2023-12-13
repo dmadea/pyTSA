@@ -1,7 +1,7 @@
 import { Colormap, Colormaps, ILut } from "../color";
-import { Figure } from "./figure";
+import { Colorbar, Figure } from "./figure";
 import { NumberArray } from "../types";
-import { Dataset, isclose } from "../utils";
+import { DataType, Dataset, isclose, putOptions } from "../utils";
 import { IPaintEvent } from "../object";
 
 interface LutPtr {
@@ -12,7 +12,11 @@ interface LutPtr {
 interface RecalcImageNative extends CallableFunction {
     //  void recalculateImage(unsigned char * iData, float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut,
     // float zlim0, float zlim1);
-(DataPtr: number, LutPtr: number, ParamsPtr: number): undefined
+(DataPtr: number, LutPtr: number, ParamsPtr: number, test: number): undefined
+}
+
+interface Malloc extends CallableFunction {
+(size: number): number
 }
 
 export class HeatMap {
@@ -33,6 +37,7 @@ export class HeatMap {
     private iDataPtr: number | null = null;
     private matrixBuf?: Float32Array;
     private lutPtr?: LutPtr; 
+    public colorbar?: Colorbar;
 
     get isXRegular() {
         return this._isXRegular;
@@ -167,9 +172,9 @@ export class HeatMap {
         var u8view = new Uint8Array(w.memory.buffer);
         var view = new DataView(w.memory.buffer)
 
-        var malloc = w.exports._malloc as CallableFunction;
+        var malloc = w.exports._malloc as Malloc;
         var free = w.exports._free as CallableFunction;
-        var RecalcImageNative = w.exports._Z16recalculateImageP4DataP3LutP6Params as RecalcImageNative;
+        var RecalcImageNative = w.exports._Z16recalculateImageP4DataP3LutP6ParamsP4Test as RecalcImageNative;
         // var getColor = w.exports._Z8getColorfPfPhmS0_ as CallableFunction;
 
         // float recalculateImage(const float * matrix, size_t rows, size_t cols, float * pos, unsigned char * lut, size_t nlut) {
@@ -228,11 +233,12 @@ export class HeatMap {
         // Data;
 
         // generate Data struct
-        var Data = malloc(4 * 4);
-        view.setUint32(Data, this.iDataPtr as number, true);
-        view.setUint32(Data + 4, this.matrixDataPtr as number, true);
-        view.setUint32(Data + 8, this.dataset.data.nrows, true);
-        view.setUint32(Data + 12, this.dataset.data.ncols, true);
+        var Data = putOptions(w.memory.buffer, 
+            [[this.iDataPtr, DataType.ptr],
+             [this.matrixDataPtr, DataType.ptr],
+             [this.dataset.data.nrows, DataType.uint32],
+             [this.dataset.data.ncols, DataType.uint32],
+            ], malloc);
 
         // typedef struct
         // {
@@ -242,11 +248,12 @@ export class HeatMap {
         //     bool inverted;
         // }
         // Lut;
-        var Lut = malloc(4 * 3 + 1);
-        view.setUint8(Lut, this.colormap.inverted ? 1 : 0);
-        view.setUint32(Lut + 1, this.lutPtr.posPtr, true);
-        view.setUint32(Lut + 5, this.lutPtr.lutPtr, true);
-        view.setUint32(Lut + 9, lutN, true);
+        var Lut = putOptions(w.memory.buffer, [
+            [this.colormap.inverted, DataType.bool],
+            [this.lutPtr.posPtr, DataType.ptr],
+             [this.lutPtr.lutPtr, DataType.ptr],
+             [lutN, DataType.uint32],
+            ], malloc);
 
         // typedef struct
         // {
@@ -263,20 +270,27 @@ export class HeatMap {
         var r1 = this.zRange[0] as number;
         var r2 = this.zRange[1] as number;
 
-        console.log(r1, r2);
+        console.log(r1, r1 + r2);
 
+        var Params = putOptions(w.memory.buffer, 
+            [
+             [this.figure.xAxis.inverted, DataType.bool],
+             [this.figure.yAxis.inverted, DataType.bool],
+             [this.colorbar ? this.colorbar.yAxis.symlogLinthresh : 1, DataType.float32],
+             [this.colorbar ? this.colorbar.yAxis.symlogLinscale : 1, DataType.float32],
+             [r1, DataType.float32],
+             [r1 + r2, DataType.float32],
+            //  [0, DataType.int32],
+            ], malloc);
 
-        var Params = malloc(22);
-        view.setUint8(Params, this.figure.xAxis.inverted ? 1 : 0);
-        view.setUint8(Params + 1, this.figure.yAxis.inverted ? 1 : 0);
-        view.setFloat32(Params + 2, 1, true);
-        view.setFloat32(Params + 6, 1, true);
-        view.setFloat32(Params + 10, r1, true);
-        view.setFloat32(Params + 14, r1 + r2, true);
-        view.setUint32(Params + 20, 0, true);
+        var Test = putOptions(w.memory.buffer, 
+            [
+                [1.5, DataType.float32],
+                [5, DataType.float32],
+                [-100, DataType.float32],
+            ], malloc);
 
-
-        RecalcImageNative(Data, Lut, Params);
+        RecalcImageNative(Data, Lut, Params, Test);
 
         free(Params);
         free(Lut);

@@ -180,6 +180,86 @@ export function drawTextWithGlow(text: string, x: number, y: number, ctx: Canvas
 }
 
 
+export enum DataType {
+    ptr = 'ptr',
+    uint32 = 'uint32',
+    int16 = 'int16',
+    int32 = 'int32',
+    // int64 = 'int64',
+    float32 = 'float32',
+    float64 = 'float64',
+    bool = 'bool',
+    byte = 'byte'
+}
+
+const TypeSize = {
+    ptr: 4,
+    uint32: 4,
+    int16: 2,
+    int32: 4,
+    // int64: 8,
+    float32: 4,
+    float64: 8,
+    bool: 4,
+    byte: 1
+}
+
+
+// returns a pointer
+export function putOptions(buffer: ArrayBuffer, options: [number | boolean | null, DataType][], malloc: (size: number) => number): number {
+
+    var size = 0;
+    for (const [opt, t] of options) {
+        size += TypeSize[t];
+    }
+
+    const structPtr = malloc(size);
+    const view = new DataView(buffer, structPtr, size);
+
+    var offset = 0;
+
+    for (const [opt, t] of options) {
+        switch (t) {
+            case DataType.uint32: {
+                view.setUint32(offset, opt as number, true);
+                break;
+            }
+            case DataType.int16: {
+                view.setInt16(offset, opt as number, true);
+                break;
+            }
+            case DataType.int32: {
+                view.setInt32(offset, opt as number, true);
+                break;
+            }
+            case DataType.float32: {
+                view.setFloat32(offset, opt as number, true);
+                break;
+            }
+            case DataType.float64: {
+                view.setFloat64(offset, opt as number, true);
+                break;
+            }
+            case DataType.bool: {
+                var o = opt as boolean;
+                view.setInt32(offset, o ? 1 : 0, true);
+                break;
+            }
+            case DataType.ptr: {
+                view.setUint32(offset, opt as number, true);
+                break;
+            }
+            case DataType.byte: {
+                view.setUint8(offset, opt as number);
+                break;
+            }
+        }
+        offset += TypeSize[t];
+    }
+    return structPtr;
+}
+
+
 
 
     // totally useless code, the same thing can be done elegantly with clipping
