@@ -75,6 +75,7 @@ export class Grid extends GraphicObject {
         let width = r.w - r.w * (ncols - 1) * this.gridSettings.horizontalSpace;
         let height = r.h - r.h * (nrows - 1) * this.gridSettings.verticalSpace;
 
+
         if (this.gridSettings.widthRatios === null || this.gridSettings.widthRatios.length !== ncols){
             this.gridSettings.widthRatios = new NumberArray(ncols).fill(1);  // fill only ones
         }

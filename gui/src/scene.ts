@@ -2,12 +2,13 @@ import { Colormap, Colormaps, getDefaultColor } from "./plotter/color";
 import { DraggableLines, Orientation } from "./plotter/draggableLines";
 import { Colorbar, Figure, ILinePlot } from "./plotter/figure/figure";
 import { Grid } from "./plotter/grid";
+import { LayoutScene } from "./plotter/layoutscene";
 import { Scene } from "./plotter/scene";
 import { NumberArray } from "./plotter/types";
 import { Dataset, loadData } from "./plotter/utils";
 
 
-export class SceneUser extends Scene {
+export class SceneUser extends LayoutScene {
 
     public fig: Figure | null = null;
     public figy: Figure | null = null;
@@ -17,13 +18,10 @@ export class SceneUser extends Scene {
 
     public datasets: Dataset[] = [];
 
-    public figHeatmaps: Figure[] = [];
     public dLinesArr: DraggableLines[] = [];
 
-    public figTrace: Figure | null = null;
-    public figSpecrum: Figure | null = null;
-
-    public grid: Grid;
+    // public figTrace: Figure | null = null;
+    // public figSpecrum: Figure | null = null;
 
     constructor(parentElement: HTMLDivElement) {
         super(parentElement);
@@ -187,7 +185,7 @@ export class SceneUser extends Scene {
             const dataset = this.datasets[i];
 
             var heatmapFig = new Figure();
-            this.figHeatmaps.push(heatmapFig);
+            this.heatmapFigures.push(heatmapFig);
             heatmapFig.yAxis.inverted = true;
             heatmapFig.yAxis.label = 'Time / ps';
             heatmapFig.xAxis.label = 'Wavelength / nm';

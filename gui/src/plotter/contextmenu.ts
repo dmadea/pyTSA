@@ -11,6 +11,7 @@ export class ContextMenu {
 
     public parentMenu?: ContextMenu;
     private updateUIFuncs: (() => void)[] = [];
+    private showingMenu = false;
 
     constructor() {
         this.menu = this.createMenu();
@@ -37,7 +38,7 @@ export class ContextMenu {
                     }
             }
 
-            if (hide) this.hide();
+            if (hide && !this.showingMenu) this.hide();
         });
 
         // this.menu = menu;
@@ -254,6 +255,11 @@ export class ContextMenu {
         for (const f of this.updateUIFuncs) {
             f();
         }
+
+        this.showingMenu = true;
+        setTimeout(() => {
+            this.showingMenu = false;
+        }, 100);
 
         this.menu.classList.add("show");
         const mousex = location.x;

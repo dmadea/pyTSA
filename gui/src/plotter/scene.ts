@@ -1,3 +1,6 @@
+import { ContextMenu } from "./contextmenu";
+import { Figure } from "./figure/figure";
+import { Grid } from "./grid";
 import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 // import { Rect } from "./types";
 
@@ -5,18 +8,26 @@ import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 import wasmData from "./wasm/bin/color.wasm";
 // import * as Module from "./wasm/hello";
 
-interface Hello extends CallableFunction {
-    (): number;
-}
+// interface Hello extends CallableFunction {
+//     (): number;
+// }
 
 export class Scene extends GraphicObject {
 
     private canvasResizeObserver: ResizeObserver;
+    protected navBar?: SceneNavBar;
+
+    protected setNavBar() {
+        this.navBar = new SceneNavBar(this);
+    }
 
     constructor(parentElement: HTMLDivElement) {
         super();
+        
         var wrapper = document.createElement("div");
         wrapper.style.cssText = "position: relative; width: 100%; height: 100%";
+
+        this.setNavBar();
 
         var mainCanvas = document.createElement("canvas");
         var secCanvas = document.createElement("canvas");
@@ -28,6 +39,7 @@ export class Scene extends GraphicObject {
 
         wrapper.appendChild(mainCanvas);
         wrapper.appendChild(secCanvas);
+        if (this.navBar) parentElement.appendChild(this.navBar.divElement);
         parentElement.appendChild(wrapper);
 
         this.bottomCtx = mainCanvas.getContext('2d') as CanvasRenderingContext2D;
@@ -217,5 +229,71 @@ export class Scene extends GraphicObject {
 
         super.paint(e);
 
+    }
+}
+
+export class SceneNavBarContextMenu extends ContextMenu {
+
+    public scene: Scene;
+
+    constructor(scene: Scene) {
+        super();
+        this.scene = scene;
+    }
+
+    protected constructMenu(): void {
+
+        var repaint = this.addAction("Repaint");
+        repaint.addEventListener("click", e=> {
+            this.scene.repaint();
+        });
+
+        var copy = this.addAction("Copy plot to clipboard");
+        copy.addEventListener("click", e => {
+            this.scene.bottomCanvas?.toBlob(blob => {
+                if (blob) navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+
+            });
+        });
+    }
+}
+
+
+export class SceneNavBar {
+
+    public scene: Scene;
+    public divElement: HTMLDivElement;
+    protected contextMenu?: ContextMenu;
+
+    constructor(scene: Scene) {
+        this.scene = scene;
+
+        this.divElement = document.createElement("div");
+        this.divElement.style.cssText = "width: 100%; height: 30px";
+        this.divElement.style.margin = "3px";
+        // this.divElement.style.backgroundColor = "rgb(100, 130, 130)";
+
+        this.setContextMenu();
+
+        var options = document.createElement('button');
+        options.classList.add("btn", "btn-dark", "btn-sm");
+        options.textContent = "...";
+        options.addEventListener('click', e => {
+            if (!this.contextMenu) return;
+
+            if (this.contextMenu.isVisible()) {
+                this.contextMenu.hide();
+                return;
+            }
+            var x = options.offsetLeft;
+            var y = options.offsetTop + options.offsetHeight;
+            this.contextMenu.show({x, y});
+        });
+
+        this.divElement.appendChild(options);
+    }
+
+    protected setContextMenu() {
+        this.contextMenu = new SceneNavBarContextMenu(this.scene);
     }
 }
