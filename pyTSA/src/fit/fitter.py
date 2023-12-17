@@ -1,6 +1,6 @@
 import numpy as np
 import lmfit
-from scipy.linalg import lstsq
+from scipy.linalg import lstsq as scipy_lstsq
 from numpy.linalg import pinv
 import scipy
 from copy import deepcopy
@@ -8,10 +8,13 @@ from scipy.optimize import nnls as _nnls
 from scipy.optimize import least_squares
 from numba import njit
 import sys
-from misc import find_nearest_idx
+from .mathfuncs import fi
 import time
 
-posv = scipy.linalg.get_lapack_funcs(('posv'))
+from ..dataset import Dataset
+from .mathfuncs import lstsq
+
+
 
 from .constraints import ConstraintNonneg
 
@@ -137,25 +140,11 @@ def NNLS(A, B):
 def OLS(A, B):
     """solve least squares solution for X: AX=B by ordinary least squares"""
 
-    X, residual, rank, svs = lstsq(A, B)
+    X, residual, rank, svs = scipy_lstsq(A, B)
     return X, residual
 
 
-def OLS_ridge(A, B, alpha=0.0001):
-    """fast: solve least squares solution for X: AX=B by ordinary least squares, with direct solve,
-    with optional Tikhonov regularization"""
 
-    ATA = A.T.dot(A)
-    ATB = A.T.dot(B)
-
-    if alpha != 0:
-        ATA.flat[::ATA.shape[-1] + 1] += alpha
-
-    c, x, info = posv(ATA, ATB, lower=False,
-                      overwrite_a=True,
-                      overwrite_b=False)
-
-    return x, None
 
 
 class Fitter:
@@ -168,13 +157,15 @@ class Fitter:
 
     """
 
-    def __init__(self, times=None, wls=None, D: np.ndarray = None, **kwargs):
+    def __init__(self, dataset: Dataset, **kwargs):
 
         self.fit_varpro = False
 
-        self.times = times
-        self.wls = wls
-        self.D = D
+        self.dataset = dataset
+
+        # self.times = times
+        # self.wls = wls
+        # self.D = D
 
         self.regressors = ['ols', 'ridge', 'nnls']
 

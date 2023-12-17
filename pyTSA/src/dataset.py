@@ -3,10 +3,13 @@ import numpy as np
 from scipy.linalg import svd
 
 import os
-
 import matplotlib.pyplot as plt
 
-from misc import crop_data, find_nearest, find_nearest_idx
+from .fit.fitter import Fitter
+
+from .fit.model import Model
+from .fit.mathfuncs import crop_data, fi, chirp_correction
+
 from matplotlib import cm
 from sklearn.decomposition import NMF
 from sklearn.decomposition import FastICA
@@ -24,76 +27,12 @@ def get_mu(wls, parmu=(1, 0, 0), lambda_c=433):
     return mu
 
 
-def double_points(arr):
-    """Inserts the averages of each pair of points in the array. The array must be sorted.
-    The total shape of the array will be 2 * [arr.shape[0]] - 1
-
-    So if input array is [-1, -0.5, 0, 5], the output will be
-    [-1, -0.75, -0.5, -0.25, 0, 2.5, 5]
-    """
-    new_arr = np.empty(2 * arr.shape[0] - 1)
-
-    avrg = (arr[:-1] + arr[1:]) / 2
-
-    new_arr[::2] = arr
-    new_arr[1::2] = avrg
-    return new_arr
-
-def chirp_correction(matrix, times, wavelengths, mu, offset_before_zero=0.3, t_smooth_order=1):
-    """
-    Performs the chirp correction of the data array. Modifies the original data.
-    mu is array defining time zero. The time dimension of data will be cropped to [-offset_before_zero:].
-    t_smooth_order is the number of doubling of original time points. if 0, no doubling is performed.
-    """
-
-    assert np.min(mu) - times[0] >= offset_before_zero
-
-    idx_0 = find_nearest_idx(times, -offset_before_zero)
-
-    # create new time array starting with -offset_before_zero
-    if times[idx_0] == -offset_before_zero:
-        new_times = times[idx_0:]
-    else:
-        num = int(times[idx_0] < -offset_before_zero)
-        new_times = np.insert(times[idx_0 + num:], 0, -offset_before_zero)
-
-    # perform doubling of time points
-    for i in range(t_smooth_order):
-        new_times = double_points(new_times)
-
-    new_D = np.empty((new_times.shape[0], wavelengths.shape[0]), dtype=np.float64)
-
-    for i in range(wavelengths.shape[0]):
-        # linear interpolation for each wavelength
-        new_D[:, i] = np.interp(new_times, times - mu[i], matrix[:, i])
-
-    return new_D, new_times, wavelengths
-
-
-
-# def chirp_correction(matrix, times, wls, mu, offset_before_zero=0.3):
-#
-#     assert np.min(mu) - times[0] >= offset_before_zero
-#
-#     new_times = np.concatenate((np.linspace(-offset_before_zero, offset_before_zero, 200, endpoint=False),
-#                                 np.logspace(np.log10(offset_before_zero), np.log10(times[-1] - np.max(mu)), 300)))
-#
-#     new_D = np.zeros((new_times.shape[0], wls.shape[0]), dtype=np.float64)
-#
-#     for i in range(wls.shape[0]):
-#         # linear interpolation for each wavelength
-#         new_D[:, i] = np.interp(new_times, times - mu[i], matrix[:, i])
-#
-#     return new_D, new_times, wls
-
-
-
-class LFP_matrix(object):
+class Dataset(object):
 
     @classmethod
     def from_value_matrix(cls, value_matrix, times, wavelengths, filename='', name='', mask=[]):
         m = cls()
-        m.Y = value_matrix
+        m.matrix = value_matrix
         m.times = times
         m.wavelengths = wavelengths
         m.filepath = filename
@@ -132,12 +71,12 @@ class LFP_matrix(object):
 
     def _set_D(self):
         if self.Yr is None:
-            self.Yr = self.Y
-        self.D = self.Yr.copy() if self._SVD_filter else self.Y.copy()
+            self.Yr = self.matrix
+        self.matrix_fac = self.Yr.copy() if self._SVD_filter else self.matrix.copy()
         if self._ICA_filter:
-            self.D -= self.ICA_subtr_mat
+            self.matrix_fac -= self.ICA_subtr_mat
         if self._mask:
-            self.apply_mask(self.D)
+            self.apply_mask(self.matrix_fac)
 
     def update_D(self):
         self._set_D()
@@ -148,97 +87,101 @@ class LFP_matrix(object):
         if self._mask:
             self.Mask = False
 
-        m = LFP_matrix.from_value_matrix(self.D.copy(), self.times.copy(), self.wavelengths.copy(),
+        m = Dataset.from_value_matrix(self.matrix_fac.copy(), self.times.copy(), self.wavelengths.copy(),
                                          filename=self.filepath,
                                          name=self.name, mask=self.mask.copy())
         return m
 
-    def __init__(self, data=None, filepath=None, name=None):
+    def __init__(self, matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray, filepath: str | None = None, name: str = ""):
 
-        self.wavelengths = None  # dim = w
-        self.times = None  # dim = t
-        self.Y = None  # dim = t x w   # original data
-        self.original_data_matrix = None
+        assert matrix.shape[0] == times.shape[0] and matrix.shape[1] == wavelengths.shape[0]
 
-        self._SVD_filter = False
-        self._ICA_filter = False
-        self._mask = False
-        self.ICA_components = 5
-
-        self.D = None  # matrix to be plotted - factored matrix if SVD filter or ICA filter is True, else self.Y
-
-        if data is not None:
-            self.wavelengths = data[0, 1:]  # first row without first column
-            self.times = data[1:, 0]  # first column without the first row
-
-            self.Y = data[1:, 1:]  # original matrix
-            self.original_data_matrix = data
-
-        self.D = self.Y
-
+        # define original data matrix
+        self.matrix_o = matrix
+        self.times_o = times
+        self.wavelengths_o = wavelengths
         self.filepath = filepath
         self.name = name
+
+        # actual data matrix whose dimensions can be different
+        self.wavelengths = self.wavelengths_o.copy()  # dim = w
+        self.times = self.times_o.copy()  # dim = t
+        self.matrix = self.matrix_o.copy()  # dim = t x w   # original data
+        self.matrix_fac = self.matrix   # factored matrix
+
+        # model and fitter
+        self.model: Model | None = None
+        self.fitter: Fitter | None = None
 
         # svd matrices k = min(t, w)
         self.U = None  # dim = (t x k)
         self.S = None  # !! this is only 1D array of singular values, not diagonal matrix
         self.V_T = None  # dim = (k x w)
 
-        self.C_ICA = None
-        self.ST_ICA = None
+        # self._SVD_filter = False
+        # self._ICA_filter = False
+        # self._mask = False
+        # self.ICA_components = 5
+
+
+        # self.C_ICA = None
+        # self.ST_ICA = None
 
         # reduced svd matrices, nr is number of taken singular values, cca 1 to 10 max
-        self.Ur = None  # dim = (t x nr)
-        self.Sr = None  # !! this is diagonal matrix - dim = (nr x nr)
-        self.V_Tr = None  # dim = (nr x w)
+        # self.Ur = None  # dim = (t x nr)
+        # self.Sr = None  # !! this is diagonal matrix - dim = (nr x nr)
+        # self.V_Tr = None  # dim = (nr x w)
 
         # n is number of actual absorbing species our model is based on
         # we are looking for C and A so it satisfy condition Y = C @ A
 
         # concentration matrix
-        self.C = None  # dim = (t, n)
+        # self.C = None  # dim = (t, n)
 
-        # coefficients matrix dim = (n x nr)
-        self.K = None
+        # # coefficients matrix dim = (n x nr)
+        # self.K = None
 
-        # Spectra matrix is linear combination of V_Tr:  A = K @ V_Tr
-        self.A = None  # dim = (n, w)
+        # # Spectra matrix is linear combination of V_Tr:  A = K @ V_Tr
+        # self.A = None  # dim = (n, w)
 
-        self.UrSr = None  # Ur @ Sr
+        # self.UrSr = None  # Ur @ Sr
 
-        self.Yr = self.Y  # reconstructed data matrix after data reduction from SVD
-        self.ICA_subtr_mat = 0  # matrix for subtraction after ICA comp. removal
+        # self.Yr = self.matrix  # reconstructed data matrix after data reduction from SVD
+        # self.ICA_subtr_mat = 0  # matrix for subtraction after ICA comp. removal
 
-        self.Y_fit = None
+        # self.Y_fit = None
 
-        self.C_fit = None
-        self.ST_fit = None
-        self.D_fit = None
-        self.C_COH = None
-        self.ST_COH = None
+        # self.C_fit = None
+        # self.ST_fit = None
+        # self.D_fit = None
+        # self.C_COH = None
+        # self.ST_COH = None
 
-        self.mu = None  # time zero for each wavelength, chirp
+        # self.mu = None  # time zero for each wavelength, chirp
 
-        self.E = None  # residuals
-
-        self.times_fine = None
-        self.C_fine = None
+        # self.E = None  # residuals
 
         self.mask = []
 
         self.SVD()
 
-    def get_filename(self):
+    def set_model(model: Model):
+        pass
+
+    def get_filename(self) -> str | None:
+        if not self.filepath:
+            return None
+        
         tail = os.path.split(self.filepath)[1]
         return os.path.splitext(tail)[0]  # without extension
 
     def add_masked_area(self, t0=None, t1=None, w0=None, w1=None):
 
-        t0_idx = find_nearest_idx(self.times, t0) if t0 is not None else 0
-        t1_idx = find_nearest_idx(self.times, t1) + 1 if t1 is not None else self.Y.shape[0]
+        t0_idx = fi(self.times, t0) if t0 is not None else 0
+        t1_idx = fi(self.times, t1) + 1 if t1 is not None else self.matrix.shape[0]
 
-        w0_idx = find_nearest_idx(self.wavelengths, w0) if w0 is not None else 0
-        w1_idx = find_nearest_idx(self.wavelengths, w1) + 1 if w1 is not None else self.Y.shape[1]
+        w0_idx = fi(self.wavelengths, w0) if w0 is not None else 0
+        w1_idx = fi(self.wavelengths, w1) + 1 if w1 is not None else self.matrix.shape[1]
 
         self.mask.append([t0_idx, t1_idx, w0_idx, w1_idx])
 
@@ -254,74 +197,9 @@ class LFP_matrix(object):
         for (t0_idx, t1_idx, w0_idx, w1_idx) in self.mask:
             matrix[t0_idx:t1_idx, w0_idx:w1_idx] = np.nan
 
-
-    # @classmethod
-    # def construct_test_matrix(cls, noise_intensity=0.1):
-    #
-    #     def gauss(x, mu, sigma):
-    #         return np.exp(- (x - mu) * (x - mu) / (2 * sigma * sigma))
-    #
-    #     n_times = 300
-    #     num = 3  # number of species
-    #     n_wls = 200
-    #
-    #     times = np.linspace(0, 100, num=n_times)
-    #     wls = np.linspace(1, 300, num=n_wls)
-    #
-    #     # create and fill spectra matrix
-    #     ST = np.zeros((num, n_wls))
-    #
-    #     ST[0] = gauss(wls, 100, 50)
-    #     ST[1] = 1 * gauss(wls, 200, 50)
-    #     ST[2] = 0.5 * gauss(wls, 50, 50)
-    #     # A[3] = 0.6 * gauss(wls, 150, 30)
-    #
-    #     import fitmodels
-    #
-    #     # m = ABCDE_Model(times, visible=[True, True, False, True, True])
-    #     m = fitmodels.ABC_Model(times)
-    #
-    #     params = m.params
-    #
-    #     params['c0'].value = 1
-    #     params['k1'].value = 0.5
-    #     params['k2'].value = 0.2
-    #     # params['k3'].value = 0.05
-    #
-    #     C = m.calc_C(params)
-    #
-    #     # construct data
-    #     D = C @ ST
-    #
-    #     # add plane
-    #     for i in range(n_times):
-    #         D[i] += np.random.normal(scale=0.01)
-    #
-    #     # Y += noise_intensity * np.random.rand(n_times, n_wls)
-    #
-    #     matrix = cls.from_value_matrix(D, times, wls)
-    #
-    #     from user_namespace import load_LFP_matrix, UserNamespace
-    #     from Widgets.fit_widget import FitWidget
-    #
-    #     from gui_console import Console
-    #
-    #     load_LFP_matrix(matrix)
-    #     UserNamespace.instance.main_widget.matrix = matrix
-    #     Console.push_variables({'matrix': matrix, 'model': m, 'iA': ST, 'iC': C})
-    #     FitWidget.instance.matrix = matrix
-    #
-    #     from fitmodels import plot_figures
-    #
-    #     # plot_figures(m)
-
     def SVD(self):
-
-        if self.Y is None:
-            return
-
-        self.U, self.S, self.V_T = svd(self.Y, full_matrices=False, lapack_driver='gesdd')
-        self.run_ICA()
+        self.U, self.S, self.V_T = svd(self.matrix, full_matrices=False, lapack_driver='gesdd')
+        # self.run_ICA()
 
     def save_fit(self, filepath, ST=None, C=None):
 
@@ -337,7 +215,7 @@ class LFP_matrix(object):
         t = np.concatenate([[0], self.times])
         mat = np.hstack((t.reshape(-1, 1), mat))
 
-        buff_mat = LFP_matrix.to_string(mat, separator=',')
+        buff_mat = Dataset.to_string(mat, separator=',')
 
         with open(filepath + '.csv', 'w') as f:
             f.write(buff_mat)
@@ -363,7 +241,7 @@ class LFP_matrix(object):
             f.write(buff_C)
 
     def get_TWC(self, axis=1):
-        return np.trapz(self.Y, self.wavelengths, axis=axis)
+        return np.trapz(self.matrix, self.wavelengths, axis=axis)
 
     def plot_TWC(self):
         twc = self.get_TWC()
@@ -381,7 +259,7 @@ class LFP_matrix(object):
 
         # fpath = os.path.join(output_dir, f'{name}_factored.{extension}')
 
-        self._save_matrix(self.D, fname=filepath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
+        self._save_matrix(self.matrix_fac, fname=filepath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
 
     def save_original_matrix(self, filepath='file.txt', delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
 
@@ -390,18 +268,18 @@ class LFP_matrix(object):
         #
         # fpath = os.path.join(output_dir, f'{name}.{extension}')
 
-        self._save_matrix(self.Y, fname=filepath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
+        self._save_matrix(self.matrix, fname=filepath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
 
     def _save_matrix(self, D=None, fname='output.txt', delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
         # cut data if necessary
 
-        t_idx_start = find_nearest_idx(self.times, t0) if t0 is not None else 0
-        t_idx_end = find_nearest_idx(self.times, t1) + 1 if t1 is not None else self.D.shape[0]
+        t_idx_start = fi(self.times, t0) if t0 is not None else 0
+        t_idx_end = fi(self.times, t1) + 1 if t1 is not None else self.matrix_fac.shape[0]
 
-        wl_idx_start = find_nearest_idx(self.wavelengths, w0) if w0 is not None else 0
-        wl_idx_end = find_nearest_idx(self.wavelengths, w1) + 1 if w1 is not None else self.D.shape[1]
+        wl_idx_start = fi(self.wavelengths, w0) if w0 is not None else 0
+        wl_idx_end = fi(self.wavelengths, w1) + 1 if w1 is not None else self.matrix_fac.shape[1]
 
-        D = self.D if D is None else D
+        D = self.matrix_fac if D is None else D
 
         # crop the data if necessary
         D_crop = D[t_idx_start:t_idx_end, wl_idx_start:wl_idx_end]
@@ -425,14 +303,14 @@ class LFP_matrix(object):
 
         # cut data if necessary
 
-        t_idx_start = find_nearest_idx(self.times, t0) if t0 is not None else 0
-        t_idx_end = find_nearest_idx(self.times, t1) + 1 if t1 is not None else self.D.shape[0]
+        t_idx_start = fi(self.times, t0) if t0 is not None else 0
+        t_idx_end = fi(self.times, t1) + 1 if t1 is not None else self.matrix_fac.shape[0]
 
-        wl_idx_start = find_nearest_idx(self.wavelengths, w0) if w0 is not None else 0
-        wl_idx_end = find_nearest_idx(self.wavelengths, w1) + 1 if w1 is not None else self.D.shape[1]
+        wl_idx_start = fi(self.wavelengths, w0) if w0 is not None else 0
+        wl_idx_end = fi(self.wavelengths, w1) + 1 if w1 is not None else self.matrix_fac.shape[1]
 
         # crop the data if necessary
-        D_crop = self.D[t_idx_start:t_idx_end, wl_idx_start:wl_idx_end]
+        D_crop = self.matrix_fac[t_idx_start:t_idx_end, wl_idx_start:wl_idx_end]
         times_crop = self.times[t_idx_start:t_idx_end]
         wavelengths_crop = self.wavelengths[wl_idx_start:wl_idx_end]
 
@@ -448,7 +326,7 @@ class LFP_matrix(object):
     # non-negative matrix factorization solution
     def get_NMF_solution(self, n_components=3, random_state=0):
         model = NMF(n_components=n_components, init='random', random_state=random_state)
-        _D = self.Y.copy()
+        _D = self.matrix.copy()
         _D[_D < 0] = 0
         C = model.fit_transform(_D)
         ST = model.components_
@@ -477,11 +355,11 @@ class LFP_matrix(object):
 
         t_idxs = np.linspace(int(self.times.shape[0] / points), self.times.shape[0] - 1, num=points).astype(int)
         self.sing_values = np.ones((points, sing_values_num), dtype=np.float64) * np.nan
-        self.fEFA_VTs = np.ones((points, sing_values_num, self.D.shape[1])) * np.nan
+        self.fEFA_VTs = np.ones((points, sing_values_num, self.matrix_fac.shape[1])) * np.nan
         # self.fEFA_Us = np.ones((points, sing_values_num, self.D.shape[0])) * np.nan
 
         for i in range(points):
-            U, S, V_T = svd(self.D[:t_idxs[i], :], full_matrices=False, lapack_driver='gesdd')
+            U, S, V_T = svd(self.matrix_fac[:t_idxs[i], :], full_matrices=False, lapack_driver='gesdd')
             n = int(min(sing_values_num, S.shape[0]))
             self.sing_values[i, :n] = S[:n]
 
@@ -527,7 +405,7 @@ class LFP_matrix(object):
         # pass
         ica = FastICA(n_components=self.ICA_components, random_state=random_state, max_iter=int(max_iter))
 
-        self.C_ICA = ica.fit_transform(self.Y)
+        self.C_ICA = ica.fit_transform(self.matrix)
         self.ST_ICA = ica.mixing_.T
 
     def set_ICA_filter(self, l_comp=(), n_components=5):
@@ -573,10 +451,10 @@ class LFP_matrix(object):
 
     def crop_data(self, t0=None, t1=None, w0=None, w1=None):
 
-        self.Y, self.times, self.wavelengths = crop_data(self.Y, self.times, self.wavelengths, t0, t1, w0, w1)
+        self.matrix, self.times, self.wavelengths = crop_data(self.matrix, self.times, self.wavelengths,
+                                                               t0, t1, w0, w1)
 
         self.SVD()
-        # update matrix D
         self._set_D()
 
         return self
@@ -585,11 +463,11 @@ class LFP_matrix(object):
         """Subtracts a average of specified time range from all data.
         Deep copies the object and new averaged one is returned."""
 
-        t_idx_start = find_nearest_idx(self.times, t0) if t0 is not None else 0
-        t_idx_end = find_nearest_idx(self.times, t1) + 1 if t1 is not None else self.D.shape[0]
+        t_idx_start = fi(self.times, t0) if t0 is not None else 0
+        t_idx_end = fi(self.times, t1) + 1 if t1 is not None else self.matrix_fac.shape[0]
 
-        D_selection = self.Y[t_idx_start:t_idx_end, :]
-        self.Y -= D_selection.mean(axis=0)
+        D_selection = self.matrix[t_idx_start:t_idx_end, :]
+        self.matrix -= D_selection.mean(axis=0)
 
         self.SVD()
         self._set_D()
@@ -603,10 +481,10 @@ class LFP_matrix(object):
         t_factor = int(t_dim) if t_dim is not None else 1
         w_factor = int(w_dim) if w_dim is not None else 1
 
-        self.Y = self.Y[::t_factor, :]
+        self.matrix = self.matrix[::t_factor, :]
         self.times = self.times[::t_factor]
 
-        self.Y = self.Y[:, ::w_factor]
+        self.matrix = self.matrix[:, ::w_factor]
         self.wavelengths = self.wavelengths[::w_factor]
 
         self.SVD()
@@ -617,151 +495,144 @@ class LFP_matrix(object):
         return self
 
     def restore_original_data(self):
-        if self.original_data_matrix is not None:
-            self.wavelengths = self.original_data_matrix[0, 1:]
-            self.times = self.original_data_matrix[1:, 0]
-            self.Y = self.original_data_matrix[1:, 1:]
+        self.wavelengths = self.wavelengths_o
+        self.times = self.times_o
+        self.matrix = self.matrix_o
 
     # time_slice and wavelength_slice are np.s_ slice objects
     def slice(self, time_slice, wavelength_slice):
-        self.Y = self.Y[time_slice, wavelength_slice]
+        self.matrix = self.matrix[time_slice, wavelength_slice]
         self.wavelengths = self.wavelengths[wavelength_slice]
         self.times = self.times[time_slice]
 
     def transpose(self):
+        [self.times, self.wavelengths] = [self.wavelengths, self.times]
+        self.matrix = self.matrix.T
 
-        wavelengths = self.times
-        times = self.wavelengths
-        data = self.Y
-
-        self.__init__(name=self.name, filepath=self.filepath)
-
-        self.Y = data.T
-        self.times = times
-        self.wavelengths = wavelengths
+        [self.times_o, self.wavelengths_o] = [self.wavelengths_o, self.times_o]
+        self.matrix_o = self.matrix_o.T
 
         self.SVD()
-
         # update matrix D
         self._set_D()
 
-    def plot_log_of_S(self, n=10):
+    # def plot_log_of_S(self, n=10):
 
-        # log_S = np.log(self.S[:n])
-        x_data = range(1, n + 1)
+    #     # log_S = np.log(self.S[:n])
+    #     x_data = range(1, n + 1)
 
-        plt.rcParams['figure.figsize'] = [10, 6]
+    #     plt.rcParams['figure.figsize'] = [10, 6]
 
-        plt.scatter(x_data, self.S[:n])
-        plt.yscale('log')
-        # plt.xlabel('Significant value number')
-        plt.ylabel('Magnitude')
-        plt.xlabel('Singular value index')
-        min, max = np.min(self.S[:n]), np.max(self.S[:n])
-        # dif = max - min
+    #     plt.scatter(x_data, self.S[:n])
+    #     plt.yscale('log')
+    #     # plt.xlabel('Significant value number')
+    #     plt.ylabel('Magnitude')
+    #     plt.xlabel('Singular value index')
+    #     min, max = np.min(self.S[:n]), np.max(self.S[:n])
+    #     # dif = max - min
 
-        plt.ylim(min / 2, 2 * max)
-        plt.title('First {} sing. values'.format(n))
+    #     plt.ylim(min / 2, 2 * max)
+    #     plt.title('First {} sing. values'.format(n))
 
-        fig = plt.gcf()
-        fig.canvas.set_window_title('SVD Analysis')
+    #     fig = plt.gcf()
+    #     fig.canvas.set_window_title('SVD Analysis')
 
-        plt.show()
+    #     plt.show()
 
-    def plot_figures_MCR(self):
+    # def plot_figures_MCR(self):
 
-        if self.C_MCR is None:
-            return
+    #     if self.C_MCR is None:
+    #         return
 
-        n = self.C_MCR.shape[1]
-        plt.rcParams['figure.figsize'] = [12, 6]
-        plt.subplots_adjust(left=0.05, right=0.95, top=0.95, wspace=0.33, hspace=0.33)
+    #     n = self.C_MCR.shape[1]
+    #     plt.rcParams['figure.figsize'] = [12, 6]
+    #     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, wspace=0.33, hspace=0.33)
 
-        plt.subplot(2, 2, 1)
-        for i in range(n):
-            plt.plot(self.wavelengths, self.A_MCR[i], label='Species {}'.format(i + 1))
-        plt.xlabel('Wavelength / nm')
-        plt.title('Spectra')
-        plt.legend()
+    #     plt.subplot(2, 2, 1)
+    #     for i in range(n):
+    #         plt.plot(self.wavelengths, self.A_MCR[i], label='Species {}'.format(i + 1))
+    #     plt.xlabel('Wavelength / nm')
+    #     plt.title('Spectra')
+    #     plt.legend()
 
-        plt.subplot(2, 2, 2)
-        for i in range(n):
-            plt.plot(self.times, self.C_MCR[:, i], label='Species {}'.format(i + 1))
-        plt.xlabel('Time')
-        plt.title('Concentrations')
-        plt.legend()
+    #     plt.subplot(2, 2, 2)
+    #     for i in range(n):
+    #         plt.plot(self.times, self.C_MCR[:, i], label='Species {}'.format(i + 1))
+    #     plt.xlabel('Time')
+    #     plt.title('Concentrations')
+    #     plt.legend()
 
-        # plot residual matrix
-        plt.subplot(2, 1, 2)
-        A_dif = self.C_MCR @ self.A_MCR - self.Y  # the difference matrix between MCR fit and original
-        x, y = np.meshgrid(self.times, self.wavelengths)  # needed for pcolormesh to correctly scale the image
-        plt.pcolormesh(x, y, A_dif.T, cmap='seismic', vmin=-np.abs(np.max(A_dif)), vmax=np.abs(np.max(A_dif)))
-        plt.colorbar().set_label("$\\Delta$A")
-        plt.title("Residual matrix A_fit - A")
-        plt.ylabel('Wavelength / nm')
-        plt.xlabel('Time')
+    #     # plot residual matrix
+    #     plt.subplot(2, 1, 2)
+    #     A_dif = self.C_MCR @ self.A_MCR - self.matrix  # the difference matrix between MCR fit and original
+    #     x, y = np.meshgrid(self.times, self.wavelengths)  # needed for pcolormesh to correctly scale the image
+    #     plt.pcolormesh(x, y, A_dif.T, cmap='seismic', vmin=-np.abs(np.max(A_dif)), vmax=np.abs(np.max(A_dif)))
+    #     plt.colorbar().set_label("$\\Delta$A")
+    #     plt.title("Residual matrix A_fit - A")
+    #     plt.ylabel('Wavelength / nm')
+    #     plt.xlabel('Time')
 
-        plt.tight_layout()
+    #     plt.tight_layout()
 
-        fig = plt.gcf()
-        # fig.canvas.set_window_title('Global fit - {}'.format(self.model.__class__.__name__))
+    #     fig = plt.gcf()
+    #     # fig.canvas.set_window_title('Global fit - {}'.format(self.model.__class__.__name__))
 
-        plt.show()
+    #     plt.show()
 
-    def plot_figures_one(self):
+    # def plot_figures_one(self):
 
-        n = self.model.n
-        plt.rcParams['figure.figsize'] = [12, 6]
-        plt.subplots_adjust(left=0.05, right=0.95, top=0.95, wspace=0.33, hspace=0.33)
+    #     n = self.model.n
+    #     plt.rcParams['figure.figsize'] = [12, 6]
+    #     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, wspace=0.33, hspace=0.33)
 
-        plt.subplot(2, 2, 1)
-        for i in range(n):
-            plt.plot(self.wavelengths, self.A[i], label='Species {}'.format(self.model.get_species_name(i)))
-        plt.xlabel('Wavelength / nm')
-        plt.title('Spectra')
-        plt.legend()
+    #     plt.subplot(2, 2, 1)
+    #     for i in range(n):
+    #         plt.plot(self.wavelengths, self.A[i], label='Species {}'.format(self.model.get_species_name(i)))
+    #     plt.xlabel('Wavelength / nm')
+    #     plt.title('Spectra')
+    #     plt.legend()
 
-        plt.subplot(2, 2, 2)
-        for i in range(n):
-            plt.plot(self.times, self.C[:, i], label='Species {}'.format(self.model.get_species_name(i)))
-        plt.xlabel('Time')
-        plt.title('Concentrations')
-        plt.legend()
+    #     plt.subplot(2, 2, 2)
+    #     for i in range(n):
+    #         plt.plot(self.times, self.C[:, i], label='Species {}'.format(self.model.get_species_name(i)))
+    #     plt.xlabel('Time')
+    #     plt.title('Concentrations')
+    #     plt.legend()
 
-        # plot residual matrix
-        plt.subplot(2, 1, 2)
-        A_dif = self.Y_fit - self.Y  # the difference matrix between fit and original
-        x, y = np.meshgrid(self.times, self.wavelengths)  # needed for pcolormesh to correctly scale the image
-        plt.pcolormesh(x, y, A_dif.T, cmap='seismic', vmin=-np.abs(np.max(A_dif)), vmax=np.abs(np.max(A_dif)))
-        plt.colorbar().set_label("$\Delta$A")
-        plt.title("Residual matrix A_fit - A")
-        plt.ylabel('Wavelength / nm')
-        plt.xlabel('Time')
+    #     # plot residual matrix
+    #     plt.subplot(2, 1, 2)
+    #     A_dif = self.Y_fit - self.matrix  # the difference matrix between fit and original
+    #     x, y = np.meshgrid(self.times, self.wavelengths)  # needed for pcolormesh to correctly scale the image
+    #     plt.pcolormesh(x, y, A_dif.T, cmap='seismic', vmin=-np.abs(np.max(A_dif)), vmax=np.abs(np.max(A_dif)))
+    #     plt.colorbar().set_label("$\Delta$A")
+    #     plt.title("Residual matrix A_fit - A")
+    #     plt.ylabel('Wavelength / nm')
+    #     plt.xlabel('Time')
 
-        fig = plt.gcf()
-        fig.canvas.set_window_title('Global fit - {}'.format(self.model.__class__.__name__))
+    #     fig = plt.gcf()
+    #     fig.canvas.set_window_title('Global fit - {}'.format(self.model.__class__.__name__))
 
-        plt.show()
+    #     plt.show()
 
-    def plot_figures_multiple(self):
+    # def plot_figures_multiple(self):
 
-        # plt.figure(1)
+    #     # plt.figure(1)
 
-        n = self.model.n
-        plt.rcParams['figure.figsize'] = [12, 6]
-        plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.33, hspace=0.33)
+    #     n = self.model.n
+    #     plt.rcParams['figure.figsize'] = [12, 6]
+    #     plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.33, hspace=0.33)
 
-        for i in range(n):
-            plt.subplot(2, n, i + 1)
-            plt.plot(self.wavelengths, self.A[i])
-            plt.title('Spectrum {}'.format(self.model.get_species_name(i)))
+    #     for i in range(n):
+    #         plt.subplot(2, n, i + 1)
+    #         plt.plot(self.wavelengths, self.A[i])
+    #         plt.title('Spectrum {}'.format(self.model.get_species_name(i)))
 
-        for i in range(n):
-            plt.subplot(2, n, i + n + 1)
-            plt.plot(self.times, self.C[:, i])
-            plt.title('Conc. {}'.format(self.model.get_species_name(i)))
+    #     for i in range(n):
+    #         plt.subplot(2, n, i + n + 1)
+    #         plt.plot(self.times, self.C[:, i])
+    #         plt.title('Conc. {}'.format(self.model.get_species_name(i)))
 
-        plt.show()
+    #     plt.show()
 
     def plot_fit_femto(self, t_unit='ps', z_unit=dA_unit, cmap='diverging', z_lim=[None, None],
                        t_lim=[None, None], w_lim=[None, None], linthresh=1, linscale=1.5, D_mul_factor=1e3,
@@ -778,7 +649,7 @@ class LFP_matrix(object):
         if self.D_fit is None:
             raise ValueError("No fitting data available.")
 
-        _D = self.D.copy()
+        _D = self.matrix_fac.copy()
         # _D_fit = self.D_fit.copy()
         times = self.times.copy()
         wavelengths = self.wavelengths.copy()
@@ -795,7 +666,7 @@ class LFP_matrix(object):
             #                             offset_before_zero=offset_before_zero)
 
         if hatched_wls[0] is not None:
-            idx1, idx2 = find_nearest_idx(wavelengths, hatched_wls)
+            idx1, idx2 = fi(wavelengths, hatched_wls)
 
             mask = np.zeros_like(_D)
             mask[:, idx1:idx2] = 1
@@ -825,7 +696,7 @@ class LFP_matrix(object):
             plot_SADS_ax(axes[1], self.wavelengths, ST.T, zero_reg=hatched_wls, colors=COLORS,
                          D_mul_factor=D_mul_factor, z_unit=z_unit, lw=lw_spectra, w_lim=w_lim)
 
-        plot_traces_onefig_ax(axes[-1], self.D, self.D_fit, self.times, self.wavelengths, mu=self.mu,
+        plot_traces_onefig_ax(axes[-1], self.matrix_fac, self.D_fit, self.times, self.wavelengths, mu=self.mu,
                               wls=wls_fit, marker_size=marker_size, alpha=alpha_traces,
                               marker_facecolor=marker_facecolor, n_lin_bins=n_lin_bins, n_log_bins=n_log_bins,
                               marker_linewidth=marker_linewidth, colors=COLORS, t_axis_formatter=y_major_formatter,
@@ -856,13 +727,13 @@ class LFP_matrix(object):
         if self.D_fit is None:
             raise ValueError("No fitting data available.")
 
-        _D = self.D.copy()
+        _D = self.matrix_fac.copy()
         _D_fit = self.D_fit.copy()
         times = self.times.copy()
         wavelengths = self.wavelengths.copy()
 
         if hatched_wls[0] is not None:
-            idx1, idx2 = find_nearest_idx(wavelengths, hatched_wls)
+            idx1, idx2 = fi(wavelengths, hatched_wls)
 
             mask = np.zeros_like(_D)
             mask[:, idx1:idx2] = 1
@@ -915,7 +786,7 @@ class LFP_matrix(object):
 
         fig, ax = plt.subplots(1, 1, figsize=fig_size)
 
-        _D = self.D.copy()
+        _D = self.matrix_fac.copy()
         times = self.times.copy()
         wavelengths = self.wavelengths.copy()
 
@@ -926,7 +797,7 @@ class LFP_matrix(object):
                                                            offset_before_zero=offset_before_zero)
 
         if hatched_wls[0] is not None:
-            idx1, idx2 = find_nearest_idx(wavelengths, hatched_wls)
+            idx1, idx2 = fi(wavelengths, hatched_wls)
 
             mask = np.zeros_like(_D)
             mask[:, idx1:idx2] = 1
@@ -970,7 +841,7 @@ class LFP_matrix(object):
 
         D_fit = self.C_fit @ self.ST_fit
 
-        self.E = self.Y - D_fit
+        self.E = self.matrix - D_fit
 
         plt.rcParams['figure.figsize'] = figsize
         # plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.23, hspace=0.26)
@@ -982,7 +853,7 @@ class LFP_matrix(object):
 
         plt.subplot(231)  # # of rows, # of columns, index counting form 1
 
-        plt.pcolormesh(x, y, self.Y, cmap=c_map, vmin=np.min(self.Y), vmax=np.max(self.Y))
+        plt.pcolormesh(x, y, self.matrix, cmap=c_map, vmin=np.min(self.matrix), vmax=np.max(self.matrix))
         plt.colorbar(label=z_unit)
         # plt.colorbar()
         plt.title("Data matrix $D$")
@@ -1031,7 +902,7 @@ class LFP_matrix(object):
 
         plt.pcolormesh(x, y, self.E, cmap='seismic', vmin=-np.abs(np.max(self.E)), vmax=np.abs(np.max(self.E)))
 
-        R2 = 1 - (self.E * self.E).sum() / (self.Y * self.Y).sum()
+        R2 = 1 - (self.E * self.E).sum() / (self.matrix * self.matrix).sum()
         # E2 = (self.E * self.E).sum()
         title = "Residuals $E=CS^T - D$"
         title += f", $R^2$={R2:.5g}"
@@ -1054,12 +925,12 @@ class LFP_matrix(object):
 
         wl_idxs = []
         for wl in wls:
-            wl_idxs.append(find_nearest_idx(self.wavelengths, wl))
+            wl_idxs.append(fi(self.wavelengths, wl))
 
         plt.subplot(235)  # # of rows, # of columns, index counting form 1
 
         for i, idx in enumerate(wl_idxs):
-            plt.plot(self.times, self.Y[:, idx], label=f"Data at {wls[i]} nm", lw=1)
+            plt.plot(self.times, self.matrix[:, idx], label=f"Data at {wls[i]} nm", lw=1)
         for i, idx in enumerate(wl_idxs):
             plt.plot(self.times, D_fit[:, idx], label=f"Fit at {wls[i]} nm", lw=1, color='black', ls='--')
 
@@ -1077,12 +948,12 @@ class LFP_matrix(object):
 
         t_idxs = []
         for t in times:
-            t_idxs.append(find_nearest_idx(self.times, t))
+            t_idxs.append(fi(self.times, t))
 
         plt.subplot(236)  # # of rows, # of columns, index counting form 1
 
         for i, idx in enumerate(t_idxs):
-            plt.plot(self.wavelengths, self.Y[idx], label=f"Data at {times[i]} {t_unit}", lw=1)
+            plt.plot(self.wavelengths, self.matrix[idx], label=f"Data at {times[i]} {t_unit}", lw=1)
         for i, idx in enumerate(t_idxs):
             plt.plot(self.wavelengths, D_fit[idx], label=f"Fit at {times[i]} {t_unit}", lw=1, color='black', ls='--')
 
@@ -1117,7 +988,7 @@ class LFP_matrix(object):
 
         D_fit = self.C_fine @ self.ST_fit  # fine
 
-        self.E = self.Y - self.C_fit @ self.ST_fit
+        self.E = self.matrix - self.C_fit @ self.ST_fit
 
         plt.rcParams['figure.figsize'] = figsize
         # plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.23, hspace=0.26)
@@ -1131,13 +1002,13 @@ class LFP_matrix(object):
         c1 = np.asarray([0.12156863, 0.46666667, 0.70588235, 1])
         c2 = np.asarray([1, 0.49803922, 0.05490196, 1])
 
-        n = self.Y.shape[0]
+        n = self.matrix.shape[0]
 
         for i in range(n):
             ind = i % n
             pos = ind / n
             ci = c1 * (1 - pos) + c2 * pos
-            plt.plot(self.wavelengths, self.Y[i], label=f"$c_{{L,0}}$ = {self.times[i]:.2E} mol dm$^{{-3}}$", lw=1,
+            plt.plot(self.wavelengths, self.matrix[i], label=f"$c_{{L,0}}$ = {self.times[i]:.2E} mol dm$^{{-3}}$", lw=1,
                      color=ci)
 
         # plt.title("Traces at various wavelengths")
@@ -1201,7 +1072,7 @@ class LFP_matrix(object):
 
         plt.pcolormesh(x, y, self.E, cmap='seismic', vmin=-np.abs(np.max(self.E)), vmax=np.abs(np.max(self.E)))
 
-        R2 = 1 - (self.E * self.E).sum() / (self.Y * self.Y).sum()
+        R2 = 1 - (self.E * self.E).sum() / (self.matrix * self.matrix).sum()
         # E2 = (self.E * self.E).sum()
         title = "Residuals $E=CS^T - D$"
         title += f", $R^2$={R2:.5g}"
@@ -1226,12 +1097,12 @@ class LFP_matrix(object):
 
         wl_idxs = []
         for wl in wls:
-            wl_idxs.append(find_nearest_idx(self.wavelengths, wl))
+            wl_idxs.append(fi(self.wavelengths, wl))
 
         plt.subplot(235)  # # of rows, # of columns, index counting form 1
 
         for i, idx in enumerate(wl_idxs):
-            plt.scatter(self.times, self.Y[:, idx], label=f"Data at {wls[i]} nm", lw=1)
+            plt.scatter(self.times, self.matrix[:, idx], label=f"Data at {wls[i]} nm", lw=1)
         for i, idx in enumerate(wl_idxs):
             plt.plot(self.times_fine, D_fit[:, idx], label=f"Fit at {wls[i]} nm", lw=1, color='black', ls='--')
 
@@ -1252,7 +1123,7 @@ class LFP_matrix(object):
 
         # t_idxs = []
         # for t in times:
-        #     t_idxs.append(Spectrum.find_nearest_idx(self.times, t))
+        #     t_idxs.append(Spectrum.fi(self.times, t))
 
         # plt.subplot(236)  # # of rows, # of columns, index counting form 1
         #
@@ -1337,10 +1208,10 @@ class LFP_matrix(object):
             V_Tr = self.V_T[:i + 1, :]
             Yr = Ur @ Sr @ V_Tr
 
-            A_diff = Yr - self.Y
+            A_diff = Yr - self.matrix
 
             # E2 = (A_diff * A_diff).sum()
-            R2 = (1 - (A_diff * A_diff).sum() / (self.Y * self.Y).sum())
+            R2 = (1 - (A_diff * A_diff).sum() / (self.matrix * self.matrix).sum())
 
             title = "Residuals (E=D$_{{rec}}$({}) - D)".format(i + 1)
             title += f", $R^2$={R2:.4g}"

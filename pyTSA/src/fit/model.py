@@ -14,7 +14,7 @@ from numba import njit, prange, vectorize
 
 from scipy.linalg import svd
 from math import erfc as math_erfc
-from misc import find_nearest_idx
+from .mathfuncs import fi
 
 import matplotlib.pyplot as plt
 
@@ -31,7 +31,7 @@ from scipy.linalg import lstsq
 
 
 # virtual class that every model must inherits
-class _Model(object):
+class Model(object):
     # n = 0  # number of visible species in model
     n = 0  # number of all possible species
 
@@ -188,7 +188,7 @@ class _Model(object):
 
         return weights
 
-class _Femto(_Model):
+class _Femto(Model):
 
     n_poly_chirp = 5  # order of polynomial for chirp_type: 'poly'
     n_exp_chirp = 2  # number of exponentials to describe chirp for mu_type = 'exp'
@@ -557,7 +557,7 @@ class _Femto(_Model):
         return D_fit, C, ST
 
 
-class _Photokinetic_Model(_Model):
+class _Photokinetic_Model(Model):
 
     def __init__(self, times=None, connectivity=(0, 1, 2), ST=None, wavelengths=None, aug_matrix=None, rot_mat=True,
                  C=None, method='RFA'):
@@ -1100,7 +1100,7 @@ class Target_Analysis_Z_Femto(_Femto):
         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class Firt_Order_Model_Nano(_Model):
+class Firt_Order_Model_Nano(Model):
     name = 'Sequential/parallel model (1st order)'
     _class = 'Nano'
 
@@ -1199,7 +1199,7 @@ class Firt_Order_Model_Nano(_Model):
         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class First_Order_Target_Model(_Model):
+class First_Order_Target_Model(Model):
 
     name = 'Target model (1st order)'
     _class = 'Nano'
@@ -1418,7 +1418,7 @@ class CisTransIsomerization(_Photokinetic_Model):
         return C_out
 
 
-class AB_Model(_Model):
+class AB_Model(Model):
     """Simple A->B model, default is 1st order reaction, 2nd order and n-th order can be selected as well. Also,
     user can define whether both A and B are visible, or only A or B is visible. Default is [True, False] - only A is
      visible"""
@@ -1468,7 +1468,7 @@ class AB_Model(_Model):
         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class AB_mixed12_Model(_Model):
+class AB_mixed12_Model(Model):
     """Mixed first and second order kinetics, d[A]/dt = -k1[A] - k2[A]^2"""
     n = 2
     name = 'A→B (mixed 1st and 2nd order)'
@@ -1768,7 +1768,7 @@ class AB_mixed12_Model(_Model):
 #         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class Delayed_Fl(_Model):
+class Delayed_Fl(Model):
     """Delayed fluorescence"""
 
     n = 4
@@ -1863,7 +1863,7 @@ class Delayed_Fl(_Model):
 #         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class Photosens_Model_Aug(_Model):
+class Photosens_Model_Aug(Model):
     n = 2
     name = 'Photosensitizaton augmented A→B→C (1st order)'
     _class = 'Nano'
@@ -1980,7 +1980,7 @@ class Photosens_Model_Aug(_Model):
 #         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class Bridge_Splitting(_Model):
+class Bridge_Splitting(Model):
     n = 2
     name = 'Bridge Splitting: D+2L->2M'
     _class = 'Equilibrium'
@@ -2036,7 +2036,7 @@ class Bridge_Splitting(_Model):
         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class Bridge_Splitting_Simple(_Model):
+class Bridge_Splitting_Simple(Model):
     n = 2
     name = 'Bridge Splitting: D+L->M'
     _class = 'Equilibrium'
@@ -2071,7 +2071,7 @@ class Bridge_Splitting_Simple(_Model):
         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class Dimerization_Equilibrium(_Model):
+class Dimerization_Equilibrium(Model):
     n = 2
     name = 'Dimerization: D<->2M dilution experiment'
     _class = 'Equilibrium'
@@ -2113,7 +2113,7 @@ class Dimerization_Equilibrium(_Model):
         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class HG_Equilibrium(_Model):
+class HG_Equilibrium(Model):
     n = 2
     name = '1:1 Equilibrium: G+H->HG'
     _class = 'Equilibrium'
@@ -2151,7 +2151,7 @@ class HG_Equilibrium(_Model):
         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class H2G_Equilibrium(_Model):
+class H2G_Equilibrium(Model):
     n = 3
     name = '2:1 Equilibrium: G+H->HG, HG+H->H2G'
     _class = 'Equilibrium'
@@ -2213,7 +2213,7 @@ class H2G_Equilibrium(_Model):
 
 
 
-class HDHG_Equilibrium(_Model):
+class HDHG_Equilibrium(Model):
     n = 3
     name = 'Equilibriums: D<->2G, G+H<->HG'
     _class = 'Equilibrium'
@@ -2273,7 +2273,7 @@ class HDHG_Equilibrium(_Model):
         return G, HG, D
 
 
-class Half_Bilirubin_1st_Model(_Model):
+class Half_Bilirubin_1st_Model(Model):
     n = 4
     name = '1st Half Bilirubin Photokinetics'
     _class = 'Steady state photokinetics'
@@ -4055,7 +4055,7 @@ class Test_Bilirubin_Multiset(_Photokinetic_Model):
 #         return C_out
 
 
-class PKA_Titration(_Model):
+class PKA_Titration(Model):
     """Mixed first and second order kinetics, d[A]/dt = -k1[A] - k2[A]^2"""
     n = 2   # subject of change
     name = 'pKa'
@@ -4100,7 +4100,7 @@ class PKA_Titration(_Model):
         return self.get_conc_matrix(C_out, self._connectivity)
 
 
-class Gibs_Eq(_Model):
+class Gibs_Eq(Model):
     n = 2
     name = 'Gibs'
     _class = 'Equilibrium'
