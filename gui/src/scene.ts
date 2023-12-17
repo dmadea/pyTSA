@@ -116,26 +116,79 @@ export class SceneUser extends LayoutScene {
         
         // this.clear();
 
-        this.heatmapFigures = [];
-        this.traceFigures = [];
-        this.spectraFigures = [];
+        this.groupPlots = [];
+        // this.traceFigures = [];
+        // this.spectraFigures = [];
 
         const n = this.datasets.length;
 
-        for (const ds of this.datasets) {
-            var trace = new Figure();
-            var spectrum = new Figure();
-            var h = new Figure();
-            var cbar = h.addColorbar();
-            var hmap = h.plotHeatmap(ds, new Colormap(Colormaps.symgrad));
-            cbar.linkHeatMap(hmap);
+        this.arangeFigures(n);
 
-            this.heatmapFigures.push(h);
-            this.traceFigures.push(trace);
-            this.spectraFigures.push(spectrum);
+        for (let i = 0; i < n; i++) {
+            const idx = i;
+            const ds = this.datasets[i];
+            const hfig = this.groupPlots[i].heatmapFig;
+            const spectrum = this.groupPlots[i].spectrum;
+            const trace = this.groupPlots[i].trace;
+            const tracePlot = this.groupPlots[i].tracePlot;
+            const spectrumPlot = this.groupPlots[i].spectrumPlot;
+
+            hfig.yAxis.inverted = true;
+            trace.xAxis.inverted = true;
+
+            const cbar = hfig.addColorbar();
+            const hmap = hfig.plotHeatmap(ds, new Colormap(Colormaps.symgrad));
+            cbar.linkHeatMap(hmap);
+            cbar.viewAll();
+            hfig.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
+            hfig.yAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
+
+            trace.xAxis.scale = hfig.yAxis.scale;
+            spectrum.xAxis.scale = hfig.xAxis.scale;
+
+            trace.xAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
+            spectrum.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
+
+            spectrumPlot.x = hmap.dataset.x;
+            tracePlot.x = hmap.dataset.y;
+
+            this.groupPlots[i].heatmapDLines.addPositionChangedListener((e) => {
+                if (e.yChanged) {
+                    let idxy = hmap.dataset.y.nearestIndex(e.realPosition.y);
+                    let row = hmap.dataset.data.getRow(idxy);
+                    spectrumPlot.y = row;
+                    spectrum.repaint();
+                }
+
+                if (e.xChanged) {
+                    let idxx = hmap.dataset.x.nearestIndex(e.realPosition.x);
+                    let col = hmap.dataset.data.getCol(idxx);
+                    tracePlot.y = col;
+                    trace.repaint();
+                }
+            });
+
+            this.groupPlots[i].spectrumDLines.addPositionChangedListener((e) => {
+                let idxx = hmap.dataset.x.nearestIndex(e.realPosition.x);
+                let col = hmap.dataset.data.getCol(idxx);
+                tracePlot.y = col;
+                trace.repaint();
+            });
+
+            this.groupPlots[i].traceDLines.addPositionChangedListener((e) => {
+                let idxy = hmap.dataset.y.nearestIndex(e.realPosition.x);
+                let row = hmap.dataset.data.getRow(idxy);
+                spectrumPlot.y = row;
+                spectrum.repaint();
+
+            });
+
+            
+            
         }
 
-        this.arangeFigures();
+        this.repaint();
+        setTimeout(() => this.resize(), 100);
 
         // var figy = new Figure();
         // // figy.xAxis.scale = 'lin';

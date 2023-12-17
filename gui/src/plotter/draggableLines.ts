@@ -7,7 +7,8 @@ import { drawTextWithGlow, formatNumber } from "./utils";
 export enum Orientation {
     Horizontal,
     Vertical,
-    Both
+    Both,
+    None
 }
 
 export interface IPositionChangedEvent {
@@ -449,6 +450,8 @@ export class DraggableLines extends GraphicObject {
     }
 
     public paint(e: IPaintEvent): void {
+        if (this.orientation === Orientation.None) return;
+
         e.topCtx.save();
 
         // https://stackoverflow.com/questions/39048227/html5-canvas-invert-color-of-pixels
@@ -458,10 +461,17 @@ export class DraggableLines extends GraphicObject {
         // let pr = window.devicePixelRatio;
         e.topCtx.lineWidth = 2;
         e.topCtx.setLineDash([10, 6]);
+        var f = this.parent as Figure;
 
-        if (this.orientation === Orientation.Horizontal) {
+        var h = Orientation.Horizontal;
+        var v = Orientation.Vertical;
+        if (f.axisAlignment === Orientation.Vertical) {
+            [v, h] = [h, v];
+        }
+
+        if (this.orientation === h) {
             this.strokeHorizontal(e);
-        } else if (this.orientation === Orientation.Vertical ) {
+        } else if (this.orientation === v) {
             this.strokeVertical(e);
         } else {  // both
             this.strokeVertical(e);

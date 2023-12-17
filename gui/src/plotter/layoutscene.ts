@@ -1,8 +1,10 @@
 import { ContextMenu } from "./contextmenu";
-import { Figure } from "./figure/figure";
+import { DraggableLines, Orientation } from "./draggableLines";
+import { Figure, ILinePlot } from "./figure/figure";
 import { Grid } from "./grid";
 import { Scene, SceneNavBar, SceneNavBarContextMenu } from "./scene";
 import { NumberArray } from "./types";
+import { combinations } from "./utils";
 
 
 export class LayoutSceneNavBar extends SceneNavBar {
@@ -30,21 +32,36 @@ export class LayoutSceneNavBarContextMenu extends SceneNavBarContextMenu {
             scene.layout = layout.selectedOptions[0].text;
         });
 
-        var ops = ["Matrix", "Columns-wise", "Row-wise"];
+        var ops = ["Matrix", "Column-wise", "Row-wise"];
         var alignment = this.addSelect("Alignment", ...ops);
         alignment.addEventListener("change", e => {
             scene.alignment = alignment.selectedOptions[0].text;
         });
 
-        var linkHorizontalLine = this.addCheckBox("Link horizontal lines");
-        var linkVerticalLine = this.addCheckBox("Link vertical lines");
+        var linkXAxes = this.addCheckBox("Link x axes");
+        var linkYAxes = this.addCheckBox("Link y axes");
 
-        linkHorizontalLine.addEventListener("change", e => {
-
+        linkXAxes.addEventListener("change", e => {
+            const figs = [...scene.groupPlots.map(p => p.heatmapFig), ...scene.groupPlots.map(p => p.spectrum)]
+            for (const [f1, f2] of combinations<Figure>(figs)) {
+                if (linkXAxes.checked) {
+                    f1.linkXRange(f2);
+                } else {
+                    f1.unlinkXRange(f2);
+                }
+            }
         });
 
-        linkVerticalLine.addEventListener("change", e => {
-            
+        linkYAxes.addEventListener("change", e => {
+            // TODO link yx axes.
+            const figs = [...scene.groupPlots.map(p => p.heatmapFig)]  // , ...scene.groupPlots.map(p => p.trace)
+            for (const [f1, f2] of combinations<Figure>(figs)) {
+                if (linkYAxes.checked) {
+                    f1.linkYRange(f2);
+                } else {
+                    f1.unlinkYRange(f2);
+                }
+            }
         });
 
         this.addUpdateUICallback(() => {
@@ -53,17 +70,26 @@ export class LayoutSceneNavBarContextMenu extends SceneNavBarContextMenu {
     }
 }
 
+export interface IGroupPlot {
+    heatmapFig: Figure,
+    spectrum: Figure,
+    trace: Figure,
+    heatmapDLines: DraggableLines,
+    spectrumDLines: DraggableLines,
+    traceDLines: DraggableLines,
+    spectrumPlot: ILinePlot,
+    tracePlot: ILinePlot
+}
+
 
 export class LayoutScene extends Scene {
 
     public grid: Grid;
-    public heatmapFigures: Figure[] = [];
-    public traceFigures: Figure[] = [];
-    public spectraFigures: Figure[] = [];
+    public groupPlots: IGroupPlot[] = [];
     public _layout: string = "Femto";
     public _alignment: string = "Matrix";
-    public linkVerticalLines = false;
-    public linkHorizontalLines = false;
+    // public linkVerticalLines = false;
+    // public linkHorizontalLines = false;
 
     constructor(parentElement: HTMLDivElement) {
         super(parentElement);
@@ -71,16 +97,16 @@ export class LayoutScene extends Scene {
         this.grid = new Grid();
         this.addItem(this.grid);
 
-        var hfig = new Figure();
-        // hfig.addColorbar();
-        var trace = new Figure();
-        var spectrum = new Figure();
+        // var hfig = new Figure();
+        // // hfig.addColorbar();
+        // var trace = new Figure();
+        // var spectrum = new Figure();
 
-        this.heatmapFigures.push(hfig);
-        this.traceFigures.push(trace);
-        this.spectraFigures.push(spectrum);
+        // this.heatmapFigures.push(hfig);
+        // this.traceFigures.push(trace);
+        // this.spectraFigures.push(spectrum);
 
-        this.arangeFigures();
+        // this.arangeFigures();
     }
 
     get layout() {
@@ -101,13 +127,36 @@ export class LayoutScene extends Scene {
         this.arangeFigures();
     }
 
-    protected arangeFigures() {
+    protected arangeFigures(n?: number) {
         this.grid.clear();
-        const n = this.heatmapFigures.length;
+        var repaint = true;
+        if (n) {
+            repaint = false;
+            this.groupPlots = [];
+
+            for (let i = 0; i < n; i++) {
+                var h = new Figure();
+                var s = new Figure();
+                var t = new Figure();
+
+                this.groupPlots.push({
+                    heatmapFig: h,
+                    spectrum: s,
+                    trace: t,
+                    heatmapDLines: h.addDraggableLines(Orientation.Both),
+                    spectrumDLines: s.addDraggableLines(Orientation.Vertical),
+                    traceDLines: t.addDraggableLines(Orientation.Vertical),
+                    spectrumPlot: s.plotLine([], []),
+                    tracePlot: t.plotLine([], []),
+                })
+            }
+        } else {
+            n = this.groupPlots.length;
+        }
         let nrows, ncols;
         if (this._alignment === "Matrix") {
-            nrows = Math.floor(n ** 0.5);
-            ncols = Math.ceil(n / nrows);
+            ncols = Math.floor(n ** 0.5);
+            nrows = Math.ceil(n / ncols);
         } else if (this._alignment === "Column-wise") {
             ncols = n;
             nrows = 1;
@@ -121,16 +170,31 @@ export class LayoutScene extends Scene {
                 for (let row = 0; row < nrows; row++) {
                     for (let col = 0; col < ncols; col++) {
                         const i = row * ncols + col;
-                        const hmap = this.heatmapFigures[i];
-                        const sp = this.spectraFigures[i];
-                        const tr = this.traceFigures[i];
-    
+                        if (i === n) break;
+                        const hmap = this.groupPlots[i].heatmapFig;
+                        const sp = this.groupPlots[i].spectrum;
+                        const tr = this.groupPlots[i].trace;
+                        
                         hmap.showTickNumbers = ['left', 'bottom'];
                         sp.showTickNumbers = ['left', 'bottom'];
                         tr.showTickNumbers = ['right', 'bottom'];
+                        tr.axisAlignment = Orientation.Vertical;
+
+                        sp.xAxis.autoscale = false;
+                        tr.xAxis.autoscale = false;
+                        hmap.xAxis.autoscale = false;
+                        hmap.yAxis.autoscale = false;
+
+                        hmap.linkMargin(sp, Orientation.Horizontal);
+                        hmap.linkMargin(tr, Orientation.Vertical);
+                        hmap.linkXRange(sp);
+                        hmap.linkYXRange(tr);
+
+                        this.groupPlots[i].heatmapDLines.linkX(this.groupPlots[i].spectrumDLines);
+                        this.groupPlots[i].heatmapDLines.linkYX(this.groupPlots[i].traceDLines);
     
                         // display 
-                        this.grid.addItem(hmap, 2 * row, 2 * col, 1, 1);
+                        this.grid.addItem(hmap, 2 * row, 2 * col, 1, 1);    
                         this.grid.addItem(sp, 2 * row + 1, 2 * col, 1, 1);
                         this.grid.addItem(tr, 2 * row, 2 * col + 1, 1, 1);
                     }
@@ -155,9 +219,12 @@ export class LayoutScene extends Scene {
             //     break;
             // }
         }
-        this.grid.recalculateGrid();
-        this.repaint();
-        setTimeout(() => this.resize(), 100);
+        if (repaint) {
+            this.grid.recalculateGrid();
+            this.repaint();
+            setTimeout(() => this.resize(), 100);
+        }
+            
     }
 
     protected setNavBar(): void {

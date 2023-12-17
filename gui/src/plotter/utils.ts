@@ -204,6 +204,16 @@ const TypeSize = {
     byte: 1
 }
 
+export function combinations<T>(arr: T[]): [T, T][] {
+    let res: [T, T][] = [];
+    for (let i = 0; i < arr.length - 1; i++) {
+        for (let j = 1; j < arr.length; j++) {
+            res.push([arr[i], arr[j]]);
+        }
+    }
+    return res;
+}
+
 
 // bools are storred in a struct very strangely,
 // as default bool take 4 bytes if they are fooled by a non-bool,

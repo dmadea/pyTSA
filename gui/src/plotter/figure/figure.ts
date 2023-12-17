@@ -146,17 +146,17 @@ export class Figure extends GraphicObject {
     //     this.offScreenCanvas.height = this.canvasRect.h;
     // }
 
-    public setViewBounds(xAxisBounds?: [number, number], yAxisBounds?: [number, number]) {
-        if (xAxisBounds) {
-            const xIT = this.xAxis.invTransform;
-            this.xAxis.viewBounds = [xIT(xAxisBounds[0]), xIT(xAxisBounds[1])];
-        }
+    // public setViewBounds(xAxisBounds?: [number, number], yAxisBounds?: [number, number]) {
+    //     if (xAxisBounds) {
+    //         const xIT = this.xAxis.invTransform;
+    //         this.xAxis.viewBounds = [xIT(xAxisBounds[0]), xIT(xAxisBounds[1])];
+    //     }
 
-        if (yAxisBounds) {
-            const yIT = this.yAxis.invTransform;
-            this.yAxis.viewBounds = [yIT(yAxisBounds[0]), yIT(yAxisBounds[1])];
-        }
-    }
+    //     if (yAxisBounds) {
+    //         const yIT = this.yAxis.invTransform;
+    //         this.yAxis.viewBounds = [yIT(yAxisBounds[0]), yIT(yAxisBounds[1])];
+    //     }
+    // }
 
     get range() {
         const xRng = this.xAxis.range;
@@ -229,14 +229,25 @@ export class Figure extends GraphicObject {
         }
 
     }
-
+    
     public linkXRange(figure: Figure) {
         if (figure === this) {
             return;
         }
-
+        
         figure.xRangeLinks.push(this);
         this.xRangeLinks.push(figure);
+    }
+
+    public unlinkXRange(figure: Figure) {
+        if (figure === this) {
+            return;
+        }
+        let idx = figure.xRangeLinks.indexOf(this);
+        figure.xRangeLinks.splice(idx);
+
+        idx = this.xRangeLinks.indexOf(figure);
+        this.xRangeLinks.splice(idx);
     }
 
     public linkYRange(figure: Figure) {
@@ -248,6 +259,17 @@ export class Figure extends GraphicObject {
         this.yRangeLinks.push(figure);
     }
 
+    public unlinkYRange(figure: Figure) {
+        if (figure === this) {
+            return;
+        }
+        let idx = figure.yRangeLinks.indexOf(this);
+        figure.yRangeLinks.splice(idx);
+
+        idx = this.yRangeLinks.indexOf(figure);
+        this.yRangeLinks.splice(idx);
+    }
+
     public linkXYRange(figure: Figure) {
         if (figure === this) {
             return;
@@ -256,6 +278,17 @@ export class Figure extends GraphicObject {
         figure.yxRangeLinks.push(this);
         this.xyRangeLinks.push(figure);
     }
+
+    // public unlinkXYRange(figure: Figure) {
+    //     if (figure === this) {
+    //         return;
+    //     }
+    //     let idx = figure.yRangeLinks.indexOf(this);
+    //     figure.yRangeLinks.splice(idx);
+
+    //     idx = this.yRangeLinks.indexOf(figure);
+    //     this.yRangeLinks.splice(idx);
+    // }
 
     public linkYXRange(figure: Figure) {
         if (figure === this) {
@@ -456,10 +489,15 @@ export class Figure extends GraphicObject {
     }
 
     private getBoundedRange(rect: Rect, dontZoom: boolean): Rect {
-        var x0 = Math.max(rect.x, this.xAxis.viewBounds[0]);
-        var y0 = Math.max(rect.y, this.yAxis.viewBounds[0]);
-        var x1 = Math.min(rect.x + rect.w, this.xAxis.viewBounds[1])
-        var y1 = Math.min(rect.y + rect.h, this.yAxis.viewBounds[1])
+        const xvb = this.xAxis.viewBounds;
+        const yvb = this.yAxis.viewBounds;
+
+        const [xB0, xB1] = [xvb[0], xvb[1]];
+        const [yB0, yB1] = [yvb[0], yvb[1]];
+        var x0 = Math.max(rect.x, xB0);
+        var y0 = Math.max(rect.y, yB0);
+        var x1 = Math.min(rect.x + rect.w, xB1);
+        var y1 = Math.min(rect.y + rect.h, yB1);
 
         var retRect: Rect = {
             x: x0,
@@ -469,15 +507,15 @@ export class Figure extends GraphicObject {
         }
 
         if (dontZoom){
-            if (x0 === this.xAxis.viewBounds[0]) retRect.w = rect.w;
+            if (x0 === xB0) retRect.w = rect.w;
             
-            if (x1 === this.xAxis.viewBounds[1]){
+            if (x1 === xB1){
                 retRect.w = rect.w;
                 retRect.x = x1 - rect.w;
             }
-            if (y0 === this.yAxis.viewBounds[0]) retRect.h = rect.h;
+            if (y0 === yB0) retRect.h = rect.h;
             
-            if (y1 === this.yAxis.viewBounds[1]){
+            if (y1 === yB1){
                 retRect.h = rect.h;
                 retRect.y = y1 - rect.h;
             }
@@ -487,49 +525,36 @@ export class Figure extends GraphicObject {
     }
 
     public rangeChanged(range: Rect): void {
-        // this.xAxis.autoscale = false;
-        // this.yAxis.autoscale = false;
         for (const fig of this.xRangeLinks) {
             if (this.xAxis.scale === fig.xAxis.scale) {
-                fig.internalRange.x = this.internalRange.x;
-                fig.internalRange.w = this.internalRange.w;
+                fig.xAxis.internalRange = this.xAxis.internalRange;
             } else {
-                const r = this.range;
-                const fr = fig.range;
-                fig.range = {x: r.x, y: fr.y, w: r.w, h: fr.h};
+                fig.xAxis.range = this.xAxis.range;
             }
+            // console.log(this.range, fig.range);
             fig.repaint();
         }
         for (const fig of this.yRangeLinks) {
             if (this.yAxis.scale === fig.yAxis.scale) {
-                fig.internalRange.y = this.internalRange.y;
-                fig.internalRange.h = this.internalRange.h;
+                fig.yAxis.internalRange = this.yAxis.internalRange;
             } else {
-                const r = this.range;
-                const fr = fig.range;
-                fig.range = {x: fr.x, y: r.y, w: fr.w, h: r.h};
+                fig.yAxis.range = this.yAxis.range;
             }
             fig.repaint();
         }
         for (const fig of this.xyRangeLinks) {
             if (this.xAxis.scale === fig.yAxis.scale) {
-                fig.internalRange.y = this.internalRange.x;
-                fig.internalRange.h = this.internalRange.w;
+                fig.yAxis.internalRange = this.xAxis.internalRange;
             } else {
-                const r = this.range;
-                const fr = fig.range;
-                fig.range = {x: fr.x, y: r.x, w: fr.w, h: r.w};
+                fig.yAxis.range = this.xAxis.range;
             }
             fig.repaint();
         }
         for (const fig of this.yxRangeLinks) {
             if (this.yAxis.scale === fig.xAxis.scale) {
-                fig.internalRange.x = this.internalRange.y;
-                fig.internalRange.w = this.internalRange.h;
+                fig.xAxis.internalRange = this.yAxis.internalRange;
             } else {
-                const r = this.range;
-                const fr = fig.range;
-                fig.range = {x: r.y, y: fr.y, w: r.h, h: fr.h};
+                fig.xAxis.range = this.yAxis.range;
             }
             fig.repaint();
         }
@@ -590,8 +615,8 @@ export class Figure extends GraphicObject {
         return line;
     }
 
-    public plotLine(x: NumberArray, y: NumberArray, color = "black", ld: number[] = [], lw = 1, zValue = 10) {
-        var plot: ILinePlot = {x: x.copy(), y: y.copy(), color, ld, lw, zValue}; 
+    public plotLine(x: NumberArray | number[], y: NumberArray | number[], color = "black", ld: number[] = [], lw = 1, zValue = 10) {
+        var plot: ILinePlot = {x: NumberArray.fromArray(x).copy(), y: NumberArray.fromArray(y).copy(), color, ld, lw, zValue}; 
         this.linePlots.push(plot);
         this.repaint();
         return plot;
@@ -727,6 +752,7 @@ export class Figure extends GraphicObject {
 
     private autoscale(forceAutoscale?: boolean) {
         // autoscale
+
 
         const fy = 0.1;  // autoscale margins
         const fx = 0.05;  // autoscale margins
@@ -889,7 +915,6 @@ export class Figure extends GraphicObject {
         };
 
         const offset = 30;
-
         const r = this.getEffectiveRect();
 
         e.topCtx.save();
@@ -1063,6 +1088,7 @@ export class Figure extends GraphicObject {
             [xticks, yticks] = [yticks, xticks];  // swap the axes
             [xticksVals, yticksVals] = [yticksVals, xticksVals];  // swap the axes
             [xFigs, yFigs] = [yFigs, xFigs];
+            [xMinors, yMinors] = [yMinors, xMinors];
         }
 
         const tickSize = Math.round(5 + 4 * dpr);
@@ -1253,25 +1279,33 @@ export class Figure extends GraphicObject {
             bottom: Math.max(this.requiredMargin.bottom, this.minimalMargin.bottom)
         };
 
+        const figNeedingRepaint = [];
+
         let marginFromLinks: Margin = {left: 0, right: 0, top: 0, bottom: 0};
         for (const [fig, orientation] of this.marginLinks) {
+            let needRepaint = false;
             if (orientation === Orientation.Horizontal || orientation === Orientation.Both) {
                 if (fig.requiredMargin.left > marginFromLinks.left) {
                     marginFromLinks.left = fig.requiredMargin.left;
+                    needRepaint = true;
                 }
                 if (fig.requiredMargin.right > marginFromLinks.right) {
                     marginFromLinks.right = fig.requiredMargin.right;
+                    needRepaint = true;
                 }
             }
 
             if (orientation === Orientation.Vertical || orientation === Orientation.Both) {
                 if (fig.requiredMargin.top > marginFromLinks.top) {
                     marginFromLinks.top = fig.requiredMargin.top;
+                    needRepaint = true;
                 }
                 if (fig.requiredMargin.bottom > marginFromLinks.bottom) {
                     marginFromLinks.bottom = fig.requiredMargin.bottom;
+                    needRepaint = true;
                 }
             }
+            if (needRepaint) figNeedingRepaint.push(fig);
         }
 
         const newMargin: Margin = {
@@ -1290,6 +1324,7 @@ export class Figure extends GraphicObject {
             // this.setMargin(newMargin);
             this.margin = newMargin;
             this.repaint();
+            for (const fig of figNeedingRepaint) fig.repaint();
             return true;
         }
 

@@ -10,7 +10,7 @@ export class Axis {
 
     public label: string;
     private _scale: string | NumberArray;  // lin, lo, symlog, data provided as NumberArray
-    public viewBounds: [number, number];   // bounds of view or [x0, x1]
+    private _viewBounds: [number, number];   // bounds of view or [x0, x1]
     public autoscale: boolean;
     public inverted: boolean;
     private _symlogLinthresh: number; // Defines the range (-x, x), within which the plot is linear.
@@ -31,13 +31,27 @@ export class Axis {
             this.axisType = axisType;
             this.label = label ?? '';
             this._scale = scale ?? 'lin';
-            this.viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];
+            this._viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];
             this.autoscale = autoscale ?? true;
             this.inverted = inverted ?? false;
             this._symlogLinscale = symlogLinscale ?? 1;
             this._symlogLinthresh = symlogLinthresh ?? 1;
             this.keepCentered = keepCentered ?? false;
             // this._range = this.axisType === AxisType.xAxis ?
+    }
+
+    set viewBounds(bounds: [number, number]) {
+        // this._viewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
+        this._viewBounds = bounds;
+
+    }
+
+    get viewBounds() {
+        return this._viewBounds;
+    }
+
+    public setViewBounds(bounds: [number, number]) {
+        this._viewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
     }
 
     get internalRange(): [number, number] {
@@ -94,7 +108,9 @@ export class Axis {
     set scale(scale: string | NumberArray) {
         if (scale !== this._scale) {
             const prevRange = this.range;
+            const prevBounds = this.viewBounds;
             this._scale = scale;
+            this.viewBounds = prevBounds;
             this.range = prevRange;
             console.log(this.range);
         }

@@ -58,31 +58,29 @@ export class ContextMenu {
 
             var actionRect: Rect = {
                 x: this.menu.offsetLeft,
-                y: this.menu.offsetTop + action.offsetTop,
+                y: this.menu.offsetTop + action.offsetTop + 0.5,
                 w: action.offsetWidth,
-                h: action.offsetHeight
+                h: action.offsetHeight - 1
             }
-
-            // console.log(actionRect, e.pageX, e.pageY);
 
             let show = false;
 
             if (e.pageX >= actionRect.x && e.pageX <= actionRect.x + actionRect.w 
                 && e.pageY >= actionRect.y && e.pageY <= actionRect.y + actionRect.h) {
                     show = true;
-                    // console.log('on action');
                 }
 
             if (e.pageX >= divMenu.offsetLeft && e.pageX <= divMenu.offsetLeft + divMenu.offsetWidth
                 && e.pageY >= divMenu.offsetTop && e.pageY <= divMenu.offsetTop + divMenu.offsetHeight) {
                     show = true;
-                    // console.log('on menu');
                 }
             
             if (show) {
-                if (!menu.isVisible()) menu.show({x: actionRect.x + actionRect.w, y: actionRect.y});
+                if (!menu.isVisible()) {
+                    setTimeout(() => menu.show({x: actionRect.x + actionRect.w, y: actionRect.y}), 400);
+                } 
             } else {
-                menu.hide();
+                setTimeout(() => menu.hide(), 400);
             }
 
         });
