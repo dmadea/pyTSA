@@ -6,6 +6,8 @@ from math import erfc as math_erfc
 from math import fabs
 import scipy
 posv = scipy.linalg.get_lapack_funcs(('posv'))
+from scipy.linalg import lstsq as scipy_lstsq
+from scipy.integrate import cumulative_trapezoid
 
 # import scipy.constants as sc
 # from scipy.linalg import lstsq
@@ -97,10 +99,10 @@ def fast_erfc(x):
 
 
 @vectorize(nopython=True, fastmath=False)
-def fold_exp(t, k, fwhm, t0):
+def fold_exp(t, k, fwhm):
 
-    w = fwhm / (2 * np.sqrt(np.log(2)))  # width
-    tt = t - t0
+    w = fwhm / (2 * np.sqrt(np.log(2)))  # gaussian width
+    tt = t
 
     if w > 0:
         return 0.5 * np.exp(k * (k * w * w / 4.0 - tt)) * math_erfc(w * k / 2.0 - tt / w)
@@ -249,3 +251,52 @@ def is_iterable(obj):
         return False
     else:
         return True
+    
+def fit_sum_exp(x: np.ndarray, y: np.ndarray, n: int = 2, fit_intercept=True) -> tuple[np.ndarray, np.ndarray]:
+    """Fits the data with the sum of exponential function and returns multipliers of exponential and 
+    lambda - the parameters in the exponent
+
+    if fit_intercept is True, last multiplier will be the intercept, also the 0 will be added
+    at the end of lambda vector"""
+
+    assert isinstance(x, np.ndarray) and isinstance(y, np.ndarray)
+    assert x.shape[0] == y.shape[0]
+    assert x.shape[0] >= 2 * n
+
+    Y_size = 2 * n + 1 if fit_intercept else 2 * n
+    Y = np.empty((x.shape[0], Y_size))
+
+    Y[:, 0] = cumulative_trapezoid(y, x, initial=0)
+    for i in range(1, n):
+        Y[:, i] = cumulative_trapezoid(Y[:, i - 1], x, initial=0)
+
+    Y[:, -1] = 1
+    for i in reversed(range(n, Y_size - 1)):
+        Y[:, i] = Y[:, i + 1] * x
+
+    A = scipy_lstsq(Y, y)[0]
+    Ahat = np.diag(np.ones(n - 1), -1)
+    Ahat[0] = A[:n]
+
+    lambdas = np.linalg.eigvals(Ahat)
+    # remove imaginary values
+    if any(np.iscomplex(lambdas)):
+        lambdas = lambdas.real
+
+    X = np.exp(lambdas[None, :] * x[:, None])
+    if fit_intercept:
+        X = np.hstack((X, np.ones_like(x)[:, None]))
+        lambdas = np.insert(lambdas, n, 0)
+    multipliers = scipy_lstsq(X, y)[0]
+
+    return multipliers, lambdas
+
+
+def fit_polynomial_coefs(x: np.ndarray, y: np.ndarray, n: int = 3):
+    X = np.ones((x.shape[0], n))  # polynomial regression matrix
+
+    for i in range(1, n):
+        X[:, i:] *= x[:, None] / 100
+
+    coefs = scipy_lstsq(X, y)[0]
+    return coefs

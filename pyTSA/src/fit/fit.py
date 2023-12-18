@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import lmfit
 from scipy.linalg import lstsq as scipy_lstsq
@@ -11,7 +13,9 @@ import sys
 from .mathfuncs import fi
 import time
 
-from ..dataset import Dataset
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ..dataset import Dataset
 from .mathfuncs import lstsq
 
 
@@ -147,7 +151,7 @@ def OLS(A, B):
 
 
 
-class Fitter:
+class Fit:
     """
     Multivariate Curve Resolution - Alternating Regression
     Purely soft modeling or hard modeling - fitting model applied to C or ST
@@ -209,7 +213,7 @@ class Fitter:
         self.kwds = {'ftol': 1e-10, 'xtol': 1e-10, 'gtol': 1e-10, 'loss': 'linear', 'verbose': self.verbose,
                      'jac': '3-point'}
 
-        self.update_options(**kwargs)
+        # self.update_options(**kwargs)
 
     def update_options(self, **kwargs):
         for key, value in kwargs.items():
@@ -229,7 +233,7 @@ class Fitter:
         if method.lower() == self.regressors[0]:
             return OLS(A, B)
         elif method.lower() == self.regressors[1]:
-            return OLS_ridge(A, B, self.regressor_alpha)
+            return lstsq(A, B, self.regressor_alpha)
         else:
             return NNLS(A, B)
 

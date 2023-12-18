@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from misc import find_nearest_idx
+from .fit.mathfuncs import fi
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 from matplotlib import colormaps
@@ -289,7 +289,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu=None, wls=(355, 4
         color_points = c.to_rgb(colors[i])
         color_line = np.asarray(color_points) * 0.7
 
-        idx = find_nearest_idx(wavelengths, wls[i])
+        idx = fi(wavelengths, wls[i])
         tt = t - mu[idx]
         ax.scatter(tt, D[:, idx] * D_mul_factor, edgecolor=color_points, facecolor=marker_facecolor,
                    alpha=alpha, marker='o', s=marker_size, linewidths=marker_linewidth)
@@ -345,7 +345,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu=None, wls=(355, 4
 #         color_points = c.to_rgb(colors[i])
 #         color_line = np.asarray(color_points) * 0.7
 #
-#         idx = find_nearest_idx(wavelengths, wls[i])
+#         idx = fi(wavelengths, wls[i])
 #         tt = t - mu[idx]
 #         ax.scatter(tt, D[:, idx] * D_mul_factor, edgecolor=color_points, facecolor=marker_facecolor,
 #                    alpha=alpha, marker='o', s=marker_size, linewidths=marker_linewidth)
@@ -390,14 +390,14 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times=(0, 100), zero_reg
     _D = D * D_mul_factor
 
     if zero_reg[0] is not None:
-        cut_idxs = find_nearest_idx(wavelengths, zero_reg)
+        cut_idxs = fi(wavelengths, zero_reg)
         _D[:, cut_idxs[0]:cut_idxs[1]] = np.nan
 
     set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]),
                   x_minor_locator=AutoMinorLocator(10), x_major_locator=MultipleLocator(100), y_minor_locator=None)
     _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
-    t_idxs = find_nearest_idx(times, selected_times)
+    t_idxs = fi(times, selected_times)
 
     _cmap = cm.get_cmap(cmap, t_idxs.shape[0])
     ax.axhline(0, wavelengths[0], wavelengths[-1], ls='--', color='black', lw=1)
@@ -463,12 +463,12 @@ def plot_kinetics_ax(ax, D, times, wavelengths,   lw=0.5,  time_unit='ps',
     cmap = cm.get_cmap(cmap)
     norm = mpl.colors.SymLogNorm(vmin=t[0], vmax=t[-1], linscale=linscale, linthresh=linthresh, base=10, clip=True)
 
-    tsb_idxs = find_nearest_idx(t, emph_t)
+    tsb_idxs = fi(t, emph_t)
     ts_real = np.round(t[tsb_idxs])
 
     x_space = np.linspace(0, 1, n_spectra, endpoint=True, dtype=np.float64)
 
-    t_idx_space = find_nearest_idx(t, norm.inverse(x_space))
+    t_idx_space = fi(t, norm.inverse(x_space))
     t_idx_space = np.sort(np.asarray(list(set(t_idx_space).union(set(tsb_idxs)))))
 
     for i in t_idx_space:
@@ -521,14 +521,14 @@ def plot_kinetics_ax(ax, D, times, wavelengths,   lw=0.5,  time_unit='ps',
     # _D = D * D_mul_factor
     #
     # if zero_reg[0] is not None:
-    #     cut_idxs = find_nearest_idx(wavelengths, zero_reg)
+    #     cut_idxs = fi(wavelengths, zero_reg)
     #     _D[:, cut_idxs[0]:cut_idxs[1]] = np.nan
     #
     # set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]),
     #               x_minor_locator=AutoMinorLocator(10), x_major_locator=MultipleLocator(100), y_minor_locator=None)
     # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
     #
-    # t_idxs = find_nearest_idx(times, selected_times)
+    # t_idxs = fi(times, selected_times)
     #
     # _cmap = cm.get_cmap(cmap, t_idxs.shape[0])
     # ax.axhline(0, wavelengths[0], wavelengths[-1], ls='--', color='black', lw=1)
@@ -723,11 +723,11 @@ def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_un
                  area_plot_alpha=0.2, area_plot_alpha2=0.1, w_lim=(None, None)):
     _SADS = SADS.copy() * D_mul_factor
     if zero_reg[0] is not None:
-        cut_idxs = find_nearest_idx(wls, zero_reg)
+        cut_idxs = fi(wls, zero_reg)
         _SADS[cut_idxs[0]:cut_idxs[1]] = np.nan
 
     w_lim = (wls[0] if w_lim[0] is None else w_lim[0], wls[-1] if w_lim[1] is None else w_lim[1])
-    w1, w2 = find_nearest_idx(wls, w_lim)
+    w1, w2 = fi(wls, w_lim)
     _SADS = _SADS[w1:w2 + 1]
     wls = wls[w1:w2 + 1]
 

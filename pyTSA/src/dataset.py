@@ -5,9 +5,9 @@ from scipy.linalg import svd
 import os
 import matplotlib.pyplot as plt
 
-from .fit.fitter import Fitter
+from .fit.fit import Fit
 
-from .fit.model import Model
+from .fit.kineticmodel import KineticModel
 from .fit.mathfuncs import crop_data, fi, chirp_correction
 
 from matplotlib import cm
@@ -16,7 +16,7 @@ from sklearn.decomposition import FastICA
 from numpy import ma
 
 from matplotlib.ticker import *
-from plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
+from .plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
 
 
 def get_mu(wls, parmu=(1, 0, 0), lambda_c=433):
@@ -91,8 +91,22 @@ class Dataset(object):
                                          filename=self.filepath,
                                          name=self.name, mask=self.mask.copy())
         return m
+    
+    @classmethod
+    def from_file(cls, fname: str, transpose: bool = False, **kwargs):
+        data = np.genfromtxt(fname, dtype=np.float64, filling_values=np.nan,  **kwargs)
 
-    def __init__(self, matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray, filepath: str | None = None, name: str = ""):
+        t = data[1:, 0]
+        w = data[0, 1:]
+        mat = data[1:, 1:]
+
+        if transpose:
+            [t, w] = [w, t]
+            mat = mat.T
+
+        return cls(mat, t, w, filepath=fname)
+
+    def __init__(self, matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray, filepath: str | None = None, name: str | None = None):
 
         assert matrix.shape[0] == times.shape[0] and matrix.shape[1] == wavelengths.shape[0]
 
@@ -100,8 +114,6 @@ class Dataset(object):
         self.matrix_o = matrix
         self.times_o = times
         self.wavelengths_o = wavelengths
-        self.filepath = filepath
-        self.name = name
 
         # actual data matrix whose dimensions can be different
         self.wavelengths = self.wavelengths_o.copy()  # dim = w
@@ -110,19 +122,26 @@ class Dataset(object):
         self.matrix_fac = self.matrix   # factored matrix
 
         # model and fitter
-        self.model: Model | None = None
-        self.fitter: Fitter | None = None
+        self.model: KineticModel | None = None
+        self.fit: Fit = Fit(self)
 
         # svd matrices k = min(t, w)
         self.U = None  # dim = (t x k)
         self.S = None  # !! this is only 1D array of singular values, not diagonal matrix
         self.V_T = None  # dim = (k x w)
 
+        # define chirp-corrected dataset
+        self.chirp_corrected_dataset: Dataset | None = None
+
+        self.filepath = filepath
+        if name is None and self.filepath is not None:
+            tail = os.path.split(self.filepath)[1]
+            self.name = os.path.splitext(tail)[0]  # without extension
+
         # self._SVD_filter = False
         # self._ICA_filter = False
         # self._mask = False
         # self.ICA_components = 5
-
 
         # self.C_ICA = None
         # self.ST_ICA = None
@@ -165,7 +184,7 @@ class Dataset(object):
 
         self.SVD()
 
-    def set_model(model: Model):
+    def set_model(model: KineticModel):
         pass
 
     def get_filename(self) -> str | None:
@@ -261,7 +280,7 @@ class Dataset(object):
 
         self._save_matrix(self.matrix_fac, fname=filepath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
 
-    def save_original_matrix(self, filepath='file.txt', delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
+    def save_matrix(self, filepath='file.txt', delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
 
         # _, fname = os.path.split(self.filepath)
         # name, ext = os.path.splitext(fname)
@@ -449,7 +468,7 @@ class Dataset(object):
         # update D
         self._set_D()
 
-    def crop_data(self, t0=None, t1=None, w0=None, w1=None):
+    def crop(self, t0=None, t1=None, w0=None, w1=None):
 
         self.matrix, self.times, self.wavelengths = crop_data(self.matrix, self.times, self.wavelengths,
                                                                t0, t1, w0, w1)
@@ -459,7 +478,7 @@ class Dataset(object):
 
         return self
 
-    def baseline_corr(self, t0=0, t1=200):
+    def baseline_correction(self, t0=0, t1=200):
         """Subtracts a average of specified time range from all data.
         Deep copies the object and new averaged one is returned."""
 
@@ -498,6 +517,9 @@ class Dataset(object):
         self.wavelengths = self.wavelengths_o
         self.times = self.times_o
         self.matrix = self.matrix_o
+        self.SVD()
+        self._set_D()
+
 
     # time_slice and wavelength_slice are np.s_ slice objects
     def slice(self, time_slice, wavelength_slice):
@@ -825,413 +847,413 @@ class Dataset(object):
         else:
             plt.show()
 
-    def _plot_fit(self, symlog=True, wls=(520, 560, 600), times=(0, 20, 200, 2000), t_unit='s', z_unit='Absorbance $A$',
-                 c_map='inferno_r', fpath=None, format='png', dpi=500, figsize=(18, 10), time_treshold=100,
-                 time_linscale=0.5):
+    # def _plot_fit(self, symlog=True, wls=(520, 560, 600), times=(0, 20, 200, 2000), t_unit='s', z_unit='Absorbance $A$',
+    #              c_map='inferno_r', fpath=None, format='png', dpi=500, figsize=(18, 10), time_treshold=100,
+    #              time_linscale=0.5):
 
-        # if self.C_fit is None:
-        #     return
+    #     # if self.C_fit is None:
+    #     #     return
 
-        # comp = list('ABCD')
-        # comp = ['A', 'B+D', 'C']
-        comp = ['D', 'M', 'C']
+    #     # comp = list('ABCD')
+    #     # comp = ['A', 'B+D', 'C']
+    #     comp = ['D', 'M', 'C']
 
-        # time_treshold = 100
-        # time_linscale = 0.5
+    #     # time_treshold = 100
+    #     # time_linscale = 0.5
 
-        D_fit = self.C_fit @ self.ST_fit
+    #     D_fit = self.C_fit @ self.ST_fit
 
-        self.E = self.matrix - D_fit
+    #     self.E = self.matrix - D_fit
 
-        plt.rcParams['figure.figsize'] = figsize
-        # plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.23, hspace=0.26)
-        # plt.tight_layout()
+    #     plt.rcParams['figure.figsize'] = figsize
+    #     # plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.23, hspace=0.26)
+    #     # plt.tight_layout()
 
-        x, y = np.meshgrid(self.wavelengths, self.times)  # needed for pcolormesh to correctly scale the image
+    #     x, y = np.meshgrid(self.wavelengths, self.times)  # needed for pcolormesh to correctly scale the image
 
-        # plot data matrix D
+    #     # plot data matrix D
 
-        plt.subplot(231)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(231)  # # of rows, # of columns, index counting form 1
 
-        plt.pcolormesh(x, y, self.matrix, cmap=c_map, vmin=np.min(self.matrix), vmax=np.max(self.matrix))
-        plt.colorbar(label=z_unit)
-        # plt.colorbar()
-        plt.title("Data matrix $D$")
-        plt.ylabel(f'Time ({t_unit})')
-        plt.xlabel('Wavelength (nm)')
+    #     plt.pcolormesh(x, y, self.matrix, cmap=c_map, vmin=np.min(self.matrix), vmax=np.max(self.matrix))
+    #     plt.colorbar(label=z_unit)
+    #     # plt.colorbar()
+    #     plt.title("Data matrix $D$")
+    #     plt.ylabel(f'Time ({t_unit})')
+    #     plt.xlabel('Wavelength (nm)')
 
-        plt.gca().invert_yaxis()
+    #     plt.gca().invert_yaxis()
 
-        if symlog:
-            plt.yscale('symlog', subsy=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscaley=time_linscale, linthreshy=time_treshold)
-            yaxis = plt.gca().yaxis
-            yaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
+    #     if symlog:
+    #         plt.yscale('symlog', subsy=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscaley=time_linscale, linthreshy=time_treshold)
+    #         yaxis = plt.gca().yaxis
+    #         yaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
 
-        # concentration profile
+    #     # concentration profile
 
-        plt.subplot(232)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(232)  # # of rows, # of columns, index counting form 1
 
-        for i in range(self.C_fit.shape[1]):
-            plt.plot(self.times, self.C_fit[:, i], label=f"Species {comp[i]}", lw=1.5)
+    #     for i in range(self.C_fit.shape[1]):
+    #         plt.plot(self.times, self.C_fit[:, i], label=f"Species {comp[i]}", lw=1.5)
 
-        plt.title("Concentration matrix $C$")
-        plt.xlabel(f'Time ({t_unit})')
-        plt.ylabel('Relative population')
-        plt.legend()
+    #     plt.title("Concentration matrix $C$")
+    #     plt.xlabel(f'Time ({t_unit})')
+    #     plt.ylabel('Relative population')
+    #     plt.legend()
 
-        if symlog:
-            plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=time_linscale, linthreshx=time_treshold)
-            xaxis = plt.gca().xaxis
-            xaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
+    #     if symlog:
+    #         plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=time_linscale, linthreshx=time_treshold)
+    #         xaxis = plt.gca().xaxis
+    #         xaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
 
-        # spectras
+    #     # spectras
 
-        plt.subplot(233)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(233)  # # of rows, # of columns, index counting form 1
 
-        for i in range(self.ST_fit.shape[0]):
-            plt.plot(self.wavelengths, self.ST_fit[i], label=f"Species {comp[i]}", lw=1.5)
+    #     for i in range(self.ST_fit.shape[0]):
+    #         plt.plot(self.wavelengths, self.ST_fit[i], label=f"Species {comp[i]}", lw=1.5)
 
-        plt.title("Spectra matrix $S^T$")
-        plt.xlabel('Wavelength (nm)')
-        plt.ylabel(z_unit)
-        plt.legend()
+    #     plt.title("Spectra matrix $S^T$")
+    #     plt.xlabel('Wavelength (nm)')
+    #     plt.ylabel(z_unit)
+    #     plt.legend()
 
-        # plot residuals
+    #     # plot residuals
 
-        plt.subplot(234)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(234)  # # of rows, # of columns, index counting form 1
 
-        plt.pcolormesh(x, y, self.E, cmap='seismic', vmin=-np.abs(np.max(self.E)), vmax=np.abs(np.max(self.E)))
+    #     plt.pcolormesh(x, y, self.E, cmap='seismic', vmin=-np.abs(np.max(self.E)), vmax=np.abs(np.max(self.E)))
 
-        R2 = 1 - (self.E * self.E).sum() / (self.matrix * self.matrix).sum()
-        # E2 = (self.E * self.E).sum()
-        title = "Residuals $E=CS^T - D$"
-        title += f", $R^2$={R2:.5g}"
+    #     R2 = 1 - (self.E * self.E).sum() / (self.matrix * self.matrix).sum()
+    #     # E2 = (self.E * self.E).sum()
+    #     title = "Residuals $E=CS^T - D$"
+    #     title += f", $R^2$={R2:.5g}"
 
-        # title += f", |E|$^2$={E2:.1E}"
+    #     # title += f", |E|$^2$={E2:.1E}"
 
-        plt.colorbar(label=z_unit)
-        plt.title(title)
-        plt.ylabel(f'Time ({t_unit})')
-        plt.xlabel('Wavelength (nm)')
+    #     plt.colorbar(label=z_unit)
+    #     plt.title(title)
+    #     plt.ylabel(f'Time ({t_unit})')
+    #     plt.xlabel('Wavelength (nm)')
 
-        plt.gca().invert_yaxis()
+    #     plt.gca().invert_yaxis()
 
-        if symlog:
-            plt.yscale('symlog', subsy=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscaley=time_linscale, linthreshy=time_treshold)
-            yaxis = plt.gca().yaxis
-            yaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
+    #     if symlog:
+    #         plt.yscale('symlog', subsy=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscaley=time_linscale, linthreshy=time_treshold)
+    #         yaxis = plt.gca().yaxis
+    #         yaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
 
-        # wavelength fits time trace
+    #     # wavelength fits time trace
 
-        wl_idxs = []
-        for wl in wls:
-            wl_idxs.append(fi(self.wavelengths, wl))
+    #     wl_idxs = []
+    #     for wl in wls:
+    #         wl_idxs.append(fi(self.wavelengths, wl))
 
-        plt.subplot(235)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(235)  # # of rows, # of columns, index counting form 1
 
-        for i, idx in enumerate(wl_idxs):
-            plt.plot(self.times, self.matrix[:, idx], label=f"Data at {wls[i]} nm", lw=1)
-        for i, idx in enumerate(wl_idxs):
-            plt.plot(self.times, D_fit[:, idx], label=f"Fit at {wls[i]} nm", lw=1, color='black', ls='--')
+    #     for i, idx in enumerate(wl_idxs):
+    #         plt.plot(self.times, self.matrix[:, idx], label=f"Data at {wls[i]} nm", lw=1)
+    #     for i, idx in enumerate(wl_idxs):
+    #         plt.plot(self.times, D_fit[:, idx], label=f"Fit at {wls[i]} nm", lw=1, color='black', ls='--')
 
-        plt.title("Traces at various wavelengths")
-        plt.xlabel(f'Time ({t_unit})')
-        plt.ylabel(z_unit)
-        plt.legend()
+    #     plt.title("Traces at various wavelengths")
+    #     plt.xlabel(f'Time ({t_unit})')
+    #     plt.ylabel(z_unit)
+    #     plt.legend()
 
-        if symlog:
-            plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=time_linscale, linthreshx=time_treshold)
-            xaxis = plt.gca().xaxis
-            xaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
+    #     if symlog:
+    #         plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=time_linscale, linthreshx=time_treshold)
+    #         xaxis = plt.gca().xaxis
+    #         xaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
 
-        # time fits spectras
+    #     # time fits spectras
 
-        t_idxs = []
-        for t in times:
-            t_idxs.append(fi(self.times, t))
+    #     t_idxs = []
+    #     for t in times:
+    #         t_idxs.append(fi(self.times, t))
 
-        plt.subplot(236)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(236)  # # of rows, # of columns, index counting form 1
 
-        for i, idx in enumerate(t_idxs):
-            plt.plot(self.wavelengths, self.matrix[idx], label=f"Data at {times[i]} {t_unit}", lw=1)
-        for i, idx in enumerate(t_idxs):
-            plt.plot(self.wavelengths, D_fit[idx], label=f"Fit at {times[i]} {t_unit}", lw=1, color='black', ls='--')
+    #     for i, idx in enumerate(t_idxs):
+    #         plt.plot(self.wavelengths, self.matrix[idx], label=f"Data at {times[i]} {t_unit}", lw=1)
+    #     for i, idx in enumerate(t_idxs):
+    #         plt.plot(self.wavelengths, D_fit[idx], label=f"Fit at {times[i]} {t_unit}", lw=1, color='black', ls='--')
 
-        plt.title("Spectra at various times")
-        plt.xlabel('Wavelength (nm)')
-        plt.ylabel(z_unit)
-        plt.legend()
+    #     plt.title("Spectra at various times")
+    #     plt.xlabel('Wavelength (nm)')
+    #     plt.ylabel(z_unit)
+    #     plt.legend()
 
-        plt.tight_layout()
+    #     plt.tight_layout()
 
-        if fpath is None:
-            plt.show()
-        else:
-            plt.savefig(fname=fpath, format=format, transparent=True, dpi=dpi)
+    #     if fpath is None:
+    #         plt.show()
+    #     else:
+    #         plt.savefig(fname=fpath, format=format, transparent=True, dpi=dpi)
 
-        plt.cla()
-        plt.clf()
-        plt.close()
+    #     plt.cla()
+    #     plt.clf()
+    #     plt.close()
 
-    def plot_fit_eq(self, symlog=True, wls=(520, 560, 600), times=(0, 20, 200, 2000), t_unit='mol dm$^{{-3}}$',
-                    z_unit='Absorbance $A$',
-                    c_map='inferno_r', fpath=None, format='png', dpi=500, figsize=(18, 10), time_treshold=100,
-                    time_linscale=0.5,
-                    font_size=8, loc='best'):
+    # def plot_fit_eq(self, symlog=True, wls=(520, 560, 600), times=(0, 20, 200, 2000), t_unit='mol dm$^{{-3}}$',
+    #                 z_unit='Absorbance $A$',
+    #                 c_map='inferno_r', fpath=None, format='png', dpi=500, figsize=(18, 10), time_treshold=100,
+    #                 time_linscale=0.5,
+    #                 font_size=8, loc='best'):
 
-        comp = ['D', 'M', 'C']
+    #     comp = ['D', 'M', 'C']
 
-        # time_treshold = 100
-        # time_linscale = 0.5
+    #     # time_treshold = 100
+    #     # time_linscale = 0.5
 
-        # D_fit = self.C_fit @ self.ST_fit
+    #     # D_fit = self.C_fit @ self.ST_fit
 
-        D_fit = self.C_fine @ self.ST_fit  # fine
+    #     D_fit = self.C_fine @ self.ST_fit  # fine
 
-        self.E = self.matrix - self.C_fit @ self.ST_fit
+    #     self.E = self.matrix - self.C_fit @ self.ST_fit
 
-        plt.rcParams['figure.figsize'] = figsize
-        # plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.23, hspace=0.26)
-        # plt.tight_layout()
+    #     plt.rcParams['figure.figsize'] = figsize
+    #     # plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.23, hspace=0.26)
+    #     # plt.tight_layout()
 
-        x, y = np.meshgrid(self.wavelengths, self.times)  # needed for pcolormesh to correctly scale the image
+    #     x, y = np.meshgrid(self.wavelengths, self.times)  # needed for pcolormesh to correctly scale the image
 
-        # plot data matrix D
+    #     # plot data matrix D
 
-        plt.subplot(231)  # # of rows, # of columns, index counting form 1
-        c1 = np.asarray([0.12156863, 0.46666667, 0.70588235, 1])
-        c2 = np.asarray([1, 0.49803922, 0.05490196, 1])
+    #     plt.subplot(231)  # # of rows, # of columns, index counting form 1
+    #     c1 = np.asarray([0.12156863, 0.46666667, 0.70588235, 1])
+    #     c2 = np.asarray([1, 0.49803922, 0.05490196, 1])
 
-        n = self.matrix.shape[0]
+    #     n = self.matrix.shape[0]
 
-        for i in range(n):
-            ind = i % n
-            pos = ind / n
-            ci = c1 * (1 - pos) + c2 * pos
-            plt.plot(self.wavelengths, self.matrix[i], label=f"$c_{{L,0}}$ = {self.times[i]:.2E} mol dm$^{{-3}}$", lw=1,
-                     color=ci)
+    #     for i in range(n):
+    #         ind = i % n
+    #         pos = ind / n
+    #         ci = c1 * (1 - pos) + c2 * pos
+    #         plt.plot(self.wavelengths, self.matrix[i], label=f"$c_{{L,0}}$ = {self.times[i]:.2E} mol dm$^{{-3}}$", lw=1,
+    #                  color=ci)
 
-        # plt.title("Traces at various wavelengths")
-        plt.xlabel('Wavelength (nm)')
-        plt.ylabel(z_unit)
-        plt.legend(loc=loc, prop={'size': font_size})
+    #     # plt.title("Traces at various wavelengths")
+    #     plt.xlabel('Wavelength (nm)')
+    #     plt.ylabel(z_unit)
+    #     plt.legend(loc=loc, prop={'size': font_size})
 
-        #
-        #
-        # plt.pcolormesh(x, y, self.Y, cmap=c_map, vmin=np.min(self.Y), vmax=np.max(self.Y))
-        # plt.colorbar(label=z_unit)
-        # # plt.colorbar()
-        # plt.title("Data matrix $D$")
-        # plt.ylabel('Added pyridine (mol dm$^{-3}$)')
-        # plt.xlabel('Wavelength (nm)')
-        #
-        # plt.gca().invert_yaxis()
-        #
-        # if symlog:
-        #     plt.yscale('symlog', subsy=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscaley=time_linscale, linthreshy=time_treshold)
-        #     yaxis = plt.gca().yaxis
-        #     yaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
+    #     #
+    #     #
+    #     # plt.pcolormesh(x, y, self.Y, cmap=c_map, vmin=np.min(self.Y), vmax=np.max(self.Y))
+    #     # plt.colorbar(label=z_unit)
+    #     # # plt.colorbar()
+    #     # plt.title("Data matrix $D$")
+    #     # plt.ylabel('Added pyridine (mol dm$^{-3}$)')
+    #     # plt.xlabel('Wavelength (nm)')
+    #     #
+    #     # plt.gca().invert_yaxis()
+    #     #
+    #     # if symlog:
+    #     #     plt.yscale('symlog', subsy=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscaley=time_linscale, linthreshy=time_treshold)
+    #     #     yaxis = plt.gca().yaxis
+    #     #     yaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
 
-        # concentration profile
+    #     # concentration profile
 
-        plt.subplot(232)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(232)  # # of rows, # of columns, index counting form 1
 
-        for i in range(self.C_fine.shape[1]):
-            plt.plot(self.times_fine, self.C_fine[:, i], label=f"Species {comp[i]}", lw=1.5)
+    #     for i in range(self.C_fine.shape[1]):
+    #         plt.plot(self.times_fine, self.C_fine[:, i], label=f"Species {comp[i]}", lw=1.5)
 
-        plt.title("Concentration matrix $C$")
-        plt.xlabel('Added pyridine (mol dm$^{-3}$)')
-        plt.ylabel('Concentration (mol dm$^{-3}$)')
-        plt.legend()
+    #     plt.title("Concentration matrix $C$")
+    #     plt.xlabel('Added pyridine (mol dm$^{-3}$)')
+    #     plt.ylabel('Concentration (mol dm$^{-3}$)')
+    #     plt.legend()
 
-        plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
-        plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
+    #     plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+    #     plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
 
-        if symlog:
-            plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=time_linscale, linthreshx=time_treshold)
-            xaxis = plt.gca().xaxis
-            xaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
+    #     if symlog:
+    #         plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=time_linscale, linthreshx=time_treshold)
+    #         xaxis = plt.gca().xaxis
+    #         xaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
 
-        # spectras
+    #     # spectras
 
-        plt.subplot(233)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(233)  # # of rows, # of columns, index counting form 1
 
-        for i in range(self.ST_fit.shape[0]):
-            plt.plot(self.wavelengths, self.ST_fit[i], label=f"Species {comp[i]}", lw=1.5)
+    #     for i in range(self.ST_fit.shape[0]):
+    #         plt.plot(self.wavelengths, self.ST_fit[i], label=f"Species {comp[i]}", lw=1.5)
 
-        plt.title("Spectra matrix $S^T$")
-        plt.xlabel('Wavelength (nm)')
-        plt.ylabel(r'$\varepsilon$ (mol$^{-1}$ dm$^3$ cm$^{-1}$)')
-        plt.legend()
+    #     plt.title("Spectra matrix $S^T$")
+    #     plt.xlabel('Wavelength (nm)')
+    #     plt.ylabel(r'$\varepsilon$ (mol$^{-1}$ dm$^3$ cm$^{-1}$)')
+    #     plt.legend()
 
-        plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+    #     plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
 
-        # plot residuals
+    #     # plot residuals
 
-        plt.subplot(234)  # # of rows, # of columns, index counting form 1
+    #     plt.subplot(234)  # # of rows, # of columns, index counting form 1
 
-        plt.pcolormesh(x, y, self.E, cmap='seismic', vmin=-np.abs(np.max(self.E)), vmax=np.abs(np.max(self.E)))
+    #     plt.pcolormesh(x, y, self.E, cmap='seismic', vmin=-np.abs(np.max(self.E)), vmax=np.abs(np.max(self.E)))
 
-        R2 = 1 - (self.E * self.E).sum() / (self.matrix * self.matrix).sum()
-        # E2 = (self.E * self.E).sum()
-        title = "Residuals $E=CS^T - D$"
-        title += f", $R^2$={R2:.5g}"
+    #     R2 = 1 - (self.E * self.E).sum() / (self.matrix * self.matrix).sum()
+    #     # E2 = (self.E * self.E).sum()
+    #     title = "Residuals $E=CS^T - D$"
+    #     title += f", $R^2$={R2:.5g}"
 
-        # title += f", |E|$^2$={E2:.1E}"
+    #     # title += f", |E|$^2$={E2:.1E}"
 
-        plt.colorbar(label=z_unit)
-        plt.title(title)
-        plt.ylabel('Added pyridine (mol dm$^{-3}$)')
-        plt.xlabel('Wavelength (nm)')
+    #     plt.colorbar(label=z_unit)
+    #     plt.title(title)
+    #     plt.ylabel('Added pyridine (mol dm$^{-3}$)')
+    #     plt.xlabel('Wavelength (nm)')
 
-        plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+    #     plt.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
 
-        plt.gca().invert_yaxis()
+    #     plt.gca().invert_yaxis()
 
-        if symlog:
-            plt.yscale('symlog', subsy=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscaley=time_linscale, linthreshy=time_treshold)
-            yaxis = plt.gca().yaxis
-            yaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
+    #     if symlog:
+    #         plt.yscale('symlog', subsy=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscaley=time_linscale, linthreshy=time_treshold)
+    #         yaxis = plt.gca().yaxis
+    #         yaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
 
-        # wavelength fits time trace
-
-        wl_idxs = []
-        for wl in wls:
-            wl_idxs.append(fi(self.wavelengths, wl))
-
-        plt.subplot(235)  # # of rows, # of columns, index counting form 1
+    #     # wavelength fits time trace
+
+    #     wl_idxs = []
+    #     for wl in wls:
+    #         wl_idxs.append(fi(self.wavelengths, wl))
+
+    #     plt.subplot(235)  # # of rows, # of columns, index counting form 1
 
-        for i, idx in enumerate(wl_idxs):
-            plt.scatter(self.times, self.matrix[:, idx], label=f"Data at {wls[i]} nm", lw=1)
-        for i, idx in enumerate(wl_idxs):
-            plt.plot(self.times_fine, D_fit[:, idx], label=f"Fit at {wls[i]} nm", lw=1, color='black', ls='--')
+    #     for i, idx in enumerate(wl_idxs):
+    #         plt.scatter(self.times, self.matrix[:, idx], label=f"Data at {wls[i]} nm", lw=1)
+    #     for i, idx in enumerate(wl_idxs):
+    #         plt.plot(self.times_fine, D_fit[:, idx], label=f"Fit at {wls[i]} nm", lw=1, color='black', ls='--')
 
-        plt.title("Traces at various wavelengths")
-        plt.xlabel('Added pyridine (mol dm$^{-3}$)')
-        plt.ylabel(z_unit)
-        plt.xlim(-0.6e-5, 2.2e-4)
-        plt.legend()
+    #     plt.title("Traces at various wavelengths")
+    #     plt.xlabel('Added pyridine (mol dm$^{-3}$)')
+    #     plt.ylabel(z_unit)
+    #     plt.xlim(-0.6e-5, 2.2e-4)
+    #     plt.legend()
 
-        plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
+    #     plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
 
-        if symlog:
-            plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=time_linscale, linthreshx=time_treshold)
-            xaxis = plt.gca().xaxis
-            xaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
+    #     if symlog:
+    #         plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=time_linscale, linthreshx=time_treshold)
+    #         xaxis = plt.gca().xaxis
+    #         xaxis.set_minor_locator(MinorSymLogLocator(time_treshold))
 
-        # time fits spectras
+    #     # time fits spectras
 
-        # t_idxs = []
-        # for t in times:
-        #     t_idxs.append(Spectrum.fi(self.times, t))
+    #     # t_idxs = []
+    #     # for t in times:
+    #     #     t_idxs.append(Spectrum.fi(self.times, t))
 
-        # plt.subplot(236)  # # of rows, # of columns, index counting form 1
-        #
-        # for i, idx in enumerate(t_idxs):
-        #     plt.plot(self.wavelengths, self.Y[idx], label=f"Data at {times[i]} {t_unit}", lw=1)
-        # for i, idx in enumerate(t_idxs):
-        #     plt.plot(self.wavelengths, D_fit[idx], label=f"Fit at {times[i]} {t_unit}", lw=1, color='black', ls='--')
-        #
-        # plt.title("Spectra at various py concentrations")
-        # plt.xlabel('Wavelength (nm)')
-        # plt.ylabel(z_unit)
-        # plt.legend()
+    #     # plt.subplot(236)  # # of rows, # of columns, index counting form 1
+    #     #
+    #     # for i, idx in enumerate(t_idxs):
+    #     #     plt.plot(self.wavelengths, self.Y[idx], label=f"Data at {times[i]} {t_unit}", lw=1)
+    #     # for i, idx in enumerate(t_idxs):
+    #     #     plt.plot(self.wavelengths, D_fit[idx], label=f"Fit at {times[i]} {t_unit}", lw=1, color='black', ls='--')
+    #     #
+    #     # plt.title("Spectra at various py concentrations")
+    #     # plt.xlabel('Wavelength (nm)')
+    #     # plt.ylabel(z_unit)
+    #     # plt.legend()
 
-        plt.tight_layout()
+    #     plt.tight_layout()
 
-        if fpath is None:
-            plt.show()
-        else:
-            plt.savefig(fname=fpath, format=format, transparent=True, dpi=dpi)
+    #     if fpath is None:
+    #         plt.show()
+    #     else:
+    #         plt.savefig(fname=fpath, format=format, transparent=True, dpi=dpi)
 
-        plt.cla()
-        plt.clf()
-        plt.close()
+    #     plt.cla()
+    #     plt.clf()
+    #     plt.close()
 
-    def plot_first_n_vectors(self, n=4, symlog=False, t_unit='ms'):
-        # import matplotlib.ticker as ticker
-        S_single = []  # define a list of diagonal matrices with only one singular value
-        for i in range(n):
-            S_i = np.zeros((self.S.shape[0], self.S.shape[0]))  # recreate diagonal matrices
-            S_i[i, i] = self.S[i]
-            S_single.append(S_i)
+    # def plot_first_n_vectors(self, n=4, symlog=False, t_unit='ms'):
+    #     # import matplotlib.ticker as ticker
+    #     S_single = []  # define a list of diagonal matrices with only one singular value
+    #     for i in range(n):
+    #         S_i = np.zeros((self.S.shape[0], self.S.shape[0]))  # recreate diagonal matrices
+    #         S_i[i, i] = self.S[i]
+    #         S_single.append(S_i)
 
-        plt.rcParams['figure.figsize'] = [15, 8]
-        plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.26, hspace=0.41)
+    #     plt.rcParams['figure.figsize'] = [15, 8]
+    #     plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.26, hspace=0.41)
 
-        x, y = np.meshgrid(self.wavelengths, self.times)  # needed for pcolormesh to correctly scale the image
-        for i in range(n):
-            plt.subplot(4, n, i + 1)
-            plt.plot(self.wavelengths, self.V_T[i], color='black', lw=1.5)
-            plt.title("{}. $V^T$ vector, $\Sigma_{{{}}}$ = {:.3g}".format(i + 1, str(i + 1) * 2, self.S[i]))
-            plt.xlabel('Wavelength (nm)')
-            # plt.xticks(np.arange(self.wavelengths[0], self.wavelengths[-1], step=50))
-            # plt.xlim(self.wavelengths[0], self.wavelengths[-1])
-            # plt.set_major_locator(ticker.MultipleLocator(100))
-        for i in range(n):
-            plt.subplot(4, n, i + n + 1)
+    #     x, y = np.meshgrid(self.wavelengths, self.times)  # needed for pcolormesh to correctly scale the image
+    #     for i in range(n):
+    #         plt.subplot(4, n, i + 1)
+    #         plt.plot(self.wavelengths, self.V_T[i], color='black', lw=1.5)
+    #         plt.title("{}. $V^T$ vector, $\Sigma_{{{}}}$ = {:.3g}".format(i + 1, str(i + 1) * 2, self.S[i]))
+    #         plt.xlabel('Wavelength (nm)')
+    #         # plt.xticks(np.arange(self.wavelengths[0], self.wavelengths[-1], step=50))
+    #         # plt.xlim(self.wavelengths[0], self.wavelengths[-1])
+    #         # plt.set_major_locator(ticker.MultipleLocator(100))
+    #     for i in range(n):
+    #         plt.subplot(4, n, i + n + 1)
 
-            plt.plot(self.times, self.U[:, i], color='black', lw=1.5)
-            plt.title("{}. $U$ vector".format(i + 1))
-            plt.xlabel(f'Time ({t_unit})')
+    #         plt.plot(self.times, self.U[:, i], color='black', lw=1.5)
+    #         plt.title("{}. $U$ vector".format(i + 1))
+    #         plt.xlabel(f'Time ({t_unit})')
 
-            if symlog:
-                plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
-                xaxis = plt.gca().xaxis
-                xaxis.set_minor_locator(MinorSymLogLocator(100))
+    #         if symlog:
+    #             plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
+    #             xaxis = plt.gca().xaxis
+    #             xaxis.set_minor_locator(MinorSymLogLocator(100))
 
-        for i in range(n):
-            plt.subplot(4, n, i + 2 * n + 1)
+    #     for i in range(n):
+    #         plt.subplot(4, n, i + 2 * n + 1)
 
-            A_rec = self.U @ S_single[i] @ self.V_T  # reconstruct the A matrix
-            # setup z range so that white color corresponds to 0
-            plt.pcolormesh(x, y, A_rec, cmap='seismic', vmin=-np.abs(np.max(A_rec)), vmax=np.abs(np.max(A_rec)))
-            # plt.colorbar(label='Absorbance')
-            plt.colorbar()
-            plt.title("Component matrix {}".format(i + 1))
-            plt.xlabel('Wavelength (nm)')
-            plt.ylabel(f'Time ({t_unit})')
+    #         A_rec = self.U @ S_single[i] @ self.V_T  # reconstruct the A matrix
+    #         # setup z range so that white color corresponds to 0
+    #         plt.pcolormesh(x, y, A_rec, cmap='seismic', vmin=-np.abs(np.max(A_rec)), vmax=np.abs(np.max(A_rec)))
+    #         # plt.colorbar(label='Absorbance')
+    #         plt.colorbar()
+    #         plt.title("Component matrix {}".format(i + 1))
+    #         plt.xlabel('Wavelength (nm)')
+    #         plt.ylabel(f'Time ({t_unit})')
 
-            if symlog:
-                plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
-                xaxis = plt.gca().xaxis
-                xaxis.set_minor_locator(MinorSymLogLocator(100))
+    #         if symlog:
+    #             plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
+    #             xaxis = plt.gca().xaxis
+    #             xaxis.set_minor_locator(MinorSymLogLocator(100))
 
-            plt.gca().invert_yaxis()
+    #         plt.gca().invert_yaxis()
 
-            plt.subplot(4, n, i + 3 * n + 1)
+    #         plt.subplot(4, n, i + 3 * n + 1)
 
-            S = np.diag(self.S)
+    #         S = np.diag(self.S)
 
-            Ur = self.U[:, :i + 1]
-            Sr = S[:i + 1, :i + 1]
-            V_Tr = self.V_T[:i + 1, :]
-            Yr = Ur @ Sr @ V_Tr
+    #         Ur = self.U[:, :i + 1]
+    #         Sr = S[:i + 1, :i + 1]
+    #         V_Tr = self.V_T[:i + 1, :]
+    #         Yr = Ur @ Sr @ V_Tr
 
-            A_diff = Yr - self.matrix
+    #         A_diff = Yr - self.matrix
 
-            # E2 = (A_diff * A_diff).sum()
-            R2 = (1 - (A_diff * A_diff).sum() / (self.matrix * self.matrix).sum())
+    #         # E2 = (A_diff * A_diff).sum()
+    #         R2 = (1 - (A_diff * A_diff).sum() / (self.matrix * self.matrix).sum())
 
-            title = "Residuals (E=D$_{{rec}}$({}) - D)".format(i + 1)
-            title += f", $R^2$={R2:.4g}"
+    #         title = "Residuals (E=D$_{{rec}}$({}) - D)".format(i + 1)
+    #         title += f", $R^2$={R2:.4g}"
 
-            plt.pcolormesh(x, y, A_diff, cmap='seismic', vmin=-np.abs(np.max(A_diff)), vmax=np.abs(np.max(A_diff)))
-            plt.colorbar()
-            plt.title(title)
-            plt.xlabel('Wavelength (nm)')
-            plt.ylabel(f'Time ({t_unit})')
+    #         plt.pcolormesh(x, y, A_diff, cmap='seismic', vmin=-np.abs(np.max(A_diff)), vmax=np.abs(np.max(A_diff)))
+    #         plt.colorbar()
+    #         plt.title(title)
+    #         plt.xlabel('Wavelength (nm)')
+    #         plt.ylabel(f'Time ({t_unit})')
 
-            if symlog:
-                plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
-                xaxis = plt.gca().xaxis
-                xaxis.set_minor_locator(MinorSymLogLocator(100))
+    #         if symlog:
+    #             plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
+    #             xaxis = plt.gca().xaxis
+    #             xaxis.set_minor_locator(MinorSymLogLocator(100))
 
-            plt.gca().invert_yaxis()
+    #         plt.gca().invert_yaxis()
 
-        # plt.tight_layout()
+    #     # plt.tight_layout()
 
-        plt.show()
+    #     plt.show()
 
 
     @staticmethod

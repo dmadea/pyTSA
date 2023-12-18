@@ -18,8 +18,7 @@ from .mathfuncs import fi
 
 import matplotlib.pyplot as plt
 
-from PyQt6.QtWidgets import QPushButton, QCheckBox, QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit
-from target_model import TargetModel
+from targetmodel import TargetModel
 import glob, os
 import scipy.constants as sc
 from scipy.linalg import lstsq
