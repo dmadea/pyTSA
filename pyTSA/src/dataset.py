@@ -5,7 +5,7 @@ from scipy.linalg import svd
 import os
 import matplotlib.pyplot as plt
 
-from .fit.fit import Fit
+from .fit.fit import Fitter
 
 from .fit.kineticmodel import KineticModel
 from .fit.mathfuncs import crop_data, fi, chirp_correction
@@ -70,13 +70,14 @@ class Dataset(object):
         self._set_D()
 
     def _set_D(self):
-        if self.Yr is None:
-            self.Yr = self.matrix
-        self.matrix_fac = self.Yr.copy() if self._SVD_filter else self.matrix.copy()
-        if self._ICA_filter:
-            self.matrix_fac -= self.ICA_subtr_mat
-        if self._mask:
-            self.apply_mask(self.matrix_fac)
+        pass
+        # if self.Yr is None:
+        #     self.Yr = self.matrix
+        # self.matrix_fac = self.matrix.copy() if self._SVD_filter else self.matrix.copy()
+        # if self._ICA_filter:
+        #     self.matrix_fac -= self.ICA_subtr_mat
+        # if self._mask:
+        #     self.apply_mask(self.matrix_fac)
 
     def update_D(self):
         self._set_D()
@@ -106,34 +107,35 @@ class Dataset(object):
 
         return cls(mat, t, w, filepath=fname)
 
-    def __init__(self, matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray, filepath: str | None = None, name: str | None = None):
+    def __init__(self, matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray,
+                 filepath: str | None = None, name: str | None = None):
 
         assert matrix.shape[0] == times.shape[0] and matrix.shape[1] == wavelengths.shape[0]
 
         # define original data matrix
-        self.matrix_o = matrix
-        self.times_o = times
-        self.wavelengths_o = wavelengths
+        self.matrix_o: np.ndarray = matrix
+        self.times_o: np.ndarray = times
+        self.wavelengths_o: np.ndarray = wavelengths
 
         # actual data matrix whose dimensions can be different
-        self.wavelengths = self.wavelengths_o.copy()  # dim = w
-        self.times = self.times_o.copy()  # dim = t
-        self.matrix = self.matrix_o.copy()  # dim = t x w   # original data
-        self.matrix_fac = self.matrix   # factored matrix
+        self.wavelengths: np.ndarray = self.wavelengths_o.copy()  # dim = w
+        self.times: np.ndarray = self.times_o.copy()  # dim = t
+        self.matrix: np.ndarray = self.matrix_o.copy()  # dim = t x w   # original data
+        self.matrix_fac: np.ndarray = self.matrix   # factored matrix
 
         # model and fitter
         self.model: KineticModel | None = None
-        self.fit: Fit = Fit(self)
+        self.fitter: Fitter = Fitter(self)
 
         # svd matrices k = min(t, w)
-        self.U = None  # dim = (t x k)
-        self.S = None  # !! this is only 1D array of singular values, not diagonal matrix
-        self.V_T = None  # dim = (k x w)
+        self.U: np.ndarray | None = None  # dim = (t x k)
+        self.S: np.ndarray | None = None  # !! this is only 1D array of singular values, not diagonal matrix
+        self.V_T: np.ndarray | None = None  # dim = (k x w)
 
         # define chirp-corrected dataset
         self.chirp_corrected_dataset: Dataset | None = None
 
-        self.filepath = filepath
+        self.filepath: str = filepath
         if name is None and self.filepath is not None:
             tail = os.path.split(self.filepath)[1]
             self.name = os.path.splitext(tail)[0]  # without extension
@@ -184,15 +186,26 @@ class Dataset(object):
 
         self.SVD()
 
-    def set_model(model: KineticModel):
-        pass
-
-    def get_filename(self) -> str | None:
-        if not self.filepath:
-            return None
+    def set_model(self, model: KineticModel):
+        if not isinstance(model, KineticModel):
+            raise TypeError("Model needst to be type of KineticModel.")
         
-        tail = os.path.split(self.filepath)[1]
-        return os.path.splitext(tail)[0]  # without extension
+        self.model = model
+        self.model.dataset = self
+
+    def fit(self):
+        if self.model is None:
+            raise TypeError("Datasets needs to have a valid model instantiated.")
+
+        self.fitter.var_pro_femto()
+        
+
+    # def get_filename(self) -> str | None:
+    #     if not self.filepath:
+    #         return None
+        
+    #     tail = os.path.split(self.filepath)[1]
+    #     return os.path.splitext(tail)[0]  # without extension
 
     def add_masked_area(self, t0=None, t1=None, w0=None, w1=None):
 

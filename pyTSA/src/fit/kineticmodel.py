@@ -5,9 +5,9 @@ from scipy.integrate import odeint
 from lmfit import Parameters
 
 from abc import abstractmethod
-from numba import njit
+# from numba import njit
 
-from .mathfuncs import fi, fit_polynomial_coefs, fit_sum_exp, fold_exp
+from .mathfuncs import blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, glstsq, lstsq
 
 import matplotlib.pyplot as plt
 
@@ -40,7 +40,6 @@ class KineticModel(object):
         self.n_species: int = n_species
         self.species_names = np.array(list('ABCDEFGHIJKLMNOPQRSTUV'), dtype=str)
         self.params: Parameters = self.init_params()
-        self.init_params()
 
     @abstractmethod
     def simulate(self) -> np.ndarray:
@@ -68,12 +67,12 @@ class KineticModel(object):
     def init_params(self) -> Parameters:
         return Parameters()
 
-    def update_n(self, n: int):
-        if (n == self.n_species):
-            return
+    # def update_n(self, n: int):
+    #     if (n == self.n_species):
+    #         return
         
-        self.n_species = n
-        self._update_params()
+    #     self.n_species = n
+    #     self._update_params()
 
     def update_options(self, **kwargs):
         for key, value in kwargs.items():
@@ -161,22 +160,28 @@ class FirstOrderModel(KineticModel):
 
         return params
     
-    def _get_rates(self) -> np.ndarray:
+    def _get_rates(self, params: Parameters | None = None) -> np.ndarray:
         if (self.n_species == 0):
             return np.asarray([])
-        vals = np.asarray([self.params[f"tau{i+1}"].value for i in range(self.n_species)])
+        
+        params = self.params if params is None else params
+
+        vals = np.asarray([params[f"tau{i+1}"].value for i in range(self.n_species)])
         return 1 / vals
     
-    def _get_fwhm(self) -> float:
-        return self.params["FWHM"].value
+    def _get_fwhm(self, params: Parameters | None = None) -> float:
+        params = self.params if params is None else params
+        return params["FWHM"].value
 
-    def _get_tau(self, params=None) -> np.ndarray | float:
+    def _get_tau(self, params: Parameters | None = None) -> np.ndarray | float:
         """Return the curve that defines FWHM with respect to wavelength."""
+
+        params = self.params if params is None else params
 
         if not self.include_irf:
             return 0
         
-        fwhm = self._get_fwhm()
+        fwhm = self._get_fwhm(params)
 
         if not self.include_variable_fwhm:
             return fwhm
@@ -199,10 +204,12 @@ class FirstOrderModel(KineticModel):
         plt.ylabel('IRF_FWHM / ps')
         plt.show()
 
-    def _get_mu(self) -> np.ndarray | float:
+    def _get_mu(self, params: Parameters | None = None) -> np.ndarray | float:
         """Return the curve that defines chirp (time zero) with respect to wavelength."""
 
-        t0 = self.params["t0"].value
+        params = self.params if params is None else params
+
+        t0 = params["t0"].value
 
         if not self.include_chirp:
             return t0
@@ -213,12 +220,12 @@ class FirstOrderModel(KineticModel):
 
         if self.chirp_type == 'exp':
             for i in range(self.num_of_exp_chirp_params):
-                factor = self.params[f"t0_mul_{i + 1}"].value
-                lam = self.params[f"t0_lam_{i + 1}"].value
+                factor = params[f"t0_mul_{i + 1}"].value
+                lam = params[f"t0_lam_{i + 1}"].value
                 mu += factor * np.exp(x * lam)
         elif self.chirp_type == 'poly':
             for i in range(self.num_of_poly_chirp_params):
-                p = self.params[f"t0_p_{i + 1}"].value
+                p = params[f"t0_p_{i + 1}"].value
                 mu += p * (x / 100) ** (i + 1)
 
         return mu
@@ -243,43 +250,35 @@ class FirstOrderModel(KineticModel):
                 self.params[f"t0_p_{i + 1}"].value = coefs[i+1]
 
 
-    @staticmethod
-    def simulate_model(t, K, j, mu=None, fwhm=0):
-        # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
-        L, Q = np.linalg.eig(K)
-        Q_inv = np.linalg.inv(Q)
+    # @staticmethod
+    # def simulate_model(t, K, j, mu=None, fwhm=0):
+    #     # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
+    #     L, Q = np.linalg.eig(K)
+    #     Q_inv = np.linalg.inv(Q)
 
-        A2_T = Q * Q_inv.dot(j)  # Q @ np.diag(Q_inv.dot(j))
+    #     A2_T = Q * Q_inv.dot(j)  # Q @ np.diag(Q_inv.dot(j))
 
-        _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
+    #     _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
 
-        if mu is not None:  # TODO !!! pořešit, ať je to obecne
-            # C = _Femto.conv_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau)
-            C = fold_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau, 0)
+    #     if mu is not None:  # TODO !!! pořešit, ať je to obecne
+    #         # C = _Femto.conv_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau)
+    #         C = fold_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau, 0)
 
-        else:
-            # C = _Femto.conv_exp(t[:, None], -L[None, :], fwhm)
-            C = fold_exp(t[:, None], -L[None, :], fwhm, 0)
+    #     else:
+    #         # C = _Femto.conv_exp(t[:, None], -L[None, :], fwhm)
+    #         C = fold_exp(t[:, None], -L[None, :], fwhm, 0)
 
-        return C.dot(A2_T.T)
+    #     return C.dot(A2_T.T)
 
-    def simulate_coh_gaussian(self, params=None, zero_coh_range=None):
+    def _simulate_artifacts(self, tt: np.ndarray, fwhm: np.ndarray, zero_coh_range=None) -> np.ndarray:
 
-        order = self.coh_spec_order
-
-        fwhm = self.get_tau(params)
-        mu = self.get_mu(params)
+        order = self.artifact_order
 
         s = fwhm / (2 * np.sqrt(2 * np.log(2)))  # sigma
-        s = s[:, None, None] if isinstance(s, np.ndarray) else s
 
-        tt = self.times[None, :, None] - mu[:, None, None]
+        y: np.ndarray = gaussian(tt, s)
 
-        y = np.where(s > 0,
-                     np.exp(-0.5 * tt * tt / (s * s)),
-                     np.zeros((mu.shape[0], self.times.shape[0], 1)))
-
-        y = np.tile(y, (1, 1, order + 1))
+        y = np.tile(y, (1, 1, order + 1)) if tt.ndim == 3 else np.tile(y, (1, order + 1)) # TODO
 
         if order > 0:  # first derivative
             y[..., 1] *= -tt.squeeze()
@@ -293,18 +292,18 @@ class FirstOrderModel(KineticModel):
         if order > 3:  # fourth derivative
             y[..., 4] *= (tt ** 4 - 6 * tt * tt * s * s + 3 * s ** 4).squeeze()
 
-        y_max = np.max(y, axis=1, keepdims=True)  # find maxima over time axis
+        y_max = np.max(y, axis=-2, keepdims=True)  # find maxima over time axis
         y_max[np.isclose(y_max, 0)] = 1  # values close to zero force to 1 to not divide by zero
         y /= y_max
 
-        self.C_COH = y
+        return y
 
-        if zero_coh_range is not None:
-            self.C_COH *= zero_coh_range[:, None, None]
+        # self.C_COH = y
 
-        return self.C_COH
-    
+        # if zero_coh_range is not None:
+        #     self.C_COH *= zero_coh_range[:, None, None]
 
+        # return self.C_COH
 
     # def get_weights(self, params=None):
     #     weights = super(_Femto, self).get_weights()
@@ -362,32 +361,65 @@ class FirstOrderModel(KineticModel):
     #     D_fit = np.nan_to_num(D_fit)
     #     return D_fit, C, ST
 
-
-    def simulate(self) -> np.ndarray:
-        fwhm = self._get_fwhm()
-        ks = self._get_rates()
+    def calculate_LDM_ridge(self, lifetimes: np.ndarray, ridge_alpha: float = 1) -> tuple[np.ndarray, np.ndarray]:
+        """Calculates lifetime density map according to given lifetimes, ridge alpha and current settings such as 
+        chirp, partau, fwhm, artifacts..."""
         mu = self._get_mu()
-        fwhm = self._get_tau()  # fwhm
-
         tensor: bool = isinstance(mu, np.ndarray)
+        fwhm = self._get_tau()  # fwhm
+        _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
+        _mu = mu[:, None, None] if tensor else mu
+        _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
+        tt = _t - _mu
 
-        # simulate only artifacts
-        if self.n_species == 0:
-            pass
+        ks = 1 / lifetimes
+        _ks = ks[None, None, :] if tensor else ks[None, :]
 
-        # simulation for DADS only
-        # EADS can be then recalculated from EADS
+        C: np.ndarray = fold_exp(tt, _ks, _tau)
+
+        if self.include_artifacts:
+            C_artifacts = self._simulate_artifacts(tt, fwhm)
+            C = np.concatenate((C_artifacts, C), axis=-1)
+
+        coefs, D_fit = glstsq(C, self.dataset.matrix_fac.T, ridge_alpha)
+
+        # coefs = ST
+        return coefs, D_fit
+
+    def simulate(self, params: Parameters | None = None) -> np.ndarray:
+        """Simulates concentration profiles, including coherent artifacts if setup in a model."""
+        params = self.params if params is None else params
+
+        ks = self._get_rates(params)
+        mu = self._get_mu(params)
+        fwhm = self._get_tau(params)  # fwhm
+
+        # if True, partitioned variable projection will be used for fitting
+        tensor: bool = isinstance(mu, np.ndarray)
 
         _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
         _mu = mu[:, None, None] if tensor else mu
         _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
-        _ks = ks[None, None, :] if tensor else ks[None, :]
         tt = _t - _mu
 
-        C = fold_exp(tt, _ks, _tau)
+        C_artifacts = None
+        if self.include_artifacts:
+            C_artifacts = self._simulate_artifacts(tt, fwhm)
+
+        # simulate only artifacts
+        if self.n_species == 0 and C_artifacts is not None:
+            return C_artifacts
+
+        _ks = ks[None, None, :] if tensor else ks[None, :]
+        
+        # simulation for DADS only
+        # EADS can be then recalculated from EADS
+        C: np.ndarray = fold_exp(tt, _ks, _tau)
+
+        if C_artifacts is not None:
+            C = np.concatenate((C_artifacts, C), axis=-1)
 
         return C
-
 
 
 # class PumpProbeCrossCorrelation(_Femto):

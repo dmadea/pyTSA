@@ -65,6 +65,16 @@ def lstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> tuple[np.ndarr
 
     return x, c
 
+
+def glstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> tuple[np.ndarray, np.ndarray]:
+    """Generalized Ridge regression. If A is a 3D tensor, it switches to batch least squares."""
+
+    if A.ndim == 3:
+        return blstsq(A, B, alpha)
+    else:
+        return lstsq(A, B, alpha)
+
+
 # copied from https://github.com/Tillsten/skultrafast/blob/23572ba9ea32238f34a8a15390fb572ecd8bc6fa/skultrafast/base_funcs/backend_tester.py
 # © Till Stensitzki
 # @vectorize(nopython=True, fastmath=False)
@@ -99,7 +109,7 @@ def fast_erfc(x):
 
 
 @vectorize(nopython=True, fastmath=False)
-def fold_exp(t, k, fwhm):
+def fold_exp(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray | float) -> np.ndarray | float:
 
     w = fwhm / (2 * np.sqrt(np.log(2)))  # gaussian width
     tt = t
@@ -108,6 +118,14 @@ def fold_exp(t, k, fwhm):
         return 0.5 * np.exp(k * (k * w * w / 4.0 - tt)) * math_erfc(w * k / 2.0 - tt / w)
     else:
         return np.exp(-tt * k) if tt >= 0 else 0
+    
+
+@vectorize(nopython=True, fastmath=False)
+def gaussian(t: np.ndarray | float, sigma: np.ndarray | float) -> np.ndarray | float:
+    if sigma > 0:
+        return np.exp(-0.5 * t * t / (sigma * sigma))
+    else:
+        return 0
 
 #
 # def fold_exp_numpy(t, k, fwhm):

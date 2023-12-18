@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import lmfit
+from lmfit import Minimizer
 from scipy.linalg import lstsq as scipy_lstsq
 from numpy.linalg import pinv
 import scipy
@@ -10,7 +11,7 @@ from scipy.optimize import nnls as _nnls
 from scipy.optimize import least_squares
 from numba import njit
 import sys
-from .mathfuncs import fi
+from .mathfuncs import blstsq, fi, glstsq
 import time
 
 from typing import TYPE_CHECKING
@@ -151,7 +152,7 @@ def OLS(A, B):
 
 
 
-class Fit:
+class Fitter:
     """
     Multivariate Curve Resolution - Alternating Regression
     Purely soft modeling or hard modeling - fitting model applied to C or ST
@@ -539,43 +540,51 @@ class Fit:
             # needed to use nonlocal because of nested functions, https://stackoverflow.com/questions/5218895/python-nested-functions-variable-scoping
             # nonlocal D_fit
 
-            t0 = time.perf_counter()
+            # t0 = time.perf_counter()
 
             if self.fit_varpro:
-                C = self.c_model.simulate_C_tensor(params)
-                _t = time.perf_counter()
+                C = self.dataset.model.simulate(params)
+                if C.ndim == 3:
+                    R = res_parvarpro_svd(C, self.dataset.matrix_fac)
+                else:
+                    R = _res_varpro(C, self.dataset.matrix_fac)
+
+                # _t = time.perf_counter()
                 # print(f"C tensor calc took {(_t - t0) * 1e3} ms")
-                t0 = _t
-                R = res_parvarpro_svd(C, self.D)
+                # t0 = _t
             else:
                 # classical naive batched least squares solution is so far a bit faster than "fancy"
                 # partitioned variable projection algorithm...
-                # caclulation of C tensor takes  still quite a long time
-                D_fit, self.C_opt, self.ST_opt = self.c_model.simulate_mod(self.D, params)
-                R = self.D - D_fit
+                # caclulation of C tensor takes still quite a long time
+
+                C = self.dataset.model.simulate(params)
+                ST, D_fit = glstsq(C, self.dataset.matrix_fac.T, self.regressor_alpha)
+
+                self.ST_opt = ST
+                R = self.dataset.matrix_fac - D_fit
 
             # R = np.nan_to_num(R)
-            weights = self.c_model.get_weights(params)
+            weights = self.dataset.model.get_weights(params)
 
-            tdiff = time.perf_counter() - t0
+            # tdiff = time.perf_counter() - t0
             # print(f"residuals took {tdiff * 1e3} ms")
 
             return R * weights
 
         # iter_cb - callback function
-        self.minimizer = lmfit.Minimizer(residuals, self.c_model.params, nan_policy='omit',
+        self.minimizer = Minimizer(residuals, self.dataset.model.params, nan_policy='omit',
                                          iter_cb=lambda params, iter, resid, *args, **kws: self.is_interruption_requested())
         self.kwds.update(kwargs)
         self.last_result = self.minimizer.minimize(method=self.fit_alg, **self.kwds)  # minimize the residuals
 
-        self.c_model.params = self.last_result.params
+        self.dataset.model.params = self.last_result.params
 
-        D_fit, self.C_opt, self.ST_opt = self.c_model.simulate_mod(self.D, self.c_model.params)
+        # D_fit, self.C_opt, self.ST_opt = self.c_model.simulate_mod(self.D, self.c_model.params)
 
         # self.C_opt = _C_tensor[0, :, :-self.c_model.coh_spec_order - 1] if self.c_model.coh_spec else _C_tensor[0]
         # self.ST_opt = _ST[:-self.c_model.coh_spec_order - 1] if self.c_model.coh_spec else _ST
 
-        return D_fit
+        # return D_fit
 
 
     def _set_C_indiv(self, Ci, i, j=0):
