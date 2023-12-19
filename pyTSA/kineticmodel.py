@@ -10,7 +10,7 @@ from abc import abstractmethod
 # from .fit import Fitter
 # from numba import njit
 
-from .mathfuncs import blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, glstsq, lstsq
+from mathfuncs import blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, glstsq, lstsq
 
 import matplotlib.pyplot as plt
 
@@ -21,7 +21,7 @@ import scipy.constants as sc
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..dataset import Dataset
+    from .dataset import Dataset
 
 
 # abstract class that every model must inherits
@@ -78,6 +78,11 @@ class KineticModel(object):
                 _params[key].min = par.min
                 _params[key].max = par.max
                 _params[key].stderr = par.stderr
+                _params[key].brute_step = par.brute_step
+                _params[key].correl = par.correl
+                _params[key].init_value = par.init_value
+                _params[key].expr = par.expr
+                _params[key].user_data = par.user_data
 
         self.params = _params
 
@@ -351,9 +356,12 @@ class FirstOrderModel(KineticModel):
 
     #     return weights
 
-    def calculate_LDM(self, lifetimes: np.ndarray, ridge_alpha: float = 1) -> tuple[np.ndarray, np.ndarray]:
+    def calculate_LDM(self, log_range: tuple[float, float], n: int, ridge_alpha: float = 1) -> tuple[np.ndarray, np.ndarray]:
         """Calculates lifetime density map according to given lifetimes, ridge alpha and current settings such as 
         chirp, partau, fwhm, artifacts..."""
+
+        lifetimes = np.logspace(log_range[0], log_range[1], num=n, endpoint=True)
+
         mu = self.get_mu()
         fwhm = self.get_tau()  # fwhm
         tensor: bool = isinstance(mu, np.ndarray) or isinstance(fwhm, np.ndarray)

@@ -69,7 +69,9 @@ def lstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> np.ndarray:
 
 
 def glstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> tuple[np.ndarray, np.ndarray]:
-    """Generalized Ridge regression. If A is a 3D tensor, it switches to batch least squares."""
+    """Generalized Ridge regression. If A is a 3D tensor, it switches to batch least squares.
+    
+    Returns solution X and fit = A @ X"""
 
     if A.ndim == 3:
         X, fit = blstsq(A, B.T, alpha)

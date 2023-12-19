@@ -5,10 +5,8 @@ from scipy.linalg import svd
 import os
 import matplotlib.pyplot as plt
 
-from .fit.fit import Fitter
-
-from .fit.kineticmodel import FirstOrderModel, KineticModel
-from .fit.mathfuncs import crop_data, fi, chirp_correction
+from kineticmodel import FirstOrderModel, KineticModel
+from mathfuncs import crop_data, fi, chirp_correction
 
 from matplotlib import cm
 from sklearn.decomposition import NMF
@@ -16,7 +14,7 @@ from sklearn.decomposition import FastICA
 from numpy import ma
 
 from matplotlib.ticker import *
-from .plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
+from plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
 
 
 def get_mu(wls, parmu=(1, 0, 0), lambda_c=433):
@@ -125,7 +123,6 @@ class Dataset(object):
 
         # model and fitter
         self.model: KineticModel | None = None
-        self.fitter: Fitter = Fitter(self)
 
         # svd matrices k = min(t, w)
         self.U: np.ndarray | None = None  # dim = (t x k)
@@ -674,7 +671,7 @@ class Dataset(object):
                         n_lin_bins=10, n_log_bins=10, squeeze_z_range_factor=1,
                         n_levels=30, plot_countours=True,
                        colorbar_locator=AutoLocator(), hatch='/////', colorbar_aspect=35, add_wn_axis=True,
-                       fig_size=(6, 4.5), dpi=500, filepath=None, transparent=True, hatched_wls=(None, None),
+                       fig_size=(5.5, 4.5), dpi=500, filepath=None, transparent=True, hatched_wls=(None, None),
                        x_label="Wavelength / nm"):
 
         if self.model.matrix_opt is None:
@@ -690,8 +687,8 @@ class Dataset(object):
                      n_levels=n_levels, cmap=cmap, y_label='Lifetime', squeeze_z_range_factor=squeeze_z_range_factor,
                      t_unit=t_unit, z_unit=z_unit, n_lin_bins=n_lin_bins, n_log_bins=n_log_bins,
                      z_lim=z_lim, t_lim=t_lim, w_lim=w_lim, y_major_formatter=None,
-                    colorbar_locator=colorbar_locator, hatch=hatch,
-                     colorbar_aspect=colorbar_aspect, add_wn_axis=add_wn_axis, x_label=x_label)
+                    colorbar_locator=colorbar_locator, hatch=hatch,  title=self.name,
+                     colorbar_aspect=colorbar_aspect, add_wn_axis=False, x_label=x_label)
 
         plt.tight_layout()
 
@@ -703,9 +700,9 @@ class Dataset(object):
 
     def plot_fit_femto(self, t_unit='ps', z_unit=dA_unit, cmap='diverging', z_lim=[None, None],
                        t_lim=[None, None], w_lim=[None, None], linthresh=1, linscale=1.5, D_mul_factor=1e3,
-                       y_major_formatter=ScalarFormatter(), n_lin_bins=10, n_log_bins=10,
+                       y_major_formatter=ScalarFormatter(), n_lin_bins=10, n_log_bins=10, 
                        x_minor_locator=AutoMinorLocator(10), n_levels=30, plot_countours=True,
-                       colorbar_locator=AutoLocator(), hatch='/////', colorbar_aspect=35, add_wn_axis=True,
+                       colorbar_locator=AutoLocator(), hatch='/////', colorbar_aspect=35, add_wn_axis=False,
                        wls_fit=(355, 400, 450, 500, 550), marker_size=10, marker_linewidth=1,
                        marker_facecolor='none', alpha_traces=1, legend_spacing=0.2, lw_traces=1.5, lw_spectra=1.5,
                        legend_loc_traces='best', plot_chirp_corrected=True, offset_before_zero=0.3,
@@ -746,7 +743,7 @@ class Dataset(object):
         fig, axes = plt.subplots(1, 3 if plot_ST else 2, figsize=fig_size)
 
         plot_data_ax(fig, axes[0], _D, times, wavelengths, D_mul_factor=D_mul_factor, symlog=True,
-                     plot_countours=plot_countours, plot_tilts=plot_tilts,
+                     plot_countours=plot_countours, plot_tilts=plot_tilts, title=self.name,
                      n_levels=n_levels, cmap=cmap, linthresh=linthresh, linscale=linscale,
                      t_unit=t_unit, z_unit=z_unit, n_lin_bins=n_lin_bins, n_log_bins=n_log_bins,
                      z_lim=z_lim, t_lim=t_lim, w_lim=w_lim, y_major_formatter=y_major_formatter,
@@ -762,7 +759,8 @@ class Dataset(object):
         if plot_ST:
             ST = self.model.ST_artifacts if self.model.ST_opt is None else self.model.ST_opt
             plot_SADS_ax(axes[1], self.wavelengths, ST.T, zero_reg=hatched_wls, colors=COLORS,
-                         D_mul_factor=D_mul_factor, z_unit=z_unit, lw=lw_spectra, w_lim=w_lim)
+                         D_mul_factor=D_mul_factor, z_unit=z_unit, lw=lw_spectra, w_lim=w_lim, title='DADS',
+                         show_legend=True, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.model.get_rates()])
 
         plot_traces_onefig_ax(axes[-1], self.matrix_fac, self.model.matrix_opt, self.times, self.wavelengths, mu=mu,
                               wls=wls_fit, marker_size=marker_size, alpha=alpha_traces,

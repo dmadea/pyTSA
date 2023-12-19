@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .fit.mathfuncs import fi
+from mathfuncs import fi
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 from matplotlib import colormaps
@@ -561,7 +561,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
                  n_lin_bins=10, n_log_bins=10, plot_tilts=True, squeeze_z_range_factor=1,
                  y_major_formatter=ScalarFormatter(), y_label='Time delay',
                  x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels=30, plot_countours=True,
-                 colorbar_locator=MultipleLocator(50), colorbarpad=0.04,
+                 colorbar_locator=MultipleLocator(50), colorbarpad=0.04, title='',
                  diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=True,
                  x_label="Wavelength / nm"):
     """data is individual dataset"""
@@ -626,6 +626,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
     ax.yaxis.set_ticks_position('both')
 
     ax.set_axisbelow(False)
+    ax.set_title(title)
 
     fig.colorbar(mappable, ax=ax, label=z_unit, orientation='vertical', aspect=colorbar_aspect, pad=colorbarpad,
                  ticks=colorbar_locator)
@@ -727,7 +728,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
 def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1e3,
                  legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=False,
                  area_plot_data=(None, None), area_plot_color='violet', area_plot_data2=(None, None),
-                 area_plot_color2='blue',
+                 area_plot_color2='blue', title="",
                  area_plot_alpha=0.2, area_plot_alpha2=0.1, w_lim=(None, None)):
     _SADS = SADS.copy() * D_mul_factor
     if zero_reg[0] is not None:
@@ -744,7 +745,7 @@ def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_un
 
     set_main_axis(ax, y_label=z_unit, xlim=w_lim, #, ylim=(_min, _max),
                   x_minor_locator=AutoMinorLocator(), x_major_locator=None, y_minor_locator=None)
-    _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
+    # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
     cmap = cm.get_cmap('gist_rainbow', _SADS.shape[1] / 0.75)
 
@@ -765,6 +766,8 @@ def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_un
     if area_plot_data2[0] is not None:
         ax.fill_between(area_plot_data2[0], area_plot_data2[1], color=area_plot_color2, alpha=area_plot_alpha2,
                         zorder=-10)
+    
+    ax.set_title(title)
 
     if show_legend:
         ax.legend(frameon=False, labelspacing=legend_spacing, ncol=legend_ncol)
