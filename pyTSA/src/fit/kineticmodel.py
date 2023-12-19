@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.integrate import odeint
-from lmfit import Parameters
+# from scipy.integrate import odeint
+from lmfit import Parameters, Minimizer
+from lmfit.minimizer import MinimizerResult
 
 from abc import abstractmethod
+
+# from .fit import Fitter
 # from numba import njit
 
 from .mathfuncs import blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, glstsq, lstsq
@@ -41,8 +44,22 @@ class KineticModel(object):
         self.species_names = np.array(list('ABCDEFGHIJKLMNOPQRSTUV'), dtype=str)
         self.params: Parameters = self.init_params()
 
+        self.C_opt: np.ndarray | None = None
+        self.ST_opt: np.ndarray | None = None
+        self.matrix_opt: np.ndarray | None = None
+
+        self.minimizer: Minimizer | None = None
+        self.fit_result: MinimizerResult | None = None
+        # fitter arguments to the underlying fitting algorithm
+        self.fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='linear', verbose=2, jac='3-point')
+
+        # {'ftol': 1e-10, 'xtol': 1e-10, 'gtol': 1e-10, 'loss': 'linear', 'verbose': 2,
+                    #  'jac': '3-point'}
+        self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
+
+
     @abstractmethod
-    def simulate(self) -> np.ndarray:
+    def simulate(self):
         pass
 
     def add_weight(self, w0: float, w1: float, weight: float = 1):
@@ -66,13 +83,10 @@ class KineticModel(object):
 
     def init_params(self) -> Parameters:
         return Parameters()
-
-    # def update_n(self, n: int):
-    #     if (n == self.n_species):
-    #         return
-        
-    #     self.n_species = n
-    #     self._update_params()
+    
+    @abstractmethod
+    def fit(self):
+        pass
 
     def update_options(self, **kwargs):
         for key, value in kwargs.items():
@@ -120,6 +134,21 @@ class FirstOrderModel(KineticModel):
 
         self.zero_coh_spec_range = []  # zero coherent artifact in that wavelength range
 
+        self.ridge_alpha = 0.0001
+
+        # concentration profiles and spectra of coherent artifacts
+        self.C_artifacts: np.ndarray | None = None
+        self.ST_artifacts: np.ndarray | None = None
+        
+        # for C_opt and ST_opt, decay profiles and DAS will be plotted
+        # for EAS, new variables are defined
+        self.C_EAS: np.ndarray | None = None
+        self.ST_EAS: np.ndarray | None = None
+
+        self.LDM: np.ndarray | None = None
+        self.LDM_fit: np.ndarray | None = None
+        self.LDM_lifetimes: np.ndarray | None = None
+
         # self.weight_chirp = False
         # self.w_of_chirp = 0.1
         # self.t_radius_chirp = 0.2  # time radius around chirp / in ps
@@ -156,24 +185,24 @@ class FirstOrderModel(KineticModel):
                     params.add(f'var_FWHM_p_{i+1}', value=0.01, min=-np.inf, max=np.inf, vary=True)   # wavelength-dependent FWHM
 
         for i in range(self.n_species):
-            params.add(f'tau{i+1}', value=10 ** (i - 1), min=0, max=np.inf, vary=True)
+            params.add(f'tau_{i+1}', value=10 ** (i - 1), min=0, max=np.inf, vary=True)
 
         return params
     
-    def _get_rates(self, params: Parameters | None = None) -> np.ndarray:
+    def get_rates(self, params: Parameters | None = None) -> np.ndarray:
         if (self.n_species == 0):
             return np.asarray([])
         
         params = self.params if params is None else params
 
-        vals = np.asarray([params[f"tau{i+1}"].value for i in range(self.n_species)])
+        vals = np.asarray([params[f"tau_{i+1}"].value for i in range(self.n_species)])
         return 1 / vals
     
-    def _get_fwhm(self, params: Parameters | None = None) -> float:
+    def get_fwhm(self, params: Parameters | None = None) -> float:
         params = self.params if params is None else params
         return params["FWHM"].value
 
-    def _get_tau(self, params: Parameters | None = None) -> np.ndarray | float:
+    def get_tau(self, params: Parameters | None = None) -> np.ndarray | float:
         """Return the curve that defines FWHM with respect to wavelength."""
 
         params = self.params if params is None else params
@@ -181,7 +210,7 @@ class FirstOrderModel(KineticModel):
         if not self.include_irf:
             return 0
         
-        fwhm = self._get_fwhm(params)
+        fwhm = self.get_fwhm(params)
 
         if not self.include_variable_fwhm:
             return fwhm
@@ -199,12 +228,12 @@ class FirstOrderModel(KineticModel):
         if not self.include_irf and not self.include_variable_fwhm:
             return
 
-        plt.plot(self.dataset.wavelengths, self._get_tau())
+        plt.plot(self.dataset.wavelengths, self.get_tau())
         plt.xlabel('Wavelength / nm')
         plt.ylabel('IRF_FWHM / ps')
         plt.show()
 
-    def _get_mu(self, params: Parameters | None = None) -> np.ndarray | float:
+    def get_mu(self, params: Parameters | None = None) -> np.ndarray | float:
         """Return the curve that defines chirp (time zero) with respect to wavelength."""
 
         params = self.params if params is None else params
@@ -230,8 +259,14 @@ class FirstOrderModel(KineticModel):
 
         return mu
     
-    def estimate_chirp(self, wls_vals: np.ndarray, time_vals: np.ndarray):
+    def estimate_chirp(self, wls_vals: np.ndarray | list[float], time_vals: np.ndarray | list[float]):
         """Estimates the chirp parameters, based on input values as ndarrays"""
+
+        if not self.include_chirp:
+            raise TypeError("Model does not have chirp parameters. include_chirp == False")
+
+        wls_vals = np.asarray(wls_vals)
+        time_vals = np.asarray(time_vals)
 
         cv = self.central_wave
 
@@ -278,7 +313,7 @@ class FirstOrderModel(KineticModel):
 
         y: np.ndarray = gaussian(tt, s)
 
-        y = np.tile(y, (1, 1, order + 1)) if tt.ndim == 3 else np.tile(y, (1, order + 1)) # TODO
+        y = np.tile(y, (1, 1, order + 1)) if tt.ndim == 3 else np.tile(y, (1, order + 1))
 
         if order > 0:  # first derivative
             y[..., 1] *= -tt.squeeze()
@@ -316,59 +351,14 @@ class FirstOrderModel(KineticModel):
 
     #     return weights
 
-
-    # def simulate_C_tensor(self, params=None):
-    #     if params is None:
-    #         params = self.params
-
-    #     _C_tensor = self.calc_C(params)
-    #     # n = _C_tensor.shape[-1]
-    #     # ST = np.zeros((n + (self.coh_spec_order + 1 if self.coh_spec else 0), self.wavelengths.shape[0]))
-
-    #     zero_coh_range = np.ones_like(self.wavelengths)
-    #     for rng in self.zero_coh_spec_range:
-    #         idx0, idx1 = find_nearest_idx(self.wavelengths, rng)
-    #         zero_coh_range[idx0:idx1+1] = 0
-
-    #     if self.coh_spec:
-    #         _C_COH = self.simulate_coh_gaussian(zero_coh_range=zero_coh_range)
-    #         _C_tensor = np.concatenate((_C_tensor, _C_COH), axis=-1) if _C_tensor is not None else _C_COH
-
-    #     _C_tensor = np.nan_to_num(_C_tensor)
-
-    #     return _C_tensor
-
-
-    # def simulate_mod(self, D, params=None):
-    #     if D is None:
-    #         raise ValueError('param D cannot be None')
-
-    #     if params is None:
-    #         params = self.params
-
-    #     _C_tensor = self.simulate_C_tensor(params)
-
-    #     ST, D_fit = blstsq(_C_tensor, D.T, self.ridge_alpha)  # solve batched least squares problem
-
-    #     if self.coh_spec:
-    #         self.ST_COH = ST[-self.coh_spec_order - 1:]
-
-    #     # D_fit = np.matmul(_C_tensor, ST.T[..., None]).squeeze().T
-
-    #     C = _C_tensor[0, :, :-self.coh_spec_order - 1] if self.coh_spec else _C_tensor[0]
-    #     ST = ST[:-self.coh_spec_order - 1] if self.coh_spec else ST
-
-    #     D_fit = np.nan_to_num(D_fit)
-    #     return D_fit, C, ST
-
-    def calculate_LDM_ridge(self, lifetimes: np.ndarray, ridge_alpha: float = 1) -> tuple[np.ndarray, np.ndarray]:
+    def calculate_LDM(self, lifetimes: np.ndarray, ridge_alpha: float = 1) -> tuple[np.ndarray, np.ndarray]:
         """Calculates lifetime density map according to given lifetimes, ridge alpha and current settings such as 
         chirp, partau, fwhm, artifacts..."""
-        mu = self._get_mu()
-        tensor: bool = isinstance(mu, np.ndarray)
-        fwhm = self._get_tau()  # fwhm
+        mu = self.get_mu()
+        fwhm = self.get_tau()  # fwhm
+        tensor: bool = isinstance(mu, np.ndarray) or isinstance(fwhm, np.ndarray)
         _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
-        _mu = mu[:, None, None] if tensor else mu
+        _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
         _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
         tt = _t - _mu
 
@@ -381,45 +371,88 @@ class FirstOrderModel(KineticModel):
             C_artifacts = self._simulate_artifacts(tt, fwhm)
             C = np.concatenate((C_artifacts, C), axis=-1)
 
-        coefs, D_fit = glstsq(C, self.dataset.matrix_fac.T, ridge_alpha)
+        coefs, D_fit = glstsq(C, self.dataset.matrix_fac, ridge_alpha)
+
+        if self.include_artifacts:
+            coefs = coefs[self.artifact_order + 1:]
+
+        self.LDM = coefs
+        self.LDM_fit = D_fit
+        self.LDM_lifetimes = lifetimes
 
         # coefs = ST
         return coefs, D_fit
+    
+    def simulate(self, params: Parameters | None = None):
 
-    def simulate(self, params: Parameters | None = None) -> np.ndarray:
+        self.calculate_C_profiles(params)
+
+        if self.C_opt is None and self.C_artifacts is None:
+            return
+        
+        if self.C_opt is None:
+            C_full = self.C_artifacts
+        elif self.C_artifacts is None:
+            C_full = self.C_opt
+        else:
+            C_full: np.ndarray = np.concatenate((self.C_artifacts, self.C_opt), axis=-1)
+
+        ST_full, self.matrix_opt = glstsq(C_full, self.dataset.matrix_fac, self.ridge_alpha)
+
+        if self.include_artifacts:
+            n = self.C_artifacts.shape[-1]
+            self.ST_artifacts = ST_full[:n]
+            if self.n_species > 0:
+                self.ST_opt = ST_full[n:]
+        else:
+            self.ST_opt = ST_full
+
+
+    def calculate_C_profiles(self, params: Parameters | None = None):
         """Simulates concentration profiles, including coherent artifacts if setup in a model."""
         params = self.params if params is None else params
+        self.C_opt = None
+        self.C_artifacts = None
 
-        ks = self._get_rates(params)
-        mu = self._get_mu(params)
-        fwhm = self._get_tau(params)  # fwhm
+        ks = self.get_rates(params)
+        mu = self.get_mu(params)
+        fwhm = self.get_tau(params)  # fwhm
 
         # if True, partitioned variable projection will be used for fitting
-        tensor: bool = isinstance(mu, np.ndarray)
+        tensor: bool = isinstance(mu, np.ndarray) or isinstance(fwhm, np.ndarray)
 
         _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
-        _mu = mu[:, None, None] if tensor else mu
+        _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
         _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
         tt = _t - _mu
 
-        C_artifacts = None
         if self.include_artifacts:
-            C_artifacts = self._simulate_artifacts(tt, fwhm)
+            self.C_artifacts = self._simulate_artifacts(tt, fwhm)
 
-        # simulate only artifacts
-        if self.n_species == 0 and C_artifacts is not None:
-            return C_artifacts
+        if self.n_species == 0:
+            return
 
         _ks = ks[None, None, :] if tensor else ks[None, :]
         
         # simulation for DADS only
         # EADS can be then recalculated from EADS
-        C: np.ndarray = fold_exp(tt, _ks, _tau)
+        self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau)
 
-        if C_artifacts is not None:
-            C = np.concatenate((C_artifacts, C), axis=-1)
+    def fit(self):
+        def residuals(params):
+            self.simulate(params)
+            R = self.dataset.matrix_fac - self.matrix_opt
+            weights = self.get_weights()
+            return R * weights
 
-        return C
+        # iter_cb - callback function
+        self.minimizer = Minimizer(residuals, self.params, nan_policy='omit') #,
+                                        #  iter_cb=lambda params, iter, resid, *args, **kws: self.is_interruption_requested())
+        
+        self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
+        self.params = self.fit_result.params
+
+
 
 
 # class PumpProbeCrossCorrelation(_Femto):

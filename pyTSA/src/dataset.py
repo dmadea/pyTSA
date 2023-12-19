@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 from .fit.fit import Fitter
 
-from .fit.kineticmodel import KineticModel
+from .fit.kineticmodel import FirstOrderModel, KineticModel
 from .fit.mathfuncs import crop_data, fi, chirp_correction
 
 from matplotlib import cm
@@ -668,6 +668,38 @@ class Dataset(object):
     #         plt.title('Conc. {}'.format(self.model.get_species_name(i)))
 
     #     plt.show()
+        
+    def plot_LDM(self, t_unit='ps', z_unit='Amplitude', cmap='diverging', z_lim=[None, None],
+                       t_lim=[None, None], w_lim=[None, None], 
+                        n_lin_bins=10, n_log_bins=10, squeeze_z_range_factor=1,
+                        n_levels=30, plot_countours=True,
+                       colorbar_locator=AutoLocator(), hatch='/////', colorbar_aspect=35, add_wn_axis=True,
+                       fig_size=(6, 4.5), dpi=500, filepath=None, transparent=True, hatched_wls=(None, None),
+                       x_label="Wavelength / nm"):
+
+        if self.model.matrix_opt is None:
+            raise ValueError("No fitting data available.")
+
+        assert isinstance(self.model, FirstOrderModel)
+        assert self.model.LDM is not None
+
+        fig, ax = plt.subplots(1, 1, figsize=fig_size)
+
+        plot_data_ax(fig, ax, self.model.LDM, self.model.LDM_lifetimes, self.wavelengths, symlog=False, log=True,
+                     plot_countours=plot_countours, plot_tilts=False, D_mul_factor=1,
+                     n_levels=n_levels, cmap=cmap, y_label='Lifetime', squeeze_z_range_factor=squeeze_z_range_factor,
+                     t_unit=t_unit, z_unit=z_unit, n_lin_bins=n_lin_bins, n_log_bins=n_log_bins,
+                     z_lim=z_lim, t_lim=t_lim, w_lim=w_lim, y_major_formatter=None,
+                    colorbar_locator=colorbar_locator, hatch=hatch,
+                     colorbar_aspect=colorbar_aspect, add_wn_axis=add_wn_axis, x_label=x_label)
+
+        plt.tight_layout()
+
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, transparent=transparent, dpi=dpi)
+        else:
+            plt.show()
 
     def plot_fit_femto(self, t_unit='ps', z_unit=dA_unit, cmap='diverging', z_lim=[None, None],
                        t_lim=[None, None], w_lim=[None, None], linthresh=1, linscale=1.5, D_mul_factor=1e3,
@@ -681,24 +713,24 @@ class Dataset(object):
                        fig_size=(15, 4.5), dpi=500, filepath=None, transparent=True, hatched_wls=(None, None),
                        plot_ST=True, x_label="Wavelength / nm"):
 
-        if self.D_fit is None:
+        if self.model.matrix_opt is None:
             raise ValueError("No fitting data available.")
 
+        assert isinstance(self.model, FirstOrderModel)
+
         _D = self.matrix_fac.copy()
-        # _D_fit = self.D_fit.copy()
         times = self.times.copy()
         wavelengths = self.wavelengths.copy()
 
-        assert _D.shape == self.D_fit.shape
+        assert _D.shape == self.model.matrix_opt.shape
 
-        if plot_chirp_corrected and self.mu is not None:
+        mu = self.model.get_mu()
+
+        if plot_chirp_corrected and mu is not None:
             if t_lim[0] is None:
                 t_lim[0] = -offset_before_zero
-            _D, times, _wavelengths = chirp_correction(_D, times, wavelengths, self.mu, offset_before_zero=offset_before_zero)
+            _D, times, _wavelengths = chirp_correction(_D, times, wavelengths, mu, offset_before_zero=offset_before_zero)
 
-
-            # _D_fit, times, wavelengths = chirp_correction(_D_fit, times, wavelengths, self.parmu, lambda_c=self.lambda_c,
-            #                             offset_before_zero=offset_before_zero)
 
         if hatched_wls[0] is not None:
             idx1, idx2 = fi(wavelengths, hatched_wls)
@@ -723,15 +755,16 @@ class Dataset(object):
 
         # mu = get_mu(wavelengths, self.parmu, self.lambda_c) if self.parmu is not None else None
 
-        if draw_chirp and self.mu is not None:
-            axes[0].plot(wavelengths, self.mu, color='black', lw=lw_chirp, ls=ls_chirp)
+        if draw_chirp:
+            _mu = mu if isinstance(mu, np.ndarray) else np.ones_like(self.wavelengths) * mu
+            axes[0].plot(wavelengths, _mu, color='black', lw=lw_chirp, ls=ls_chirp)
 
         if plot_ST:
-            ST = self.ST_COH if self.ST_fit.shape[0] == 0 else self.ST_fit
+            ST = self.model.ST_artifacts if self.model.ST_opt is None else self.model.ST_opt
             plot_SADS_ax(axes[1], self.wavelengths, ST.T, zero_reg=hatched_wls, colors=COLORS,
                          D_mul_factor=D_mul_factor, z_unit=z_unit, lw=lw_spectra, w_lim=w_lim)
 
-        plot_traces_onefig_ax(axes[-1], self.matrix_fac, self.D_fit, self.times, self.wavelengths, mu=self.mu,
+        plot_traces_onefig_ax(axes[-1], self.matrix_fac, self.model.matrix_opt, self.times, self.wavelengths, mu=mu,
                               wls=wls_fit, marker_size=marker_size, alpha=alpha_traces,
                               marker_facecolor=marker_facecolor, n_lin_bins=n_lin_bins, n_log_bins=n_log_bins,
                               marker_linewidth=marker_linewidth, colors=COLORS, t_axis_formatter=y_major_formatter,

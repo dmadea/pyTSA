@@ -264,7 +264,7 @@ def _plot_tilts(ax, norm, at_value, axis='y', inverted_axis=False):
     ax.plot(x_vals[2], y_vals[2], ls='dotted', lw=1, **kwargs)
 
 
-def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu=None, wls=(355, 400, 450, 500, 550), marker_size=10,
+def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarray | None = None, wls=(355, 400, 450, 500, 550), marker_size=10,
                           marker_linewidth=1, n_lin_bins=10, n_log_bins=10, t_axis_formatter=ScalarFormatter(),
                           marker_facecolor='white', alpha=0.8, y_lim=(None, None), plot_tilts=True, wl_unit='nm',
                           linthresh=1, linscale=1, colors=None, D_mul_factor=1e3, legend_spacing=0.2, lw=1.5,
@@ -274,6 +274,8 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu=None, wls=(355, 4
     n = wls.__len__()
     t = times
     mu = np.zeros_like(wavelengths) if mu is None else mu
+    if not isinstance(mu, np.ndarray):
+        mu = np.ones_like(wavelengths) * mu
 
     t_lim = (times[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
 
@@ -553,11 +555,11 @@ def plot_kinetics_ax(ax, D, times, wavelengths,   lw=0.5,  time_unit='ps',
     # ax.yaxis.set_ticks_position('both')
 
 
-def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, t_unit='ps',
+def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_unit='ps',
                  z_unit=dA_unit, cmap='diverging', z_lim=(None, None),
                  t_lim=(None, None), w_lim=(None, None), linthresh=1, linscale=1, D_mul_factor=1e3,
-                 n_lin_bins=10, n_log_bins=10, plot_tilts=True,
-                 y_major_formatter=ScalarFormatter(),
+                 n_lin_bins=10, n_log_bins=10, plot_tilts=True, squeeze_z_range_factor=1,
+                 y_major_formatter=ScalarFormatter(), y_label='Time delay',
                  x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels=30, plot_countours=True,
                  colorbar_locator=MultipleLocator(50), colorbarpad=0.04,
                  diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=True,
@@ -575,11 +577,15 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, t_unit='ps',
     zmin = np.min(D) if z_lim[0] is None else z_lim[0]
     zmax = np.max(D) if z_lim[1] is None else z_lim[1]
 
-    if z_lim[0] is not None:
-        D[D < zmin] = zmin
+    # assuming zmax > 0 and zmin < 0
+    zmin = squeeze_z_range_factor * zmin
+    zmax = squeeze_z_range_factor * zmax
 
-    if z_lim[1] is not None:
-        D[D > zmax] = zmax
+    # if z_lim[0] is not None:
+    D[D < zmin] = zmin
+
+    # if z_lim[1] is not None:
+    D[D > zmax] = zmax
 
     register_div_cmap(zmin, zmax)
     register_div_white_cmap(zmin, zmax, diverging_white_cmap_tr)
@@ -588,7 +594,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, t_unit='ps',
 
     # plot data matrix D
 
-    set_main_axis(ax, xlim=w_lim, ylim=t_lim, x_label=x_label, y_label=f'Time delay / {t_unit}',
+    set_main_axis(ax, xlim=w_lim, ylim=t_lim, x_label=x_label, y_label=f'{y_label} / {t_unit}',
                   x_minor_locator=x_minor_locator, x_major_locator=x_major_locator, y_minor_locator=None)
     if add_wn_axis:
         w_ax = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
@@ -633,6 +639,8 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, t_unit='ps',
             norm = c.SymLogNorm(vmin=t_lim[0], vmax=t_lim[1], linscale=linscale, linthresh=linthresh, base=10,
                                 clip=True)
             _plot_tilts(ax, norm, linthresh, 'y', inverted_axis=True)
+    elif log:
+        ax.set_yscale('log')
 
     if y_major_formatter:
         ax.yaxis.set_major_formatter(y_major_formatter)
@@ -735,7 +743,7 @@ def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_un
     # _min, _max = abs(np.nanmin(_SADS)) * fctr * np.sign(np.nanmin(_SADS)), abs(np.nanmax(_SADS)) * fctr * np.sign(np.nanmax(_SADS))
 
     set_main_axis(ax, y_label=z_unit, xlim=w_lim, #, ylim=(_min, _max),
-                  x_minor_locator=AutoMinorLocator(10), x_major_locator=MultipleLocator(100), y_minor_locator=None)
+                  x_minor_locator=AutoMinorLocator(), x_major_locator=None, y_minor_locator=None)
     _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
     cmap = cm.get_cmap('gist_rainbow', _SADS.shape[1] / 0.75)

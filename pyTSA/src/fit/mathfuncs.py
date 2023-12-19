@@ -8,13 +8,15 @@ import scipy
 posv = scipy.linalg.get_lapack_funcs(('posv'))
 from scipy.linalg import lstsq as scipy_lstsq
 from scipy.integrate import cumulative_trapezoid
+from numpy.linalg import pinv
+
 
 # import scipy.constants as sc
 # from scipy.linalg import lstsq
 
 
 ## inspiration from https://github.com/Tillsten/skultrafast/blob/9544c3cc3c3c3fa46b728156198807e2b21ba24b/skultrafast/base_funcs/pytorch_fitter.py
-def blstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.001) -> tuple[np.ndarray, np.ndarray]:
+def blstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.001) -> np.ndarray:
     """
     Batched linear least-squares by numpy with direct solve method with optional Tikhonov regularization
     to prevent errors in case of singular matrices.
@@ -49,7 +51,7 @@ def blstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.001) -> tuple[np.ndarr
     return X[..., 0].T, fit
 
 
-def lstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> tuple[np.ndarray, np.ndarray]:
+def lstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> np.ndarray:
     """fast: solve least squares solution for X: AX=B by ordinary least squares, with direct solve,
     with optional Tikhonov regularization"""
 
@@ -63,16 +65,90 @@ def lstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> tuple[np.ndarr
                       overwrite_a=True,
                       overwrite_b=False)
 
-    return x, c
+    return x
 
 
 def glstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> tuple[np.ndarray, np.ndarray]:
     """Generalized Ridge regression. If A is a 3D tensor, it switches to batch least squares."""
 
     if A.ndim == 3:
-        return blstsq(A, B, alpha)
+        X, fit = blstsq(A, B.T, alpha)
+        return X, fit
     else:
-        return lstsq(A, B, alpha)
+        X = lstsq(A, B, alpha)
+        return X, np.dot(A, X)
+
+
+
+def _res_varpro(C, D):
+    """Calculates residuals efficiently  by (I - CC+)D.
+    Projector CC+ is calculated by SVD: CC+ = U @ U.T.
+
+    Removal of the columns of U that does not correspond to data is needed
+    (those columns whose corresponding singular values ar    e
+    lower
+    than
+    tolerance)"""
+
+    U, S, VT = np.linalg.svd(C, full_matrices=False)
+
+    Sr = S[S > S[0] * 1e-10]
+    Ur = U[:, :Sr.shape[0]]
+
+    R = (np.eye(C.shape[0]) - Ur.dot(Ur.T)).dot(D)
+
+    return R.flatten()
+
+
+# def res_par_varpro(C, D, rcond=1e-10):
+#     """Calculates residuals efficiently  by partitioned variable projection.
+#     residuals are (I - CC+)D. C is tensor (n_w, n_t, k), D is matrix (n_t, n_w)
+#     Projector CC+ is calculated by batched pseudoinverse
+#     """
+#
+#     # t0 = time.perf_counter()
+#
+#     Cp = pinv(C, rcond=rcond)  # calculate batch pseudoinverse
+#     I = np.eye(C.shape[1])[None, ...]  # eye matrix
+#     P = I - np.matmul(C, Cp)  # calculate the projector
+#     residuals = np.matmul(P, D.T[..., None]).squeeze().T  # and final residuals
+#
+#     # tdiff = time.perf_counter() - t0
+#     # print(f"res_par_varpro took {tdiff * 1e3} ms")
+#
+#     return residuals
+
+
+def res_parvarpro_pinv(C, D, rcond=1e-10):
+    """Calculates residuals efficiently  by partitioned variable projection.
+    residuals are (I - CC+)D. C is tensor (n_w, n_t, k), D is matrix (n_t, n_w)
+    Projector CC+ is calculated by batched pseudoinverse
+    """
+    Cp = pinv(C, rcond=rcond)  # calculate batch pseudoinverse
+    CpD = np.matmul(Cp, D.T[..., None])
+    CCpD = np.matmul(C, CpD).squeeze().T
+    residuals = D - CCpD
+    return residuals
+
+
+def res_parvarpro_svd(C, D, rcond=1e-10):
+    """Calculates residuals efficiently  by partitioned variable projection.
+    residuals are (I - CC+)D. C is tensor (n_w, n_t, k), D is matrix (n_t, n_w)
+    Projector CC+ is calculated by batched svd
+    """
+    U, S, VT = np.linalg.svd(C, full_matrices=False)  # calculate batch svd of C tensor
+    cutoff = rcond * np.max(S, axis=-1, keepdims=True)
+    small = S < cutoff
+    small = np.tile(small[:, None, :], [1, U.shape[1], 1])
+    U[small] = 0  # set vector with small singular values to zero
+
+    UT = np.transpose(U, (0, 2, 1))
+
+    UTD = np.matmul(UT, D.T[..., None])
+    UUTD = np.matmul(U, UTD).squeeze().T
+    residuals = D - UUTD
+
+    return residuals
 
 
 # copied from https://github.com/Tillsten/skultrafast/blob/23572ba9ea32238f34a8a15390fb572ecd8bc6fa/skultrafast/base_funcs/backend_tester.py
@@ -197,13 +273,18 @@ def double_points(arr):
     new_arr[1::2] = avrg
     return new_arr
 
-def chirp_correction(matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray, mu: np.ndarray,
+def chirp_correction(matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray, mu: np.ndarray | float,
                     offset_before_zero=0.3, t_smooth_order=1) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Performs the chirp correction of the data array. Modifies the original data.
     mu is array defining time zero. The time dimension of data will be cropped to [-offset_before_zero:].
     t_smooth_order is the number of doubling of original time points. if 0, no doubling is performed.
     """
+
+    if not isinstance(mu, np.ndarray):
+        # mu is just a number, there is not wavelength dependency, change only times and return the original data
+        new_times = times.copy() - mu
+        return matrix, new_times, wavelengths
 
     assert np.min(mu) - times[0] >= offset_before_zero
 
