@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 import numpy as np
 # from scipy.integrate import odeint
@@ -20,6 +21,8 @@ import scipy.constants as sc
 # from scipy.linalg import lstsq
 
 from typing import TYPE_CHECKING
+
+from plot import plot_data_ax
 if TYPE_CHECKING:
     from .dataset import Dataset
 
@@ -57,6 +60,9 @@ class KineticModel(object):
                     #  'jac': '3-point'}
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
 
+    @abstractmethod
+    def plot(self, *what: str, nrows: int = 1, ncols: int = None, **kwargs):
+        pass
 
     @abstractmethod
     def simulate(self):
@@ -460,7 +466,93 @@ class FirstOrderModel(KineticModel):
         self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
         self.params = self.fit_result.params
 
+    def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None, **kwargs):
+        # what is list of figures to plot
+        # data, traces, EADS, DADS, LDM, residuals
 
+        n = len(what)
+        if n == 0:
+            return
+        
+        if self.dataset is None:
+            raise TypeError("There is no dataset assigned to the model")
+        
+        if nrows is None and ncols is None:
+            ncols = int(np.floor(n ** 0.5))
+            nrows = int(np.ceil(n / ncols))
+        elif nrows is not None and ncols is None:
+            ncols = int(np.ceil(n / nrows))
+        elif nrows is None and ncols is not None:
+            nrows = int(np.ceil(n / ncols))
+
+        fig, axes = plt.subplots(nrows, ncols, figsize=kwargs.get('figsize', (5.5 * ncols, 4.5 * nrows)))
+        if nrows * ncols == 1:
+            axes = np.asarray([axes])
+
+        for i, p in enumerate(what):
+            if i >= nrows * ncols:
+                break
+
+            ax = axes.flat[i]
+            match p.lower():
+                case "data":
+                    pass
+                    
+                case "traces":
+                    pass
+
+                case "eads":
+                    
+                    pass
+                case "dads":
+                                    
+                    pass
+
+                case "ldm":
+                    plot_data_ax(fig, ax, self.LDM, self.LDM_lifetimes, self.dataset.wavelengths, symlog=False, log=True,
+                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=False, D_mul_factor=kwargs.get('D_mul_factor', 1),
+                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label='Lifetime',
+                        t_unit=kwargs.get('t_unit', 'ps'), z_unit='Amplitude', squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
+                        z_lim=(None, None), t_lim=(None, None), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
+                        colorbar_locator=None, hatch=kwargs.get('hatch', '/////'),  title=f"LDM [{self.dataset.name}]",
+                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
+                        x_label=kwargs.get('x_label', "Wavelength / nm"))
+
+                case "residuals":
+                    plot_data_ax(fig, ax, self.matrix_opt - self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
+                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
+                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'),
+                        t_unit=kwargs.get('t_unit', 'ps'), z_unit=kwargs.get('z_unit', 'A'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
+                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
+                        colorbar_locator=kwargs.get('colorbar_locator', None), hatch=kwargs.get('hatch', '/////'),  title=f"Residuals [{self.dataset.name}]",
+                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
+                        x_label=kwargs.get('x_label', "Wavelength / nm"))
+
+                case "fit":
+                    plot_data_ax(fig, ax, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
+                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
+                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'),
+                        t_unit=kwargs.get('t_unit', 'ps'), z_unit=kwargs.get('z_unit', 'A'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
+                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
+                        colorbar_locator=kwargs.get('colorbar_locator', None), hatch=kwargs.get('hatch', '/////'),  title=f"Fit [{self.dataset.name}]",
+                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
+                        x_label=kwargs.get('x_label', "Wavelength / nm"))
+
+                case "empty":
+                    continue
+
+                case _:
+                    raise ValueError(f"Plot {p} is not defined.")
+                
+        plt.tight_layout()
+
+        filepath = kwargs.get('filepath', None)
+
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
+        else:
+            plt.show()
 
 
 # class PumpProbeCrossCorrelation(_Femto):
