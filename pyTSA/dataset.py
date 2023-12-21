@@ -724,9 +724,9 @@ class Dataset(object):
         mu = self.model.get_mu()
 
         if plot_chirp_corrected and mu is not None:
-            if t_lim[0] is None:
-                t_lim[0] = -offset_before_zero
-            _D, times, _wavelengths = chirp_correction(_D, times, wavelengths, mu, offset_before_zero=offset_before_zero)
+            # if t_lim[0] is None:
+            #     t_lim[0] = -offset_before_zero
+            _D, times = chirp_correction(_D, times, mu)
 
 
         if hatched_wls[0] is not None:
@@ -859,7 +859,7 @@ class Dataset(object):
         if plot_chirp_corrected and self.mu is not None:
             if t_lim[0] is None:
                 t_lim[0] = -offset_before_zero
-            _D, times, wavelengths = chirp_correction(_D, times, wavelengths, self.mu,
+            _D, times = chirp_correction(_D, times, self.mu,
                                                            offset_before_zero=offset_before_zero)
 
         if hatched_wls[0] is not None:

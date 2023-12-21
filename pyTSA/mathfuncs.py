@@ -275,8 +275,8 @@ def double_points(arr):
     new_arr[1::2] = avrg
     return new_arr
 
-def chirp_correction(matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray, mu: np.ndarray | float,
-                    offset_before_zero=0.3, t_smooth_order=1) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def chirp_correction(matrix: np.ndarray, times: np.ndarray, mu: np.ndarray | float,
+                    t_smooth_order=1) -> tuple[np.ndarray, np.ndarray]:
     """
     Performs the chirp correction of the data array. Modifies the original data.
     mu is array defining time zero. The time dimension of data will be cropped to [-offset_before_zero:].
@@ -284,32 +284,40 @@ def chirp_correction(matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndar
     """
 
     if not isinstance(mu, np.ndarray):
-        # mu is just a number, there is not wavelength dependency, change only times and return the original data
+        # mu is just a number, there is no wavelength dependency, change only times and return the original data
         new_times = times.copy() - mu
-        return matrix, new_times, wavelengths
+        return matrix, new_times
+    
+    offset = np.min(mu) - times[0]
+    
+    assert offset >= 0
 
-    assert np.min(mu) - times[0] >= offset_before_zero
+    new_times = times.copy() - np.min(mu)
 
-    idx_0 = fi(times, -offset_before_zero)
+    # # idx = fi(times, )
 
-    # create new time array starting with -offset_before_zero
-    if times[idx_0] == -offset_before_zero:
-        new_times = times[idx_0:]
-    else:
-        num = int(times[idx_0] < -offset_before_zero)
-        new_times = np.insert(times[idx_0 + num:], 0, -offset_before_zero)
+    # # new_times = times.copy() -
+
+    # idx_0 = fi(times, -offset_before_zero)
+
+    # # create new time array starting with -offset_before_zero
+    # if times[idx_0] == -offset_before_zero:
+    #     new_times = times[idx_0:]
+    # else:
+    #     num = int(times[idx_0] < -offset_before_zero)
+    #     new_times = np.insert(times[idx_0 + num:], 0, -offset_before_zero)
 
     # perform doubling of time points
     for i in range(t_smooth_order):
         new_times = double_points(new_times)
 
-    new_D = np.empty((new_times.shape[0], wavelengths.shape[0]), dtype=np.float64)
+    new_D = np.empty((new_times.shape[0], matrix.shape[1]), dtype=np.float64)
 
-    for i in range(wavelengths.shape[0]):
+    for i in range(matrix.shape[1]):
         # linear interpolation for each wavelength
         new_D[:, i] = np.interp(new_times, times - mu[i], matrix[:, i])
 
-    return new_D, new_times, wavelengths
+    return new_D, new_times
 
 
 
