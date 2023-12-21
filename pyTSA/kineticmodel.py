@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+from matplotlib.ticker import AutoLocator, MultipleLocator, ScalarFormatter
 
 import numpy as np
 # from scipy.integrate import odeint
@@ -22,7 +23,7 @@ import scipy.constants as sc
 
 from typing import TYPE_CHECKING
 
-from plot import plot_data_ax
+from plot import plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax
 if TYPE_CHECKING:
     from .dataset import Dataset
 
@@ -466,6 +467,20 @@ class FirstOrderModel(KineticModel):
         self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
         self.params = self.fit_result.params
 
+    def plot_integrated(self, tstart=0):
+        if self.dataset is None:
+            return
+        
+        y = np.trapz(self.dataset.matrix_fac, self.dataset.wavelengths, axis=1)
+        plt.plot(self.dataset.times, y)
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlim(tstart, self.dataset.times[-1])
+        plt.xlabel('Time / ns')
+        plt.ylabel('Integrated intensity')
+        plt.show()
+
+
     def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None, **kwargs):
         # what is list of figures to plot
         # data, traces, EADS, DADS, LDM, residuals
@@ -489,6 +504,15 @@ class FirstOrderModel(KineticModel):
         if nrows * ncols == 1:
             axes = np.asarray([axes])
 
+        plot_chirp_corrected = kwargs.get("plot_chirp_corrected", False)
+        mu = self.get_mu()
+        draw_chirp = kwargs.get("draw_chirp", True)
+        COLORS = ['blue', 'red', 'green', 'orange', 'purple', 'black', 'gray']
+        t_unit=kwargs.get('t_unit', 'ps')
+        linthresh = kwargs.get("linthresh", 1)
+        linscale = kwargs.get("linscale", 1)
+
+
         for i, p in enumerate(what):
             if i >= nrows * ncols:
                 break
@@ -496,25 +520,47 @@ class FirstOrderModel(KineticModel):
             ax = axes.flat[i]
             match p.lower():
                 case "data":
-                    pass
-                    
+                    plot_data_ax(fig, ax, self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
+                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
+                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'),
+                        t_unit=t_unit, z_unit=kwargs.get('z_unit', '$\Delta A$'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
+                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=ScalarFormatter(),
+                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"Data [{self.dataset.name}]",
+                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),  linthresh=linthresh, linscale=linscale,
+                        x_label=kwargs.get('x_label', "Wavelength / nm"), plot_chirp_corrected=plot_chirp_corrected, mu=mu, draw_chirp=draw_chirp)
                 case "traces":
-                    pass
+                    plot_traces_onefig_ax(ax, self.dataset.matrix_fac, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, mu=mu,
+                        wls=kwargs.get('traces_wls', (300, 400, 500, 600)), marker_size=kwargs.get("marker_size", 10), alpha=kwargs.get("traces_alpha", 0.8),
+                        marker_facecolor="white", colors=COLORS, t_axis_formatter=ScalarFormatter(),
+                        linscale=linscale, linthresh=linthresh, x_label=f'Time / {t_unit}', symlog=kwargs.get('symlog', True),
+                        y_label=kwargs.get('z_unit', '$\Delta A$'), plot_tilts=kwargs.get('plot_tilts', True),
+                        D_mul_factor=kwargs.get('D_mul_factor', 1),  t_lim=kwargs.get('t_lim', (None, None)))
 
                 case "eads":
-                    
                     pass
                 case "dads":
-                                    
-                    pass
+                    # TODO include artifacts
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, zero_reg=kwargs.get("hatched_wls", (None, None)), colors=COLORS,
+                         D_mul_factor=kwargs.get('D_mul_factor', 1), z_unit=kwargs.get('z_unit', '$\Delta A$'), lw=1.5, w_lim=kwargs.get('w_lim', (None, None)),
+                           title='DADS', show_legend=True, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()])
 
                 case "ldm":
                     plot_data_ax(fig, ax, self.LDM, self.LDM_lifetimes, self.dataset.wavelengths, symlog=False, log=True,
                         plot_countours=kwargs.get('plot_countours', True), plot_tilts=False, D_mul_factor=kwargs.get('D_mul_factor', 1),
                         n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label='Lifetime',
-                        t_unit=kwargs.get('t_unit', 'ps'), z_unit='Amplitude', squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
+                        t_unit=t_unit, z_unit='Amplitude', squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
                         z_lim=(None, None), t_lim=(None, None), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
-                        colorbar_locator=None, hatch=kwargs.get('hatch', '/////'),  title=f"LDM [{self.dataset.name}]",
+                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"LDM [{self.dataset.name}]",
+                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
+                        x_label=kwargs.get('x_label', "Wavelength / nm"))
+                    
+                case "ldmfit":
+                    plot_data_ax(fig, ax, self.LDM_fit, self.LDM_lifetimes, self.dataset.wavelengths, symlog=False, log=True,
+                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=False, D_mul_factor=kwargs.get('D_mul_factor', 1),
+                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label='Lifetime',
+                        t_unit=t_unit, z_unit='Amplitude', squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
+                        z_lim=(None, None), t_lim=(None, None), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
+                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"LDM [{self.dataset.name}]",
                         colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
                         x_label=kwargs.get('x_label', "Wavelength / nm"))
 
@@ -522,21 +568,21 @@ class FirstOrderModel(KineticModel):
                     plot_data_ax(fig, ax, self.matrix_opt - self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
                         plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
                         n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'),
-                        t_unit=kwargs.get('t_unit', 'ps'), z_unit=kwargs.get('z_unit', 'A'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
-                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
-                        colorbar_locator=kwargs.get('colorbar_locator', None), hatch=kwargs.get('hatch', '/////'),  title=f"Residuals [{self.dataset.name}]",
-                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
-                        x_label=kwargs.get('x_label', "Wavelength / nm"))
+                        t_unit=t_unit, z_unit=kwargs.get('z_unit', '$\Delta A$'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
+                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=ScalarFormatter(),
+                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"Residuals [{self.dataset.name}]",
+                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False), linthresh=linthresh, linscale=linscale,
+                        x_label=kwargs.get('x_label', "Wavelength / nm"), plot_chirp_corrected=plot_chirp_corrected, mu=mu, draw_chirp=draw_chirp)
 
                 case "fit":
                     plot_data_ax(fig, ax, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
                         plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
                         n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'),
-                        t_unit=kwargs.get('t_unit', 'ps'), z_unit=kwargs.get('z_unit', 'A'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
-                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
-                        colorbar_locator=kwargs.get('colorbar_locator', None), hatch=kwargs.get('hatch', '/////'),  title=f"Fit [{self.dataset.name}]",
-                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
-                        x_label=kwargs.get('x_label', "Wavelength / nm"))
+                        t_unit=t_unit, z_unit=kwargs.get('z_unit', '$\Delta A$'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
+                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=ScalarFormatter(),
+                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"Fit [{self.dataset.name}]",
+                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False), linthresh=linthresh, linscale=linscale,
+                        x_label=kwargs.get('x_label', "Wavelength / nm"), plot_chirp_corrected=plot_chirp_corrected, mu=mu, draw_chirp=draw_chirp)
 
                 case "empty":
                     continue

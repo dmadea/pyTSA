@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from mathfuncs import fi
+from mathfuncs import chirp_correction, fi
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 from matplotlib import colormaps
@@ -277,7 +277,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
     if not isinstance(mu, np.ndarray):
         mu = np.ones_like(wavelengths) * mu
 
-    t_lim = (times[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
+    t_lim = ((times - mu.min())[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
 
     set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=y_label, x_label=x_label,
                   y_minor_locator=None, x_minor_locator=None)
@@ -563,16 +563,23 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
                  x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels=30, plot_countours=True,
                  colorbar_locator=MultipleLocator(50), colorbarpad=0.04, title='',
                  diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=True,
-                 x_label="Wavelength / nm"):
+                 x_label="Wavelength / nm", plot_chirp_corrected=False, mu=None, draw_chirp=True):
     """data is individual dataset"""
 
     # assert type(data) == Data
 
-    t_lim = (times[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
-    w_lim = (
-        wavelengths[0] if w_lim[0] is None else w_lim[0], wavelengths[-1] if w_lim[1] is None else w_lim[1])
+    D = matrix * D_mul_factor
+    
+    if plot_chirp_corrected:
+        assert mu is not None, "chirp is None"
+        D, times = chirp_correction(D, times, mu)
 
-    D = matrix.copy() * D_mul_factor
+    t_lim = (times[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
+    w_lim = (wavelengths[0] if w_lim[0] is None else w_lim[0], wavelengths[-1] if w_lim[1] is None else w_lim[1])
+
+    if mu is not None and draw_chirp and not plot_chirp_corrected:
+        _mu = mu if isinstance(mu, np.ndarray) else np.ones_like(wavelengths) * mu
+        ax.plot(wavelengths, _mu, color='black', lw=1.5, ls='--')
 
     zmin = np.min(D) if z_lim[0] is None else z_lim[0]
     zmax = np.max(D) if z_lim[1] is None else z_lim[1]
