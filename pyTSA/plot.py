@@ -265,7 +265,7 @@ def _plot_tilts(ax, norm, at_value, axis='y', inverted_axis=False):
 
 
 def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarray | None = None, wls=(355, 400, 450, 500, 550), marker_size=10,
-                          marker_linewidth=1, n_lin_bins=10, n_log_bins=10, t_axis_formatter=ScalarFormatter(),
+                          marker_linewidth=1, n_lin_bins=10, n_log_bins=10, t_axis_formatter=ScalarFormatter(), log_y=False,
                           marker_facecolor='white', alpha=0.8, y_lim=(None, None), plot_tilts=True, wl_unit='nm',
                           linthresh=1, linscale=1, colors=None, D_mul_factor=1e3, legend_spacing=0.2, lw=1.5,
                           legend_loc='lower right', y_label=dA_unit, x_label='Time / ps', symlog=True,
@@ -313,6 +313,9 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
             norm = c.SymLogNorm(vmin=t_lim[0], vmax=t_lim[1], linscale=linscale, linthresh=linthresh, base=10,
                                 clip=True)
             _plot_tilts(ax, norm, linthresh, 'x')
+
+    if log_y:
+        ax.set_yscale('log')
 
     if t_axis_formatter:
         ax.xaxis.set_major_formatter(t_axis_formatter)
@@ -561,7 +564,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
                  n_lin_bins=10, n_log_bins=10, plot_tilts=True, squeeze_z_range_factor=1,
                  y_major_formatter=ScalarFormatter(), y_label='Time delay',
                  x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels=30, plot_countours=True,
-                 colorbar_locator=MultipleLocator(50), colorbarpad=0.04, title='',
+                 colorbar_locator=MultipleLocator(50), colorbarpad=0.04, title='', log_z=False,
                  diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=True,
                  x_label="Wavelength / nm", plot_chirp_corrected=False, mu=None, draw_chirp=True):
     """data is individual dataset"""
@@ -617,7 +620,14 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
 
     #     mappable = ax.pcolormesh(x, y, D, cmap=cmap, vmin=zmin, vmax=zmax)
     levels = get_sym_space(zmin, zmax, n_levels)
-    mappable = ax.contourf(x, y, D, cmap=cmap, vmin=zmin, vmax=zmax, levels=levels, antialiased=True)
+
+    # mappable = ax.contourf(x, y, D, cmap=cmap, vmin=zmin, vmax=zmax, levels=levels, antialiased=True)
+    if log_z:
+        norm = mpl.colors.LogNorm(vmin=np.max(np.asarray([1e-9, zmin])), vmax=zmax, clip=True)
+        mappable = ax.pcolormesh(x, y, D, cmap=cmap, norm=norm)
+    else:
+        norm = mpl.colors.Normalize(vmin=zmin,vmax=zmax, clip=True)
+        mappable = ax.contourf(x, y, D, cmap=cmap, norm=norm, levels=levels, antialiased=True)
 
     if plot_countours:
         cmap_colors = cm.get_cmap(cmap)
@@ -636,8 +646,8 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
     ax.set_title(title)
 
     fig.colorbar(mappable, ax=ax, label=z_unit, orientation='vertical', aspect=colorbar_aspect, pad=colorbarpad,
-                 ticks=colorbar_locator)
-
+                 ticks=None if log_z else colorbar_locator)  # , format=ScalarFormatter()  ticks=colorbar_locator
+    
     if symlog:
         ax.set_yscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=linscale, linthresh=linthresh)
         ax.yaxis.set_major_locator(MajorSymLogLocator(base=10, linthresh=linthresh))

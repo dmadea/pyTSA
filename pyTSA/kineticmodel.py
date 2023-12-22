@@ -43,7 +43,7 @@ class KineticModel(object):
 
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
         self.dataset: Dataset = dataset
-        self._weights: list[tuple[float, float, float]] = []  # (wl_start, wl_end, weight) default weight 1
+        self._weights: list[tuple[float, float, float]] = []  # (wl_start, wl_end, weight) default weight 1, # additional weights
         self.n_species: int = n_species
         self.species_names = np.array(list('ABCDEFGHIJKLMNOPQRSTUV'), dtype=str)
         self.params: Parameters = self.init_params()
@@ -56,6 +56,9 @@ class KineticModel(object):
         self.fit_result: MinimizerResult | None = None
         # fitter arguments to the underlying fitting algorithm
         self.fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='linear', verbose=2, jac='3-point')
+
+        # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum as 1/std
+        self.noise_range: None | tuple[float, float] = None   
 
         # {'ftol': 1e-10, 'xtol': 1e-10, 'gtol': 1e-10, 'loss': 'linear', 'verbose': 2,
                     #  'jac': '3-point'}
@@ -113,9 +116,18 @@ class KineticModel(object):
 
     def get_weights(self):
         weights = np.ones((self.dataset.times.shape[0], self.dataset.wavelengths.shape[0]))
+
+        # https://gregorygundersen.com/blog/2022/08/09/weighted-ols/
+        if self.noise_range:
+            assert len(self.noise_range) == 2
+            i, j = fi(self.dataset.wavelengths, self.noise_range)
+
+            stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1)
+            weights *= 1 / stds[:, None]
+
         for *rng, w in self._weights:
-            idx0, idx1 = fi(self.dataset.wavelengths, rng)
-            weights[:, idx0:idx1+1] *= w
+            i, j = fi(self.dataset.wavelengths, rng)
+            weights[:, i:j+1] *= w
 
         return weights
 
@@ -512,7 +524,6 @@ class FirstOrderModel(KineticModel):
         linthresh = kwargs.get("linthresh", 1)
         linscale = kwargs.get("linscale", 1)
 
-
         for i, p in enumerate(what):
             if i >= nrows * ncols:
                 break
@@ -522,7 +533,7 @@ class FirstOrderModel(KineticModel):
                 case "data":
                     plot_data_ax(fig, ax, self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
                         plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
-                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'),
+                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'), log_z=kwargs.get('log_z', False),
                         t_unit=t_unit, z_unit=kwargs.get('z_unit', '$\Delta A$'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
                         z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=ScalarFormatter(),
                         colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"Data [{self.dataset.name}]",
@@ -531,10 +542,20 @@ class FirstOrderModel(KineticModel):
                 case "traces":
                     plot_traces_onefig_ax(ax, self.dataset.matrix_fac, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, mu=mu,
                         wls=kwargs.get('traces_wls', (300, 400, 500, 600)), marker_size=kwargs.get("marker_size", 10), alpha=kwargs.get("traces_alpha", 0.8),
-                        marker_facecolor="white", colors=COLORS, t_axis_formatter=ScalarFormatter(),
+                        marker_facecolor="white", colors=COLORS, t_axis_formatter=ScalarFormatter(), log_y=kwargs.get('log_y', False),
                         linscale=linscale, linthresh=linthresh, x_label=f'Time / {t_unit}', symlog=kwargs.get('symlog', True),
-                        y_label=kwargs.get('z_unit', '$\Delta A$'), plot_tilts=kwargs.get('plot_tilts', True),
+                        y_label=kwargs.get('z_unit', '$\Delta A$'), plot_tilts=kwargs.get('plot_tilts', True), y_lim=kwargs.get('y_lim', (None, None)),
                         D_mul_factor=kwargs.get('D_mul_factor', 1),  t_lim=kwargs.get('t_lim', (None, None)))
+                    
+                case "trapz":
+
+                    y = np.trapz(self.dataset.matrix_fac, self.dataset.wavelengths, axis=1)
+                    ax.set_xscale('log')
+                    ax.set_yscale('log')
+                    ax.set_xlim(2.5, self.dataset.times[-1])
+                    ax.set_xlabel(f'Time / {t_unit}')
+                    ax.set_ylabel('Integrated intensity')
+                    ax.plot(self.dataset.times, y)
 
                 case "eads":
                     pass
@@ -543,11 +564,17 @@ class FirstOrderModel(KineticModel):
                     plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, zero_reg=kwargs.get("hatched_wls", (None, None)), colors=COLORS,
                          D_mul_factor=kwargs.get('D_mul_factor', 1), z_unit=kwargs.get('z_unit', '$\Delta A$'), lw=1.5, w_lim=kwargs.get('w_lim', (None, None)),
                            title='DADS', show_legend=True, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()])
+                    
+                case "dads-norm":
+                    # TODO include artifacts
+                    plot_SADS_ax(ax, self.dataset.wavelengths, (self.ST_opt / self.ST_opt.max(axis=1, keepdims=True)).T, zero_reg=kwargs.get("hatched_wls", (None, None)), colors=COLORS,
+                         D_mul_factor=kwargs.get('D_mul_factor', 1), z_unit=kwargs.get('z_unit', '$\Delta A$'), lw=1.5, w_lim=kwargs.get('w_lim', (None, None)),
+                           title='DADS', show_legend=True, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()])
 
                 case "ldm":
                     plot_data_ax(fig, ax, self.LDM, self.LDM_lifetimes, self.dataset.wavelengths, symlog=False, log=True,
                         plot_countours=kwargs.get('plot_countours', True), plot_tilts=False, D_mul_factor=kwargs.get('D_mul_factor', 1),
-                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label='Lifetime',
+                        n_levels=kwargs.get('n_levels', 30), cmap='diverging', y_label='Lifetime',
                         t_unit=t_unit, z_unit='Amplitude', squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
                         z_lim=(None, None), t_lim=(None, None), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
                         colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"LDM [{self.dataset.name}]",
@@ -590,7 +617,11 @@ class FirstOrderModel(KineticModel):
                 case _:
                     raise ValueError(f"Plot {p} is not defined.")
                 
-        plt.tight_layout()
+        # plt.tight_layout()
+                
+    # if n < nrows * ncols:
+        for ax in axes.flat[n:]:
+            ax.set_axis_off()
 
         filepath = kwargs.get('filepath', None)
 

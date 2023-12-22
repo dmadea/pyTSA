@@ -294,19 +294,6 @@ def chirp_correction(matrix: np.ndarray, times: np.ndarray, mu: np.ndarray | flo
 
     new_times = times.copy() - np.min(mu)
 
-    # # idx = fi(times, )
-
-    # # new_times = times.copy() -
-
-    # idx_0 = fi(times, -offset_before_zero)
-
-    # # create new time array starting with -offset_before_zero
-    # if times[idx_0] == -offset_before_zero:
-    #     new_times = times[idx_0:]
-    # else:
-    #     num = int(times[idx_0] < -offset_before_zero)
-    #     new_times = np.insert(times[idx_0 + num:], 0, -offset_before_zero)
-
     # perform doubling of time points
     for i in range(t_smooth_order):
         new_times = double_points(new_times)
