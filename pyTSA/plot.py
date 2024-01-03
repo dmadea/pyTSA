@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from mathfuncs import chirp_correction, fi
+from mathfuncs import chirp_correction, fi, is_iterable
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
 from matplotlib import colormaps
@@ -10,7 +10,7 @@ import matplotlib as mpl
 import matplotlib.colors as c
 from numpy import ma
 
-from matplotlib.ticker import SymmetricalLogLocator, ScalarFormatter, AutoMinorLocator, MultipleLocator, Locator, FixedLocator
+from matplotlib.ticker import AutoLocator, SymmetricalLogLocator, ScalarFormatter, AutoMinorLocator, MultipleLocator, Locator, FixedLocator
 
 WL_LABEL = 'Wavelength / nm'
 WN_LABEL = "Wavenumber / $10^{4}$ cm$^{-1}$"
@@ -35,7 +35,9 @@ MAJOR_TICK_DIRECTION = 'in'  # in, out or inout
 MINOR_TICK_DIRECTION = 'in'  # in, out or inout
 
 X_SIZE, Y_SIZE = 5, 4.5
-dA_unit = '$\Delta A$ / $10^{-3}$'
+# dA_unit = '$\Delta A$ / $10^{-3}$'
+dA_unit = '$\Delta A$'
+
 
 COLORS = ['blue', 'red', 'green', 'orange', 'black', 'yellow']
 COLORS_gradient = ['blue', 'lightblue']
@@ -266,11 +268,13 @@ def _plot_tilts(ax, norm, at_value, axis='y', inverted_axis=False):
 
 def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarray | None = None, wls=(355, 400, 450, 500, 550), marker_size=10,
                           marker_linewidth=1, n_lin_bins=10, n_log_bins=10, t_axis_formatter=ScalarFormatter(), log_y=False,
-                          marker_facecolor='white', alpha=0.8, y_lim=(None, None), plot_tilts=True, wl_unit='nm',
-                          linthresh=1, linscale=1, colors=None, D_mul_factor=1e3, legend_spacing=0.2, lw=1.5,
-                          legend_loc='lower right', y_label=dA_unit, x_label='Time / ps', symlog=True,
-                          t_lim=(None, None),
-                          plot_zero_line=True):
+                          marker_facecolor='white', alpha=0.8, y_lim=(None, None), plot_tilts=True, wl_unit='nm', t_unit='ps',
+                          linthresh=1, linscale=1, colors=None, D_mul_factor=1, legend_spacing=0.2, lw=1.5,
+                          legend_loc='best', y_label=dA_unit, x_label='Time', symlog=True,
+                          t_lim=(None, None), plot_zero_line=True, **kwargs):
+    
+    """wls can contain a range of wavelengths, in this case, the integrated intensity will be calculated in this range and plotted"""
+
     n = wls.__len__()
     t = times
     mu = np.zeros_like(wavelengths) if mu is None else mu
@@ -279,7 +283,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
 
     t_lim = ((times - mu.min())[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
 
-    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=y_label, x_label=x_label,
+    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=y_label, x_label=f"{x_label} / {t_unit}",
                   y_minor_locator=None, x_minor_locator=None)
 
     if plot_zero_line:
@@ -290,15 +294,26 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
     for i in range(n):
         color_points = c.to_rgb(colors[i])
         color_line = np.asarray(color_points) * 0.7
+        
+        if is_iterable(wls[i]):
+            k, l = fi(wavelengths, wls[i])
+            trace = np.trapz(D[:, k:l+1], wavelengths[k:l+1], axis=1)
+            trace_fit = np.trapz(D_fit[:, k:l+1], wavelengths[k:l+1], axis=1)
+            tt = t - (mu[k] + mu[l+1]) / 2
+            label=f'({wls[i][0]}$-${wls[i][1]}) {wl_unit}'
+        else:
+            idx = fi(wavelengths, wls[i])
+            trace = D[:, idx]
+            trace_fit = D_fit[:, idx]
+            tt = t - mu[idx]
+            label=f'{wls[i]} {wl_unit}'
 
-        idx = fi(wavelengths, wls[i])
-        tt = t - mu[idx]
-        ax.scatter(tt, D[:, idx] * D_mul_factor, edgecolor=color_points, facecolor=marker_facecolor,
+        ax.scatter(tt, trace * D_mul_factor, edgecolor=color_points, facecolor=marker_facecolor,
                    alpha=alpha, marker='o', s=marker_size, linewidths=marker_linewidth)
 
         ax.scatter([], [], edgecolor=color_points, facecolor=marker_facecolor,
-                   alpha=alpha, marker='o', label=f'{wls[i]} {wl_unit}', s=marker_size * 2, linewidths=marker_linewidth)
-        ax.plot(tt, D_fit[:, idx] * D_mul_factor, lw=lw, color=color_line)
+                   alpha=alpha, marker='o', label=label, s=marker_size * 2, linewidths=marker_linewidth)
+        ax.plot(tt, trace_fit * D_mul_factor, lw=lw, color=color_line)
 
     ax.xaxis.set_ticks_position('both')
     ax.yaxis.set_ticks_position('both')
@@ -560,13 +575,13 @@ def plot_kinetics_ax(ax, D, times, wavelengths,   lw=0.5,  time_unit='ps',
 
 def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_unit='ps',
                  z_unit=dA_unit, cmap='diverging', z_lim=(None, None),
-                 t_lim=(None, None), w_lim=(None, None), linthresh=1, linscale=1, D_mul_factor=1e3,
+                 t_lim=(None, None), w_lim=(None, None), linthresh=1, linscale=1, D_mul_factor=1,
                  n_lin_bins=10, n_log_bins=10, plot_tilts=True, squeeze_z_range_factor=1,
                  y_major_formatter=ScalarFormatter(), y_label='Time delay',
                  x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels=30, plot_countours=True,
-                 colorbar_locator=MultipleLocator(50), colorbarpad=0.04, title='', log_z=False,
-                 diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=True,
-                 x_label="Wavelength / nm", plot_chirp_corrected=False, mu=None, draw_chirp=True):
+                 colorbar_locator=AutoLocator(), colorbarpad=0.04, title='', log_z=False,
+                 diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=False,
+                 x_label="Wavelength / nm", plot_chirp_corrected=False, mu=None, draw_chirp=True, **kwargs):
     """data is individual dataset"""
 
     # assert type(data) == Data
@@ -742,11 +757,11 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
 #         ax.yaxis.set_major_formatter(y_major_formatter)
 
 
-def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1e3,
+def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1,
                  legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=False,
                  area_plot_data=(None, None), area_plot_color='violet', area_plot_data2=(None, None),
                  area_plot_color2='blue', title="",
-                 area_plot_alpha=0.2, area_plot_alpha2=0.1, w_lim=(None, None)):
+                 area_plot_alpha=0.2, area_plot_alpha2=0.1, w_lim=(None, None), **kwargs):
     _SADS = SADS.copy() * D_mul_factor
     if zero_reg[0] is not None:
         cut_idxs = fi(wls, zero_reg)
@@ -776,7 +791,7 @@ def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_un
         else:
             color = colors[i]
 
-        ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=labels[i])
+        ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=labels[i] if i < len(labels) else "LPL")
 
     if area_plot_data[0] is not None:
         ax.fill_between(area_plot_data[0], area_plot_data[1], color=area_plot_color, alpha=area_plot_alpha, zorder=0)

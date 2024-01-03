@@ -1,6 +1,8 @@
 from __future__ import annotations
 import os
-from matplotlib.ticker import AutoLocator, MultipleLocator, ScalarFormatter
+# from matplotlib.ticker import AutoLocator, MultipleLocator, ScalarFormatter
+
+# from functools import partial
 
 import numpy as np
 # from scipy.integrate import odeint
@@ -12,7 +14,7 @@ from abc import abstractmethod
 # from .fit import Fitter
 # from numba import njit
 
-from mathfuncs import blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, glstsq, lstsq
+from mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq
 
 import matplotlib.pyplot as plt
 
@@ -33,13 +35,9 @@ if TYPE_CHECKING:
 # kinetic model class for models which can be solved by variable projection method, 
 # all concentration profiles are parametrized by a model and spectra are linearly dependent parameters
 class KineticModel(object):
-    # species_names = None
-
     name = '___abstract Kinetic Model____'
     # description = "..."
     # _class = '-class-'
-
-    # _err = 1e-8
 
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
         self.dataset: Dataset = dataset
@@ -60,8 +58,6 @@ class KineticModel(object):
         # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum as 1/std
         self.noise_range: None | tuple[float, float] = None   
 
-        # {'ftol': 1e-10, 'xtol': 1e-10, 'gtol': 1e-10, 'loss': 'linear', 'verbose': 2,
-                    #  'jac': '3-point'}
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
 
     @abstractmethod
@@ -113,6 +109,15 @@ class KineticModel(object):
     def get_species_name(self, i):
         # i is index in range(n)
         return self.species_names[i]
+
+    def get_weights_lstsq(self):
+        if self.noise_range is None:
+            return None
+        
+        i, j = fi(self.dataset.wavelengths, self.noise_range)
+        stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1)
+        return 1 / stds
+
 
     def get_weights(self):
         weights = np.ones((self.dataset.times.shape[0], self.dataset.wavelengths.shape[0]))
@@ -176,6 +181,7 @@ class FirstOrderModel(KineticModel):
         # self.weight_chirp = False
         # self.w_of_chirp = 0.1
         # self.t_radius_chirp = 0.2  # time radius around chirp / in ps
+        self._calculate_EAS = True
 
         super(FirstOrderModel, self).__init__(dataset, n_species)
 
@@ -309,26 +315,6 @@ class FirstOrderModel(KineticModel):
                 self.params[f"t0_p_{i + 1}"].value = coefs[i+1]
 
 
-    # @staticmethod
-    # def simulate_model(t, K, j, mu=None, fwhm=0):
-    #     # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
-    #     L, Q = np.linalg.eig(K)
-    #     Q_inv = np.linalg.inv(Q)
-
-    #     A2_T = Q * Q_inv.dot(j)  # Q @ np.diag(Q_inv.dot(j))
-
-    #     _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
-
-    #     if mu is not None:  # TODO !!! pořešit, ať je to obecne
-    #         # C = _Femto.conv_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau)
-    #         C = fold_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau, 0)
-
-    #     else:
-    #         # C = _Femto.conv_exp(t[:, None], -L[None, :], fwhm)
-    #         C = fold_exp(t[:, None], -L[None, :], fwhm, 0)
-
-    #     return C.dot(A2_T.T)
-
     def _simulate_artifacts(self, tt: np.ndarray, fwhm: np.ndarray, zero_coh_range=None) -> np.ndarray:
 
         order = self.artifact_order
@@ -356,8 +342,6 @@ class FirstOrderModel(KineticModel):
         y /= y_max
 
         return y
-
-        # self.C_COH = y
 
         # if zero_coh_range is not None:
         #     self.C_COH *= zero_coh_range[:, None, None]
@@ -398,7 +382,8 @@ class FirstOrderModel(KineticModel):
             C_artifacts = self._simulate_artifacts(tt, fwhm)
             C = np.concatenate((C_artifacts, C), axis=-1)
 
-        coefs, D_fit = glstsq(C, self.dataset.matrix_fac, ridge_alpha)
+        w = self.get_weights_lstsq()
+        coefs, D_fit = glstsq(C, self.dataset.matrix_fac, ridge_alpha, w)
 
         if self.include_artifacts:
             coefs = coefs[self.artifact_order + 1:]
@@ -424,7 +409,9 @@ class FirstOrderModel(KineticModel):
         else:
             C_full: np.ndarray = np.concatenate((self.C_artifacts, self.C_opt), axis=-1)
 
-        ST_full, self.matrix_opt = glstsq(C_full, self.dataset.matrix_fac, self.ridge_alpha)
+        w = self.get_weights_lstsq()
+
+        ST_full, self.matrix_opt = glstsq(C_full, self.dataset.matrix_fac, self.ridge_alpha, w)
 
         if self.include_artifacts:
             n = self.C_artifacts.shape[-1]
@@ -434,7 +421,14 @@ class FirstOrderModel(KineticModel):
         else:
             self.ST_opt = ST_full
 
+        if self._calculate_EAS:
+            # calculation of EAS profiles and spectra
+            ks = self.get_rates(params)
+            A = get_EAS_transform(ks)
+            self.C_EAS = self.C_opt.dot(A)
+            self.ST_EAS = np.linalg.inv(A).dot(self.ST_opt)
 
+        
     def calculate_C_profiles(self, params: Parameters | None = None):
         """Simulates concentration profiles, including coherent artifacts if setup in a model."""
         params = self.params if params is None else params
@@ -462,8 +456,8 @@ class FirstOrderModel(KineticModel):
         _ks = ks[None, None, :] if tensor else ks[None, :]
         
         # simulation for DADS only
-        # EADS can be then recalculated from EADS
         self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau)
+
 
     def fit(self):
         def residuals(params):
@@ -479,21 +473,12 @@ class FirstOrderModel(KineticModel):
         self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
         self.params = self.fit_result.params
 
-    def plot_integrated(self, tstart=0):
-        if self.dataset is None:
-            return
-        
-        y = np.trapz(self.dataset.matrix_fac, self.dataset.wavelengths, axis=1)
-        plt.plot(self.dataset.times, y)
-        plt.xscale('log')
-        plt.yscale('log')
-        plt.xlim(tstart, self.dataset.times[-1])
-        plt.xlabel('Time / ns')
-        plt.ylabel('Integrated intensity')
-        plt.show()
-
-
     def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None, **kwargs):
+        """
+        
+        
+        
+        """
         # what is list of figures to plot
         # data, traces, EADS, DADS, LDM, residuals
 
@@ -516,37 +501,39 @@ class FirstOrderModel(KineticModel):
         if nrows * ncols == 1:
             axes = np.asarray([axes])
 
-        plot_chirp_corrected = kwargs.get("plot_chirp_corrected", False)
         mu = self.get_mu()
-        draw_chirp = kwargs.get("draw_chirp", True)
         COLORS = ['blue', 'red', 'green', 'orange', 'purple', 'black', 'gray']
         t_unit=kwargs.get('t_unit', 'ps')
-        linthresh = kwargs.get("linthresh", 1)
-        linscale = kwargs.get("linscale", 1)
+
+        def update_kwargs(prefix: str, kwargs: dict):
+            for key, value in kwargs.copy().items():
+                if key.startswith(prefix.lower()):
+                    _key = key[len(prefix) + 1:]  # to account for _ symbol
+                    kwargs[_key] = value
 
         for i, p in enumerate(what):
             if i >= nrows * ncols:
                 break
 
             ax = axes.flat[i]
+            kws = kwargs.copy()
             match p.lower():
                 case "data":
-                    plot_data_ax(fig, ax, self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
-                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
-                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'), log_z=kwargs.get('log_z', False),
-                        t_unit=t_unit, z_unit=kwargs.get('z_unit', '$\Delta A$'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
-                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=ScalarFormatter(),
-                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"Data [{self.dataset.name}]",
-                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),  linthresh=linthresh, linscale=linscale,
-                        x_label=kwargs.get('x_label', "Wavelength / nm"), plot_chirp_corrected=plot_chirp_corrected, mu=mu, draw_chirp=draw_chirp)
+                    kws.update(dict(title=f"Data [{self.dataset.name}]", log=False, mu=mu))
+                    update_kwargs("data", kws)  # change to data-specific kwargs
+                    plot_data_ax(fig, ax, self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, **kws)
+                case "residuals":
+                    kws.update(dict(title=f"Residuals [{self.dataset.name}]", log=False, mu=mu))
+                    update_kwargs("residuals", kws)  # change to data-specific kwargs
+                    plot_data_ax(fig, ax, self.matrix_opt - self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, **kws)
+                case "fit":
+                    kws.update(dict(title=f"Fit [{self.dataset.name}]", log=False, mu=mu))
+                    update_kwargs("fit", kws)  # change to data-specific kwargs
+                    plot_data_ax(fig, ax, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, **kws)
                 case "traces":
-                    plot_traces_onefig_ax(ax, self.dataset.matrix_fac, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, mu=mu,
-                        wls=kwargs.get('traces_wls', (300, 400, 500, 600)), marker_size=kwargs.get("marker_size", 10), alpha=kwargs.get("traces_alpha", 0.8),
-                        marker_facecolor="white", colors=COLORS, t_axis_formatter=ScalarFormatter(), log_y=kwargs.get('log_y', False),
-                        linscale=linscale, linthresh=linthresh, x_label=f'Time / {t_unit}', symlog=kwargs.get('symlog', True),
-                        y_label=kwargs.get('z_unit', '$\Delta A$'), plot_tilts=kwargs.get('plot_tilts', True), y_lim=kwargs.get('y_lim', (None, None)),
-                        D_mul_factor=kwargs.get('D_mul_factor', 1),  t_lim=kwargs.get('t_lim', (None, None)))
-                    
+                    kws.update(dict(title=f"Traces", mu=mu, colors=COLORS))
+                    update_kwargs("traces", kws)  # change to data-specific kwargs
+                    plot_traces_onefig_ax(ax, self.dataset.matrix_fac, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, **kws)
                 case "trapz":
 
                     y = np.trapz(self.dataset.matrix_fac, self.dataset.wavelengths, axis=1)
@@ -557,69 +544,46 @@ class FirstOrderModel(KineticModel):
                     ax.set_ylabel('Integrated intensity')
                     ax.plot(self.dataset.times, y)
 
-                case "eads":
-                    pass
-                case "dads":
+                case "eas":
+                    kws.update(dict(title="EAS", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
+                    update_kwargs("eas", kws)  # change to data-specific kwargs
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_EAS.T, **kws)
+                case "eas-norm":
+                    kws.update(dict(title="EAS-norm", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
+                    update_kwargs("eas-norm", kws)  # change to data-specific kwargs
+                    plot_SADS_ax(ax, self.dataset.wavelengths, (self.ST_EAS / self.ST_EAS.max(axis=1, keepdims=True)).T, **kws)
+                case "das":
                     # TODO include artifacts
-                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, zero_reg=kwargs.get("hatched_wls", (None, None)), colors=COLORS,
-                         D_mul_factor=kwargs.get('D_mul_factor', 1), z_unit=kwargs.get('z_unit', '$\Delta A$'), lw=1.5, w_lim=kwargs.get('w_lim', (None, None)),
-                           title='DADS', show_legend=True, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()])
-                    
-                case "dads-norm":
-                    # TODO include artifacts
-                    plot_SADS_ax(ax, self.dataset.wavelengths, (self.ST_opt / self.ST_opt.max(axis=1, keepdims=True)).T, zero_reg=kwargs.get("hatched_wls", (None, None)), colors=COLORS,
-                         D_mul_factor=kwargs.get('D_mul_factor', 1), z_unit=kwargs.get('z_unit', '$\Delta A$'), lw=1.5, w_lim=kwargs.get('w_lim', (None, None)),
-                           title='DADS', show_legend=True, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()])
-
+                    kws.update(dict(title="DAS", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
+                    update_kwargs("das", kws)  # change to data-specific kwargs
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, **kws)
+                case "das-norm":
+                    kws.update(dict(title="DAS-norm", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
+                    update_kwargs("das-norm", kws)  # change to data-specific kwargs
+                    plot_SADS_ax(ax, self.dataset.wavelengths, (self.ST_opt / self.ST_opt.max(axis=1, keepdims=True)).T, **kws)
                 case "ldm":
-                    plot_data_ax(fig, ax, self.LDM, self.LDM_lifetimes, self.dataset.wavelengths, symlog=False, log=True,
-                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=False, D_mul_factor=kwargs.get('D_mul_factor', 1),
-                        n_levels=kwargs.get('n_levels', 30), cmap='diverging', y_label='Lifetime',
-                        t_unit=t_unit, z_unit='Amplitude', squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
-                        z_lim=(None, None), t_lim=(None, None), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
-                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"LDM [{self.dataset.name}]",
-                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
-                        x_label=kwargs.get('x_label', "Wavelength / nm"))
-                    
+                    kws.update(dict(title=f"LDM [{self.dataset.name}]", plot_tilts=False, y_major_formatter=None, cmap='diverging',
+                                     z_unit="Amplitude", y_label='Lifetime', mu=None, log_z=False))
+                    update_kwargs("ldm", kws)  # change to specific kwargs
+                    kws.update(dict(plot_chirp_corrected=False, symlog=False, log=True))
+                    plot_data_ax(fig, ax, self.LDM, self.LDM_lifetimes, self.dataset.wavelengths, **kws)
                 case "ldmfit":
-                    plot_data_ax(fig, ax, self.LDM_fit, self.LDM_lifetimes, self.dataset.wavelengths, symlog=False, log=True,
-                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=False, D_mul_factor=kwargs.get('D_mul_factor', 1),
-                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label='Lifetime',
-                        t_unit=t_unit, z_unit='Amplitude', squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
-                        z_lim=(None, None), t_lim=(None, None), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=None,
-                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"LDM [{self.dataset.name}]",
-                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False),
-                        x_label=kwargs.get('x_label', "Wavelength / nm"))
-
-                case "residuals":
-                    plot_data_ax(fig, ax, self.matrix_opt - self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
-                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
-                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'),
-                        t_unit=t_unit, z_unit=kwargs.get('z_unit', '$\Delta A$'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
-                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=ScalarFormatter(),
-                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"Residuals [{self.dataset.name}]",
-                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False), linthresh=linthresh, linscale=linscale,
-                        x_label=kwargs.get('x_label', "Wavelength / nm"), plot_chirp_corrected=plot_chirp_corrected, mu=mu, draw_chirp=draw_chirp)
-
-                case "fit":
-                    plot_data_ax(fig, ax, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, symlog=kwargs.get('symlog', True), log=False,
-                        plot_countours=kwargs.get('plot_countours', True), plot_tilts=kwargs.get('plot_tilts', True), D_mul_factor=kwargs.get('D_mul_factor', 1),
-                        n_levels=kwargs.get('n_levels', 30), cmap=kwargs.get('cmap', 'diverging'), y_label=kwargs.get('y_label', 'Time delay'),
-                        t_unit=t_unit, z_unit=kwargs.get('z_unit', '$\Delta A$'),  squeeze_z_range_factor=kwargs.get('squeeze_z_range_factor', 1),
-                        z_lim=kwargs.get('z_lim', (None, None)), t_lim=kwargs.get('t_lim', (None, None)), w_lim=kwargs.get('w_lim', (None, None)), y_major_formatter=ScalarFormatter(),
-                        colorbar_locator=kwargs.get('colorbar_locator', AutoLocator()), hatch=kwargs.get('hatch', '/////'),  title=f"Fit [{self.dataset.name}]",
-                        colorbar_aspect=kwargs.get('colorbar_aspect', 35), add_wn_axis=kwargs.get('add_wn_axis', False), linthresh=linthresh, linscale=linscale,
-                        x_label=kwargs.get('x_label', "Wavelength / nm"), plot_chirp_corrected=plot_chirp_corrected, mu=mu, draw_chirp=draw_chirp)
-
+                    kws.update(dict(title=f"LDM-fit", log=False, mu=mu))
+                    update_kwargs("ldmfit", kws)  # change to data-specific kwargs
+                    plot_data_ax(fig, ax, self.LDM_fit, self.dataset.times, self.dataset.wavelengths, **kws)
+                case "ldmresiduals":
+                    kws.update(dict(title=f"LDM-residuals", log=False, mu=mu))
+                    update_kwargs("ldmresiduals", kws)  # change to data-specific kwargs
+                    plot_data_ax(fig, ax, self.LDM_fit - self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, **kws)
                 case "empty":
+                    ax.set_axis_off()
                     continue
 
                 case _:
                     raise ValueError(f"Plot {p} is not defined.")
                 
-        # plt.tight_layout()
+        plt.tight_layout()
                 
-    # if n < nrows * ncols:
         for ax in axes.flat[n:]:
             ax.set_axis_off()
 
@@ -632,71 +596,35 @@ class FirstOrderModel(KineticModel):
             plt.show()
 
 
-# class PumpProbeCrossCorrelation(_Femto):
 
-#     name = 'Pump-Probe Cross-Correlation'
-#     _class = 'Femto'
+class FirstOrderLPLModel(FirstOrderModel):
 
-#     def open_model_settings(self, show_target_model=False):
-#         super(PumpProbeCrossCorrelation, self).open_model_settings(False)
+    name = "First order kinetic model with optional LPL profile"
 
-#     def calc_C(self, params=None, C_out=None):
-#         super(PumpProbeCrossCorrelation, self).calc_C(params, C_out)
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
+        self.include_LPL = True
+        super(FirstOrderLPLModel, self).__init__(dataset, n_species)
+        self._calculate_EAS = False
 
-#         return None
+    def init_params(self) -> Parameters:
+        params = super(FirstOrderLPLModel, self).init_params()
 
+        if self.include_LPL:
+            params.add('LPL_slope', value=1, min=0.1, max=10, vary=True)
 
-# class Global_Analysis_Femto(_Femto):
+        return params
+        
+    def calculate_C_profiles(self, params: Parameters | None = None):
+        super(FirstOrderLPLModel, self).calculate_C_profiles(params)
 
-#     name = 'Global Analysis'
-#     _class = 'Femto'
-#     use_numpy = True
+        if not self.include_LPL:
+            return
+        
+        params = self.params if params is None else params
 
-#     def init_model_params(self):
-#         params = super(Global_Analysis_Femto, self).init_model_params()
-
-#         # evolution model
-#         if self.spectra == 'EADS':
-#             self.species_names = [f'EADS{i + 1}' for i in range(self.n)]
-#             for i in range(self.n):
-#                 # sec_label = self.species_names[i+1] if i < self.n - 1 else ""
-#                 params.add(f'tau_{self.species_names[i]}', value=10**(i-1), min=0, max=np.inf)
-
-#         else:  # decay model
-#             self.species_names = [f'DADS{i + 1}' for i in range(self.n)]
-#             for i in range(self.n):
-#                 params.add(f'tau_{self.species_names[i]}', value=10**(i-1), min=0, max=np.inf)
-
-#         return params
-
-#     def open_model_settings(self, show_target_model=False):
-#         super(Global_Analysis_Femto, self).open_model_settings(False)
-
-
-#     def calc_C(self, params=None, C_out=None):
-#         super(Global_Analysis_Femto, self).calc_C(params, C_out)
-
-#         fwhm, ks = self.get_kin_pars(params)
-#         mu = self.get_mu(params)
-#         n = self.n
-#         fwhm = self.get_tau(params)  # fwhm
-
-#         if self.spectra == 'EADS':
-#             K = np.zeros((n, n))
-#             for i in range(n):
-#                 K[i, i] = -ks[i]
-#                 if i < n - 1:
-#                     K[i + 1, i] = ks[i]
-
-#             j = np.zeros(n)
-#             j[0] = 1
-#             self.C = self.simulate_model(self.times, K, j, mu, fwhm)
-
-#         else:  # for DADS
-#             _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
-#             self.C = fold_exp(self.times[None, :, None] - mu[:, None, None], ks[None, None, :], _tau, 0)
-
-#         return self.get_conc_matrix(C_out, self._connectivity)
+        m = params['LPL_slope'].value
+        trace = LPL_decay(self.dataset.times - params['t0'].value, m)
+        self.C_opt = np.hstack((self.C_opt, trace[:, None]))
 
 
 # class Target_Analysis_Femto(_Femto):
@@ -733,276 +661,5 @@ class FirstOrderModel(KineticModel):
 #         K = self.target_model.build_K_matrix()
 
 #         self.C = self.simulate_model(self.times, K, self.j, mu, fwhm)
-
-#         return self.get_conc_matrix(C_out, self._connectivity)
-
-
-# class Target_Analysis_Z_Femto(_Femto):
-
-#     name = 'Target Analysis Z isomer'
-#     _class = 'Femto'
-
-#     def __init__(self, times=None, connectivity=(0, 1, 2), wavelengths=None, method='femto'):
-#         super(Target_Analysis_Z_Femto, self).__init__(times=times,
-#                                                       connectivity=connectivity,
-#                                                       wavelengths=wavelengths,
-#                                                       method=method)
-
-#         self.solvation = True
-#         self.n_upsample = 3
-
-#     def init_model_params(self):
-#         params = super(Target_Analysis_Z_Femto, self).init_model_params()
-
-#         # self.params.add('phi', value=0.5, min=0, max=1, vary=False)
-#         params.add('tau_AB', value=0.25, min=0, max=np.inf)
-#         params.add('tau_BA', value=0.50, min=0, max=np.inf)
-#         params.add('tau_AB_C', value=5.65, min=0, max=np.inf)
-#         params.add('tau_CD', value=14.5, min=0, max=np.inf)
-#         params.add('tau_sol', value=1.9, min=0, max=np.inf)
-#         params.add('tau_diff', value=0.92, min=0, max=np.inf)
-
-#         return params
-
-#     def solvation_rates(self, t, k_AB, k_BA, k_diff, k_sol):
-#         _k_AB = k_AB + (k_diff * (1 - np.exp(-t * k_sol)) if self.solvation else 0)
-#         _k_BA = k_BA - (k_diff * (1 - np.exp(-t * k_sol)) if self.solvation else 0)
-
-#         return _k_AB, _k_BA
-
-#     def plot_solvation_rates(self):
-#         fwhm, ks = self.get_kin_pars(self.params)
-#         k_AB, k_BA, k_ABC, k_CD, k_sol, k_diff = ks
-#         _k_AB, _k_BA = self.solvation_rates(self.times, k_AB, k_BA, k_diff, k_sol)
-
-#         plt.plot(self.times, _k_AB, label='$k_{AB}$')
-#         plt.plot(self.times, _k_BA, label='$k_{BA}$')
-#         plt.show()
-
-#     @staticmethod
-#     def gauss(t, fwhm=1):
-#         assert fwhm != 0
-#         sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))  # https://en.wikipedia.org/wiki/Gaussian_function
-#         return np.exp(-t * t / (2 * sigma * sigma)) / (sigma * np.sqrt(2 * np.pi))
-
-#     @staticmethod
-#     def upsample_points(x, n=3):
-#         t_u = []
-#         for t1, t2 in zip(x[:-1], x[1:]):
-#             t_diff = t2 - t1
-#             for i in range(n):
-#                 t_u.append(t1 + t_diff * i / n)
-#         t_u.append(x[-1])
-#         return np.asarray(t_u)
-
-#     @staticmethod
-#     @njit(fastmath=True)
-#     def func_nb(c, t, j, t0, fwhm, rates, K_temp):
-#         k_AB, k_BA, k_ABC, k_CD, k_sol, k_diff = rates
-#         _t = t - t0
-
-#         _k_AB = k_AB + k_diff * (1 - np.exp(-_t * k_sol))
-#         _k_BA = k_BA - k_diff * (1 - np.exp(-_t * k_sol))
-
-#         K_temp[0, 0] = -_k_AB - k_ABC
-#         K_temp[0, 1] = _k_BA
-#         K_temp[1, 0] = _k_AB
-#         K_temp[1, 1] = -_k_BA - k_ABC
-
-#         sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
-#         gauss = np.exp(-_t * _t / (2 * sigma * sigma)) / (sigma * np.sqrt(2 * np.pi))
-
-#         return K_temp.dot(c) + j * gauss
-
-
-#     def calc_C(self, params=None, C_out=None):
-#         super(Target_Analysis_Z_Femto, self).calc_C(params, C_out)
-
-#         fwhm, ks = self.get_kin_pars(params)
-#         mu = self.get_mu(params)
-#         n = self.n  # n must be 4
-#         fwhm = self.get_tau(params)  # fwhm
-
-#         k_AB, k_BA, k_ABC, k_CD, k_sol, k_diff = ks
-
-#         K = np.asarray([[-k_AB - k_ABC, k_BA, 0, 0],
-#                         [k_AB, -k_BA - k_ABC, 0, 0],
-#                         [k_ABC, k_ABC, -k_CD, 0],
-#                         [0, 0, k_CD, 0]])
-
-#         # def func(c, t, j, t0, fwhm):
-#         #     _k_AB, _k_BA = self.solvation_rates(t - t0, k_AB, k_BA, k_diff, k_sol)
-#         #
-#         #     K = np.asarray([[-_k_AB - k_ABC, _k_BA, 0, 0],
-#         #                     [_k_AB,   -_k_BA - k_ABC,  0, 0],
-#         #                     [k_ABC, k_ABC, -k_CD, 0],
-#         #                     [0,        0,  k_CD, 0]])
-#         #     return K.dot(c) + j * self.gauss(t - t0, fwhm)
-
-#         j = np.zeros(n)
-#         j[0] = 1
-
-#         t_upsampled = self.upsample_points(self.times, self.n_upsample) if self.n_upsample > 1 else self.times
-
-#         self.C = np.zeros((mu.shape[0], self.times.shape[0], n), dtype=np.float64)
-
-#         # with ProcessPoolExecutor() as exe:
-#         #     exe.submit()
-
-#         for i in range(mu.shape[0]):
-#             _fwhm = fwhm[i] if isinstance(fwhm, np.ndarray) else fwhm
-#             # self.C[i, ...] = odeint(func, np.zeros(n), t_upsampled, args=(j, mu[i], _fwhm))[::self.n_upsample]
-#             self.C[i, ...] = odeint(self.func_nb, np.zeros(n), t_upsampled, args=(j, mu[i], _fwhm, ks, K))[::self.n_upsample]
-
-
-#         return self.get_conc_matrix(C_out, self._connectivity)
-
-
-# class Firt_Order_Model_Nano(Model):
-#     name = 'Sequential/parallel model (1st order)'
-#     _class = 'Nano'
-
-#     def __init__(self, times=None, connectivity=(0, 1, 2), wavelengths=None, C=None):
-#         super(Firt_Order_Model_Nano, self).__init__(times, connectivity, wavelengths, C)
-
-#         self.use_irf = False
-#         self.irf_types = ['Gaussian']
-#         self.irf_type = self.irf_types[0]
-#         self.models = ['Sequential', 'Parallel']
-#         self.model_type = self.models[0]
-
-#     def open_model_settings(self, show_target_model=False):
-#         if GenericInputDialog.if_opened_activate():
-#             return
-
-#         cbuse_irf = QCheckBox('Use IRF (instrument response function)')
-#         cbuse_irf.setChecked(self.use_irf)
-
-#         cbIRF_type = QComboBox()
-#         cbIRF_type.addItems(self.irf_types)
-#         cbIRF_type.setCurrentIndex(self.irf_types.index(self.irf_type))
-
-#         cbmodel_type = QComboBox()
-#         cbmodel_type.addItems(self.models)
-#         cbmodel_type.setCurrentIndex(self.models.index(self.model_type))
-
-#         widgets = [[cbuse_irf, None],
-#                    ['IRF type:', cbIRF_type],
-#                    ["Used kinetic model:", cbmodel_type],
-#                    ]
-
-#         def set_result():
-#             self.use_irf = cbuse_irf.isChecked()
-#             self.irf_type = self.irf_types[cbIRF_type.currentIndex()]
-#             self.model_type = self.models[cbmodel_type.currentIndex()]
-#             self.init_params()
-
-#         self.model_settigs_dialog = GenericInputDialog(widget_list=widgets, label_text="",
-#                                                        title=f'{self.name} settings',
-#                                                        set_result=set_result)
-#         self.model_settigs_dialog.show()
-#         self.model_settigs_dialog.exec()
-
-#     def init_model_params(self):
-#         params = Parameters()
-#         params.add('c0', value=1, min=0, max=np.inf, vary=False)
-#         params.add('t0', value=0, min=-np.inf, max=np.inf)  # time zero
-
-#         if self.use_irf and self.irf_type == 'Gaussian':
-#             params.add('IRF_FWHM', value=0.2, min=0, max=np.inf)
-
-#         for i in range(self.n):
-#             sec_label = self.species_names[i + 1] if i < self.n - 1 else ""
-#             params.add(f'tau_{self.species_names[i]}{sec_label}', value=1 + i ** 2, min=0, max=np.inf)
-
-#         return params
-
-#     @staticmethod
-#     def get_EAS(ks, C_base):
-#         # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
-#         # c_l = sum_{j=1}^l  b_jl * exp(-k_j * t)
-#         # for j < l: b_jl = b_{j, l-1} * k_{l-1} / (k_l - k_j)
-#         n = ks.shape[0]
-#         # C = np.exp(-t[:, None] * ks[None, :])
-#         if n == 1:
-#             return C_base
-
-#         bjl = np.triu(np.ones((n, n)))  # make triangular upper matrix
-
-#         k_prod = np.cumprod(ks[:-1])  # products of rate constants
-
-#         k_mat = ks[None, :] - ks[:, None]  # differences between rate constants
-#         k_mat[k_mat == 0] = 1  # set zero differences to 1, because of calculation of products
-#         k_mat = np.cumprod(k_mat, axis=1)  # make product of them
-#         k_mat[:, 1:] = k_prod / k_mat[:, 1:]  # combine with rate constants
-
-#         bjl *= k_mat
-
-#         return C_base.dot(bjl)
-
-#     def calc_C(self, params=None, C_out=None):
-#         super(Firt_Order_Model_Nano, self).calc_C(params, C_out)
-
-#         if self.use_irf:
-#             c0, t0, irf_fwhm, *taus = [par[1].value for par in self.params.items()]
-#         else:
-#             c0, t0, *taus = [par[1].value for par in self.params.items()]
-
-#         ks = 1 / np.asarray(taus)
-
-#         self.C = c0 * fold_exp(self.times[:, None], ks[None, :], irf_fwhm if self.use_irf else 0, t0)
-#         if self.model_type == 'Sequential':
-#             self.C = self.get_EAS(ks, self.C)
-
-#         return self.get_conc_matrix(C_out, self._connectivity)
-
-
-# class First_Order_Target_Model(Model):
-
-#     name = 'Target model (1st order)'
-#     _class = 'Nano'
-
-#     def init_model_params(self):
-#         params = Parameters()
-#         params.add('c0', value=1, min=0, max=np.inf, vary=False)
-
-#         if self.target_model:
-#             for par_name, rate in self.target_model.get_names_rates():
-#                 params.add(par_name, value=rate, min=0, max=np.inf)
-
-#         return params
-
-#     def open_model_settings(self, show_target_model=False):
-#         if GenericInputDialog.if_opened_activate():
-#             return
-
-#         widgets = []
-#         models, cbModel = self.setup_target_models(widgets)
-
-#         def set_result():
-#             self.target_model = TargetModel.load(models[cbModel.currentIndex()])
-#             self.species_names = self.target_model.get_compartments()
-#             self.init_params()
-
-#         self.model_settigs_dialog = GenericInputDialog(widget_list=widgets, label_text="",
-#                                                        title=f'{self.name} settings',
-#                                                        set_result=set_result)
-#         self.model_settigs_dialog.show()
-#         self.model_settigs_dialog.exec()
-
-#     def calc_C(self, params=None, C_out=None):
-#         super(First_Order_Target_Model, self).calc_C(params, C_out)
-
-#         c0, *ks = [par[1].value for par in self.params.items()]
-
-#         self.target_model.set_rates(ks)
-#         K = self.target_model.build_K_matrix()
-#         # print(K)
-
-#         if self.j is None or self.j.shape[0] != K.shape[0]:
-#             self.j = np.zeros(K.shape[0])
-#             self.j[0] = 1
-
-#         self.C = get_target_C_profile(self.times, K, self.j * c0)
 
 #         return self.get_conc_matrix(C_out, self._connectivity)

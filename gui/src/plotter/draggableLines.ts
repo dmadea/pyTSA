@@ -373,17 +373,23 @@ export class DraggableLines extends GraphicObject {
     
             const _metrics = e.topCtx.measureText(text);
             let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
-    
+
             e.topCtx.fillStyle = "rgba(100, 100, 100, 0.9)";
             e.topCtx.strokeStyle = "black";
             e.topCtx.setLineDash([]);
+
+            let wRect = 4 / 3 *_metrics.width;
     
-            e.topCtx.fillRect(r.x - 4 / 3 *_metrics.width, p0.y - textOffset, 4 / 3 *_metrics.width, 2 * textOffset);  //  - 1.8 * textOffset
-            e.topCtx.strokeRect(r.x - 4 / 3 *_metrics.width, p0.y - textOffset, 4 / 3 *_metrics.width, 2 * textOffset);  //  - 1.8 * textOffset
+            e.topCtx.fillRect(r.x - wRect, p0.y - textOffset, wRect, 2 * textOffset);  //  - 1.8 * textOffset
+            e.topCtx.strokeRect(r.x - wRect, p0.y - textOffset, wRect, 2 * textOffset);  //  - 1.8 * textOffset
     
             e.topCtx.fillStyle = "white";
             e.topCtx.fillText(text, r.x - textOffset / 2, p0.y);
             e.topCtx.restore();
+            
+            if (f.minimalMargin.left !== wRect){
+                f.minimalMargin.left = wRect;
+            }
         }
 
 

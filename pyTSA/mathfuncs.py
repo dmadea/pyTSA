@@ -16,7 +16,7 @@ from numpy.linalg import pinv
 
 
 ## inspiration from https://github.com/Tillsten/skultrafast/blob/9544c3cc3c3c3fa46b728156198807e2b21ba24b/skultrafast/base_funcs/pytorch_fitter.py
-def blstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.001) -> np.ndarray:
+def blstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.001, w: np.ndarray | None = None) -> np.ndarray:
     """
     Batched linear least-squares by numpy with direct solve method with optional Tikhonov regularization
     to prevent errors in case of singular matrices.
@@ -51,12 +51,20 @@ def blstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.001) -> np.ndarray:
     return X[..., 0].T, fit
 
 
-def lstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> np.ndarray:
+def lstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001, w: np.ndarray | None = None) -> np.ndarray:
     """fast: solve least squares solution for X: AX=B by ordinary least squares, with direct solve,
-    with optional Tikhonov regularization"""
+    with optional Tikhonov regularization, with optional weight, the solution is for (At W A)X = At W B"""
 
-    ATA = A.T.dot(A)
-    ATB = A.T.dot(B)
+    if w is not None:
+        assert w.shape[0] == B.shape[0]
+        Aw = A * w[:, None] if A.ndim == 2 else A * w
+        Bw = B * w[:, None] if B.ndim == 2 else B * w
+    else:
+        Aw = A
+        Bw = B
+    
+    ATA = A.T.dot(Aw)
+    ATB = A.T.dot(Bw)
 
     if alpha != 0:
         ATA.flat[::ATA.shape[-1] + 1] += alpha
@@ -68,7 +76,7 @@ def lstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> np.ndarray:
     return x
 
 
-def glstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> tuple[np.ndarray, np.ndarray]:
+def glstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001, w: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
     """Generalized Ridge regression. If A is a 3D tensor, it switches to batch least squares.
     
     Returns solution X and fit = A @ X"""
@@ -77,9 +85,68 @@ def glstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.0001) -> tuple[np.ndar
         X, fit = blstsq(A, B.T, alpha)
         return X, fit
     else:
-        X = lstsq(A, B, alpha)
+        X = lstsq(A, B, alpha, w)
         return X, np.dot(A, X)
 
+
+def get_EAS_transform(ks: np.ndarray):
+    """Returns the matrix A that when multiplied with base DAS profiles yield EAS as C_EAS = C_DAS @ A"""
+
+    n = ks.shape[0]
+    # C = np.exp(-t[:, None] * ks[None, :])
+
+    bjl = np.triu(np.ones((n, n)))  # make triangular upper matrix
+
+    k_prod = np.cumprod(ks[:-1])  # products of rate constants
+
+    k_mat = ks[None, :] - ks[:, None]  # differences between rate constants
+    k_mat[k_mat == 0] = 1  # set zero differences to 1, because of calculation of products
+    k_mat = np.cumprod(k_mat, axis=1)  # make product of them
+    k_mat[:, 1:] = k_prod / k_mat[:, 1:]  # combine with rate constants
+
+    bjl *= k_mat
+    return bjl
+
+# def simulate_model(t, K, j, mu=None, fwhm=0):
+#     # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
+#     L, Q = np.linalg.eig(K)
+#     Q_inv = np.linalg.inv(Q)
+
+#     A2_T = Q * Q_inv.dot(j)  # Q @ np.diag(Q_inv.dot(j))
+
+#     _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
+
+#     if mu is not None:  # TODO !!! pořešit, ať je to obecne
+#         # C = _Femto.conv_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau)
+#         C = fold_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau, 0)
+
+#     else:
+#         # C = _Femto.conv_exp(t[:, None], -L[None, :], fwhm)
+#         C = fold_exp(t[:, None], -L[None, :], fwhm, 0)
+
+#     return C.dot(A2_T.T)
+
+# def get_EAS(ks, C_base):
+#     # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
+#     # c_l = sum_{j=1}^l  b_jl * exp(-k_j * t)
+#     # for j < l: b_jl = b_{j, l-1} * k_{l-1} / (k_l - k_j)
+#     n = ks.shape[0]
+#     # C = np.exp(-t[:, None] * ks[None, :])
+#     if n == 1:
+#         return C_base
+
+#     bjl = np.triu(np.ones((n, n)))  # make triangular upper matrix
+
+#     k_prod = np.cumprod(ks[:-1])  # products of rate constants
+
+#     k_mat = ks[None, :] - ks[:, None]  # differences between rate constants
+#     k_mat[k_mat == 0] = 1  # set zero differences to 1, because of calculation of products
+#     k_mat = np.cumprod(k_mat, axis=1)  # make product of them
+#     k_mat[:, 1:] = k_prod / k_mat[:, 1:]  # combine with rate constants
+
+#     bjl *= k_mat
+
+#     return C_base.dot(bjl)
 
 
 def _res_varpro(C, D):
@@ -196,6 +263,14 @@ def fold_exp(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray | fl
         return 0.5 * np.exp(k * (k * w * w / 4.0 - tt)) * math_erfc(w * k / 2.0 - tt / w)
     else:
         return np.exp(-tt * k) if tt >= 0 else 0
+    
+@vectorize(nopython=True, fastmath=False)
+def LPL_decay(t: np.ndarray | float, m: float) -> np.ndarray | float:
+
+    if t > 0:
+        return 1 / (t ** m)
+    else:
+        return 0
     
 
 @vectorize(nopython=True, fastmath=False)
