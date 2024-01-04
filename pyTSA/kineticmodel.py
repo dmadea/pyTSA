@@ -35,11 +35,58 @@ if TYPE_CHECKING:
 # kinetic model class for models which can be solved by variable projection method, 
 # all concentration profiles are parametrized by a model and spectra are linearly dependent parameters
 class KineticModel(object):
+    """
+    Abstract class for kinetic models.
+
+    Attributes
+    ----------
+    dataset : Dataset | None
+        Dataset bound with this model.
+
+    n_species: int
+        Number of species.
+    
+    params: Parameters
+        Lmfit parameters of the model.
+
+    C_opt: np.ndarray | None
+        Optimized concentration profiles after fitting of the model.
+
+    ST_opt: np.ndarray | None
+        Optimized spectra after fitting of the model.      
+
+    matrix_opt: np.ndarray | None
+        Fit matrix.
+
+    minimizer: Minimizer | None
+        Lmfit minimizer used to fit the model.
+
+    fit_result: MinimizerResult | None
+        Lmfit minimizer result after fitting of the model.
+
+    fitter_kwds: dict
+        Keyword argments passed to the underlying fitting algorithm.
+
+    fit_algorithm : str
+        Fitting algorithm, default least_squares for Trust region reflective algorithm.
+
+    noise_range: None | tuple[float, float]
+        If not None, it is a range of wavelengths as tuple and it will be used to calculate the standard deviation in this range.
+        These stds will be used to for weighted regression and the weights will be set as 1/std for each time point (both in least squared procedure and 
+        for calculation of residuals).
+
+    Methods
+    -------
+    fit(c='rgb')
+        Represent the photo in the given colorspace.
+
+    """
     name = '___abstract Kinetic Model____'
     # description = "..."
     # _class = '-class-'
 
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
+    
         self.dataset: Dataset = dataset
         self._weights: list[tuple[float, float, float]] = []  # (wl_start, wl_end, weight) default weight 1, # additional weights
         self.n_species: int = n_species
@@ -138,6 +185,20 @@ class KineticModel(object):
 
 
 class FirstOrderModel(KineticModel):
+    """
+    Abstract class for kinetic models.
+
+    Attributes
+    ----------
+ 
+
+
+
+    Methods
+    -------
+
+
+    """
 
     name = "First order kinetic model"
 

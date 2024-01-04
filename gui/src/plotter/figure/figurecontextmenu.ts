@@ -90,6 +90,7 @@ class AxisContextMenu extends ContextMenu {
         });
 
         var options = ["Linear", "Logarithmic", "Symmetric logarithmic", "Data bound"];
+        
         // if (this.axis.axisType === AxisType.xAxis) {  // y axis cannot be data bound
         //     options.push("Data bound");
         // }
@@ -122,7 +123,7 @@ class AxisContextMenu extends ContextMenu {
             autoscale.checked = this.axis.autoscale;
             inverted.checked = this.axis.inverted;
             axLabel.value = this.axis.label;
-            axisScale.selectedOptions[0].text = this.getTextFromScale(this.axis.scale);
+            axisScale.selectedIndex = options.indexOf(this.getTextFromScale(this.axis.scale));
             linthresh.value = this.axis.symlogLinthresh.toString();
             linscale.value = this.axis.symlogLinscale.toString();
             keepcentered.checked = this.axis.keepCentered;
@@ -175,7 +176,7 @@ export class FigureContextMenu extends ContextMenu {
         });
 
         this.addUpdateUICallback(() => {
-            axAlign.selectedOptions[0].text = this.fig.axisAlignment === Orientation.Vertical ? "Vertical" : "Horizontal";
+            axAlign.selectedIndex = this.fig.axisAlignment === Orientation.Vertical ? 1 : 0;
         });
     }
 
@@ -212,9 +213,6 @@ class ColorbarAxisContextMenu extends AxisContextMenu {
         });
 
         var options = ["Linear", "Logarithmic", "Symmetric logarithmic"];
-        // if (this.axis.axisType === AxisType.xAxis) {  // y axis cannot be data bound
-        //     options.push("Data bound");
-        // }
 
         var axisScale = this.addSelect("Scale", ...options);
         axisScale.addEventListener("change", e => {
@@ -254,7 +252,7 @@ class ColorbarAxisContextMenu extends AxisContextMenu {
             // autoscale.checked = this.axis.autoscale;
             // inverted.checked = this.axis.inverted;
             axLabel.value = this.axis.label;
-            axisScale.selectedOptions[0].text = this.getTextFromScale(this.axis.scale);
+            axisScale.selectedIndex = options.indexOf(this.getTextFromScale(this.axis.scale));
             linthresh.value = this.axis.symlogLinthresh.toString();
             linscale.value = this.axis.symlogLinscale.toString();
             keepcentered.checked = this.axis.keepCentered;
@@ -309,8 +307,6 @@ export class ColorbarContextMenu extends ContextMenu {
 
         this.addUpdateUICallback(() => {
             inverted.checked = this.colorbar.colormap.inverted;
-
-
         });
     }
 

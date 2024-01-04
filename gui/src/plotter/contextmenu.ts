@@ -12,6 +12,7 @@ export class ContextMenu {
     public parentMenu?: ContextMenu;
     private updateUIFuncs: (() => void)[] = [];
     private showingMenu = false;
+    private timeout = 500;
 
     constructor() {
         this.menu = this.createMenu();
@@ -53,37 +54,65 @@ export class ContextMenu {
 
         // menu._order = this._order + 1;
         const divMenu = menu.menu;
+        const actionProps = {mouseover: false};
 
-        document.addEventListener("mousemove", e => {
-
-            var actionRect: Rect = {
-                x: this.menu.offsetLeft,
-                y: this.menu.offsetTop + action.offsetTop + 0.5,
-                w: action.offsetWidth,
-                h: action.offsetHeight - 1
-            }
-
-            let show = false;
-
-            if (e.pageX >= actionRect.x && e.pageX <= actionRect.x + actionRect.w 
-                && e.pageY >= actionRect.y && e.pageY <= actionRect.y + actionRect.h) {
-                    show = true;
-                }
-
-            if (e.pageX >= divMenu.offsetLeft && e.pageX <= divMenu.offsetLeft + divMenu.offsetWidth
-                && e.pageY >= divMenu.offsetTop && e.pageY <= divMenu.offsetTop + divMenu.offsetHeight) {
-                    show = true;
-                }
+        action.addEventListener("mouseenter", e => {
+            actionProps.mouseover = true;
+            // console.log('Mouse enter');
             
-            if (show) {
-                if (!menu.isVisible()) {
-                    setTimeout(() => menu.show({x: actionRect.x + actionRect.w, y: actionRect.y}), 400);
-                } 
-            } else {
-                setTimeout(() => menu.hide(), 400);
-            }
+            setTimeout(() => {
+                if (actionProps.mouseover) {
+
+                    var actionRect: Rect = {
+                        x: this.menu.offsetLeft,
+                        y: this.menu.offsetTop + action.offsetTop + 0.5,
+                        w: action.offsetWidth,
+                        h: action.offsetHeight - 1
+                    }
+
+                    menu.show({x: actionRect.x + actionRect.w, y: actionRect.y})
+                }
+            }, this.timeout)
 
         });
+
+        action.addEventListener("mouseleave", e => {
+            // console.log('Mouse leave');
+            actionProps.mouseover = false;
+            setTimeout(() => menu.hide(), this.timeout);
+        });
+
+        // document.addEventListener("mousemove", e => {
+
+
+
+        //     let show = false;
+
+        //     if (e.pageX >= actionRect.x && e.pageX <= actionRect.x + actionRect.w 
+        //         && e.pageY >= actionRect.y && e.pageY <= actionRect.y + actionRect.h) {
+        //             show = true;
+        //         }
+
+        //     if (e.pageX >= divMenu.offsetLeft && e.pageX <= divMenu.offsetLeft + divMenu.offsetWidth
+        //         && e.pageY >= divMenu.offsetTop && e.pageY <= divMenu.offsetTop + divMenu.offsetHeight) {
+        //             show = true;
+        //         }
+            
+        //     if (show) {
+        //         if (menu.isVisible()) return;
+
+        //         // setTimeout(() =>  {
+        //         //     if (e.pageX >= actionRect.x && e.pageX <= actionRect.x + actionRect.w 
+        //         //         && e.pageY >= actionRect.y && e.pageY <= actionRect.y + actionRect.h) {
+        //         //             menu.show({x: actionRect.x + actionRect.w, y: actionRect.y})
+        //         //         }
+        //         // }, 400);
+                
+        //     } else {
+        //         setTimeout(() => menu.hide(), 400);
+        //     }
+
+        // });
 
         this.otherMenus.push(menu);
         menu.otherMenus.push(this);
