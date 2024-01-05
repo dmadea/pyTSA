@@ -25,15 +25,15 @@ export class LayoutSceneNavBarContextMenu extends SceneNavBarContextMenu {
 
         const scene = this.scene as LayoutScene;
         
-        var ops = ["Femto", "Transient emission", "HPLC"];
+        var opsLayout = ["Triangle", "Packed", "HPLC"];
 
-        var layout = this.addSelect("Layout", ...ops);
+        var layout = this.addSelect("Layout", ...opsLayout);
         layout.addEventListener("change", e => {
             scene.layout = layout.selectedOptions[0].text;
         });
 
-        var ops = ["Matrix", "Column-wise", "Row-wise"];
-        var alignment = this.addSelect("Alignment", ...ops);
+        var opsAlignment = ["Matrix", "Column-wise", "Row-wise"];
+        var alignment = this.addSelect("Alignment", ...opsAlignment);
         alignment.addEventListener("change", e => {
             scene.alignment = alignment.selectedOptions[0].text;
         });
@@ -41,30 +41,64 @@ export class LayoutSceneNavBarContextMenu extends SceneNavBarContextMenu {
         var linkXAxes = this.addCheckBox("Link x axes");
         var linkYAxes = this.addCheckBox("Link y axes");
 
+        // TODO include draggable lines links
+
         linkXAxes.addEventListener("change", e => {
             const figs = [...scene.groupPlots.map(p => p.heatmapFig), ...scene.groupPlots.map(p => p.spectrum)]
-            for (const [f1, f2] of combinations<Figure>(figs)) {
-                if (linkXAxes.checked) {
+
+            if (linkXAxes.checked) {
+                for (const [f1, f2] of combinations<Figure>(figs)) {
                     f1.linkXRange(f2);
-                } else {
-                    f1.unlinkXRange(f2);
+                }
+            } else {
+                for (const fig of figs) {
+                    fig.unlinkAllXRange();                    
+                }
+
+                for (const p of scene.groupPlots) {
+                    p.heatmapFig.linkXRange(p.spectrum);
                 }
             }
         });
 
         linkYAxes.addEventListener("change", e => {
-            // TODO link yx axes.
-            const figs = [...scene.groupPlots.map(p => p.heatmapFig)]  // , ...scene.groupPlots.map(p => p.trace)
-            for (const [f1, f2] of combinations<Figure>(figs)) {
-                if (linkYAxes.checked) {
-                    f1.linkYRange(f2);
-                } else {
-                    f1.unlinkYRange(f2);
+            const hmaps = [...scene.groupPlots.map(p => p.heatmapFig)];
+            const traces = [...scene.groupPlots.map(p => p.trace)];
+
+            if (linkYAxes.checked) {
+                for (const [f1, f2] of combinations<Figure>([...hmaps, ...traces])) {
+                    if (hmaps.includes(f1) && hmaps.includes(f2)) {
+                        f1.linkYRange(f2);
+                    }
+                    if (hmaps.includes(f1) && traces.includes(f2)) {
+                        f1.linkYXRange(f2);
+                    }
+                    if (traces.includes(f1) && traces.includes(f2)) {
+                        f1.linkXRange(f2);
+                    }
+                }
+            } else {
+                for (const [f1, f2] of combinations<Figure>([...hmaps, ...traces])) {
+                    if (hmaps.includes(f1) && hmaps.includes(f2)) {
+                        f1.unlinkYRange(f2);
+                    }
+                    if (hmaps.includes(f1) && traces.includes(f2)) {
+                        f1.unlinkYXRange(f2);
+                    }
+                    if (traces.includes(f1) && traces.includes(f2)) {
+                        f1.unlinkXRange(f2);
+                    }
+                }
+                for (const p of scene.groupPlots) {
+                    p.heatmapFig.linkYXRange(p.trace);
                 }
             }
         });
 
         this.addUpdateUICallback(() => {
+            layout.selectedIndex = opsLayout.indexOf(scene.layout);
+            alignment.selectedIndex = opsAlignment.indexOf(scene.alignment);
+
             // axAlign.selectedOptions[0].text = this.fig.axisAlignment === Orientation.Vertical ? "Vertical" : "Horizontal";
         });
     }
@@ -86,27 +120,14 @@ export class LayoutScene extends Scene {
 
     public grid: Grid;
     public groupPlots: IGroupPlot[] = [];
-    public _layout: string = "Femto";
+    public _layout: string = "Packed";
     public _alignment: string = "Matrix";
-    // public linkVerticalLines = false;
-    // public linkHorizontalLines = false;
 
     constructor(parentElement: HTMLDivElement) {
         super(parentElement);
         
         this.grid = new Grid();
         this.addItem(this.grid);
-
-        // var hfig = new Figure();
-        // // hfig.addColorbar();
-        // var trace = new Figure();
-        // var spectrum = new Figure();
-
-        // this.heatmapFigures.push(hfig);
-        // this.traceFigures.push(trace);
-        // this.spectraFigures.push(spectrum);
-
-        // this.arangeFigures();
     }
 
     get layout() {
@@ -125,6 +146,41 @@ export class LayoutScene extends Scene {
     set alignment(alignment: string) {
         this._alignment = alignment;
         this.arangeFigures();
+    }
+
+    private setDefaultPlotSettings() {
+        for (const p of this.groupPlots) {
+            p.heatmapFig.showTickNumbers = ['left', 'bottom'];
+            p.heatmapFig.axisAlignment = Orientation.Horizontal;
+            p.heatmapFig.yAxis.inverted = true;
+            p.heatmapFig.xAxis.inverted = false;
+            p.spectrum.showTickNumbers = ['left', 'bottom'];
+            p.spectrum.axisAlignment = Orientation.Horizontal;
+            p.spectrum.yAxis.inverted = false;
+            p.spectrum.xAxis.inverted = false;
+            p.trace.showTickNumbers = ['right', 'bottom'];
+            p.trace.axisAlignment = Orientation.Horizontal;
+            p.trace.yAxis.inverted = false;
+            p.trace.xAxis.inverted = false;
+
+            p.spectrum.xAxis.autoscale = false;
+            p.trace.xAxis.autoscale = false;
+            p.heatmapFig.xAxis.autoscale = false;
+            p.heatmapFig.yAxis.autoscale = false;
+
+            p.trace.xAxis.label = "Time / us";
+            p.spectrum.xAxis.label = "Wavelength / nm";
+            p.heatmapFig.xAxis.label = "Wavelength / nm";
+            p.heatmapFig.yAxis.label = "Time / us";
+
+            for (const fig of [p.heatmapFig, p.spectrum, p.trace]) {
+                fig.unlinkAllXRange();
+                fig.unlinkAllYRange();
+                fig.unlinkAllXYRange();
+                fig.unlinkAllYXRange();
+                fig.unlinkAllMargin(); // TODO properly
+            }
+        }
     }
 
     protected arangeFigures(n?: number) {
@@ -166,7 +222,8 @@ export class LayoutScene extends Scene {
         }
 
         switch (this.layout) {
-            case "Femto": {
+            case "Triangle": {
+                this.setDefaultPlotSettings()
                 for (let row = 0; row < nrows; row++) {
                     for (let col = 0; col < ncols; col++) {
                         const i = row * ncols + col;
@@ -174,11 +231,12 @@ export class LayoutScene extends Scene {
                         const hmap = this.groupPlots[i].heatmapFig;
                         const sp = this.groupPlots[i].spectrum;
                         const tr = this.groupPlots[i].trace;
-                        
-                        hmap.showTickNumbers = ['left', 'bottom'];
-                        sp.showTickNumbers = ['left', 'bottom'];
-                        tr.showTickNumbers = ['right', 'bottom'];
+
+                        // hmap.showTickNumbers = ['left', 'bottom'];
+                        // sp.showTickNumbers = ['left', 'bottom'];
+                        // tr.showTickNumbers = ['right', 'bottom'];
                         tr.axisAlignment = Orientation.Vertical;
+                        tr.xAxis.inverted = true;
 
                         sp.xAxis.autoscale = false;
                         tr.xAxis.autoscale = false;
@@ -208,11 +266,54 @@ export class LayoutScene extends Scene {
                 this.grid.gridSettings.heightRatios = hr;
                 break;
             }
-            // case "Femto": {
+            case "Packed": {
+                this.setDefaultPlotSettings();
 
+                for (const [f1, f2] of combinations<Figure>(this.groupPlots.map(p => p.heatmapFig))) {
+                    f1.linkMargin(f2, Orientation.Both);
+                }
 
-            //     break;
-            // }
+                for (const [f1, f2] of combinations<Figure>(this.groupPlots.map(p => p.spectrum))) {
+                    f1.linkMargin(f2, Orientation.Both);
+                }
+
+                for (const [f1, f2] of combinations<Figure>(this.groupPlots.map(p => p.trace))) {
+                    f1.linkMargin(f2, Orientation.Both);
+                }
+
+                for (let row = 0; row < nrows; row++) {
+                    for (let col = 0; col < ncols; col++) {
+                        const i = row * ncols + col;
+                        if (i === n) break;
+                        const hmap = this.groupPlots[i].heatmapFig;
+                        const sp = this.groupPlots[i].spectrum;
+                        const tr = this.groupPlots[i].trace;
+                        tr.xAxis.inverted = false;
+
+                        tr.title = `Trace [${hmap.heatmap?.dataset.name}]`;
+                        sp.title = `Spectrum [${hmap.heatmap?.dataset.name}]`;
+                        
+                        // sp.linkMargin(tr, Orientation.Horizontal);
+                        hmap.linkXRange(sp);
+                        hmap.linkYXRange(tr);
+
+                        this.groupPlots[i].heatmapDLines.linkX(this.groupPlots[i].spectrumDLines);
+                        this.groupPlots[i].heatmapDLines.linkYX(this.groupPlots[i].traceDLines);
+    
+                        // display 
+                        // this.grid.addItem(hmap, 2 * row, 2 * col, 2, 1);
+                        // this.grid.addItem(sp, 2 * row, 2 * col + 1, 1, 1);
+                        // this.grid.addItem(tr, 2 * row + 1, 2 * col + 1, 1, 1);
+
+                        this.grid.addItem(hmap, 2 * row, col, 2, 1);    
+                        this.grid.addItem(sp, i, ncols, 1, 1);
+                        this.grid.addItem(tr, i, ncols + 1, 1, 1);
+                    }
+                }
+                this.grid.gridSettings.widthRatios = null;
+                this.grid.gridSettings.heightRatios = null;
+                break;
+            }
             // case "Femto": {
 
 

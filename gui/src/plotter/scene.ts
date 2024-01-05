@@ -243,9 +243,9 @@ export class SceneNavBarContextMenu extends ContextMenu {
 
     protected constructMenu(): void {
 
-        var repaint = this.addAction("Repaint");
+        var repaint = this.addAction("Replot");
         repaint.addEventListener("click", e=> {
-            this.scene.repaint();
+            this.scene.replot();
         });
 
         var copy = this.addAction("Copy plot to clipboard");

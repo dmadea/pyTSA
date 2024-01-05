@@ -52,24 +52,40 @@ export class ContextMenu {
         action.innerText = text + "\t▸";
         action.classList.add("dropdown-item", "small", "pt-0", "pb-0");
 
-        // menu._order = this._order + 1;
         const divMenu = menu.menu;
-        const actionProps = {mouseover: false};
+        const props = {actionMouseover: false, menuMouseover: false};
+
+        const getActRect = () => {
+            return {
+                x: this.menu.offsetLeft,
+                y: this.menu.offsetTop + action.offsetTop + 0.5,
+                w: action.offsetWidth,
+                h: action.offsetHeight - 1
+            }
+        };
+
+        action.addEventListener("click", e => {
+            const actionRect = getActRect();
+            // hide other menus if they are open
+            for (const om of this.otherMenus) {
+                if (om == menu) continue;
+                om.hide();
+            }
+            menu.show({x: actionRect.x + actionRect.w, y: actionRect.y})
+        });
 
         action.addEventListener("mouseenter", e => {
-            actionProps.mouseover = true;
-            // console.log('Mouse enter');
-            
+            props.actionMouseover = true;
             setTimeout(() => {
-                if (actionProps.mouseover) {
+                if (props.actionMouseover) {
 
-                    var actionRect: Rect = {
-                        x: this.menu.offsetLeft,
-                        y: this.menu.offsetTop + action.offsetTop + 0.5,
-                        w: action.offsetWidth,
-                        h: action.offsetHeight - 1
+                    // hide other menus if they are open
+                    for (const om of this.otherMenus) {
+                        if (om == menu) continue;
+                        om.hide();
                     }
 
+                    const actionRect = getActRect();
                     menu.show({x: actionRect.x + actionRect.w, y: actionRect.y})
                 }
             }, this.timeout)
@@ -77,42 +93,21 @@ export class ContextMenu {
         });
 
         action.addEventListener("mouseleave", e => {
-            // console.log('Mouse leave');
-            actionProps.mouseover = false;
-            setTimeout(() => menu.hide(), this.timeout);
+            props.actionMouseover = false;
+            setTimeout(() => {
+                if (!props.menuMouseover) {
+                    menu.hide()
+                }
+            }, this.timeout);
         });
 
-        // document.addEventListener("mousemove", e => {
+        divMenu.addEventListener("mouseenter", e => {
+            props.menuMouseover = true;
+        });
 
-
-
-        //     let show = false;
-
-        //     if (e.pageX >= actionRect.x && e.pageX <= actionRect.x + actionRect.w 
-        //         && e.pageY >= actionRect.y && e.pageY <= actionRect.y + actionRect.h) {
-        //             show = true;
-        //         }
-
-        //     if (e.pageX >= divMenu.offsetLeft && e.pageX <= divMenu.offsetLeft + divMenu.offsetWidth
-        //         && e.pageY >= divMenu.offsetTop && e.pageY <= divMenu.offsetTop + divMenu.offsetHeight) {
-        //             show = true;
-        //         }
-            
-        //     if (show) {
-        //         if (menu.isVisible()) return;
-
-        //         // setTimeout(() =>  {
-        //         //     if (e.pageX >= actionRect.x && e.pageX <= actionRect.x + actionRect.w 
-        //         //         && e.pageY >= actionRect.y && e.pageY <= actionRect.y + actionRect.h) {
-        //         //             menu.show({x: actionRect.x + actionRect.w, y: actionRect.y})
-        //         //         }
-        //         // }, 400);
-                
-        //     } else {
-        //         setTimeout(() => menu.hide(), 400);
-        //     }
-
-        // });
+        divMenu.addEventListener("mouseleave", e => {
+            props.menuMouseover = false;
+        });
 
         this.otherMenus.push(menu);
         menu.otherMenus.push(this);

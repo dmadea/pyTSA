@@ -231,12 +231,71 @@ export class Figure extends GraphicObject {
     }
     
     public linkXRange(figure: Figure) {
-        if (figure === this) {
+        if (figure === this || this.xRangeLinks.includes(figure)) {
             return;
         }
         
         figure.xRangeLinks.push(this);
         this.xRangeLinks.push(figure);
+    }
+
+    public linkYRange(figure: Figure) {
+        if (figure === this || this.yRangeLinks.includes(figure)) {
+            return;
+        }
+
+        figure.yRangeLinks.push(this);
+        this.yRangeLinks.push(figure);
+    }
+
+    public linkXYRange(figure: Figure) {
+        if (figure === this || this.xyRangeLinks.includes(figure)) {
+            return;
+        }
+
+        figure.yxRangeLinks.push(this);
+        this.xyRangeLinks.push(figure);
+    }
+
+    public linkYXRange(figure: Figure) {
+        if (figure === this || this.yxRangeLinks.includes(figure)) {
+            return;
+        }
+
+        figure.xyRangeLinks.push(this);
+        this.yxRangeLinks.push(figure);
+    }
+
+    public unlinkAllXRange(){
+        for (const fig of this.xRangeLinks) {
+            const idx = fig.xRangeLinks.indexOf(this);
+            fig.xRangeLinks.splice(idx);
+        }
+        this.xRangeLinks = [];
+    }
+
+    public unlinkAllYRange(){
+        for (const fig of this.yRangeLinks) {
+            const idx = fig.yRangeLinks.indexOf(this);
+            fig.yRangeLinks.splice(idx);
+        }
+        this.yRangeLinks = [];
+    }
+
+    public unlinkAllXYRange(){
+        for (const fig of this.xyRangeLinks) {
+            const idx = fig.yxRangeLinks.indexOf(this);
+            fig.yxRangeLinks.splice(idx);
+        }
+        this.xyRangeLinks = [];
+    }
+
+    public unlinkAllYXRange(){
+        for (const fig of this.yxRangeLinks) {
+            const idx = fig.xyRangeLinks.indexOf(this);
+            fig.xyRangeLinks.splice(idx);
+        }
+        this.yxRangeLinks = [];
     }
 
     public unlinkXRange(figure: Figure) {
@@ -250,15 +309,6 @@ export class Figure extends GraphicObject {
         this.xRangeLinks.splice(idx);
     }
 
-    public linkYRange(figure: Figure) {
-        if (figure === this) {
-            return;
-        }
-
-        figure.yRangeLinks.push(this);
-        this.yRangeLinks.push(figure);
-    }
-
     public unlinkYRange(figure: Figure) {
         if (figure === this) {
             return;
@@ -270,42 +320,47 @@ export class Figure extends GraphicObject {
         this.yRangeLinks.splice(idx);
     }
 
-    public linkXYRange(figure: Figure) {
+    public unlinkXYRange(figure: Figure) {
         if (figure === this) {
             return;
         }
+        let idx = figure.yxRangeLinks.indexOf(this);
+        figure.yxRangeLinks.splice(idx);
 
-        figure.yxRangeLinks.push(this);
-        this.xyRangeLinks.push(figure);
+        idx = this.xyRangeLinks.indexOf(figure);
+        this.xyRangeLinks.splice(idx);
     }
 
-    // public unlinkXYRange(figure: Figure) {
-    //     if (figure === this) {
-    //         return;
-    //     }
-    //     let idx = figure.yRangeLinks.indexOf(this);
-    //     figure.yRangeLinks.splice(idx);
-
-    //     idx = this.yRangeLinks.indexOf(figure);
-    //     this.yRangeLinks.splice(idx);
-    // }
-
-    public linkYXRange(figure: Figure) {
+    public unlinkYXRange(figure: Figure) {
         if (figure === this) {
             return;
         }
+        let idx = figure.xyRangeLinks.indexOf(this);
+        figure.xyRangeLinks.splice(idx);
 
-        figure.xyRangeLinks.push(this);
-        this.yxRangeLinks.push(figure);
+        idx = this.yxRangeLinks.indexOf(figure);
+        this.yxRangeLinks.splice(idx);
     }
 
     public linkMargin(figure: Figure, orientation: Orientation) {
-        if (figure === this) {
+        if (figure === this || this.marginLinks.map(l => l[0]).includes(figure)) {
             return;
         }
 
         figure.marginLinks.push([this, orientation]);
         this.marginLinks.push([figure, orientation]);
+    }
+
+    public unlinkAllMargin() {
+        this.marginLinks = [];
+
+        // for (const [fig, o] of this.marginLinks) {
+        //     const idx = fig.xyRangeLinks.indexOf(this);
+        //     fig.xyRangeLinks.splice(idx);
+        // }
+
+        // figure.marginLinks.push([this, orientation]);
+        // this.marginLinks.push([figure, orientation]);
     }
 
     public preventMouseEvents(preventScaling?: boolean, preventPanning?: boolean) {
@@ -524,6 +579,15 @@ export class Figure extends GraphicObject {
         return retRect;
     }
 
+    public updateRangeItems(range: Rect): void {
+        super.rangeChanged(range);
+    }
+
+    public replot(): void {
+        if (this.panning || this.scaling) return;
+        super.replot();
+    }
+
     public rangeChanged(range: Rect): void {
         for (const fig of this.xRangeLinks) {
             if (this.xAxis.scale === fig.xAxis.scale) {
@@ -532,6 +596,7 @@ export class Figure extends GraphicObject {
                 fig.xAxis.range = this.xAxis.range;
             }
             // console.log(this.range, fig.range);
+            // fig.updateRangeItems(range);
             fig.repaint();
         }
         for (const fig of this.yRangeLinks) {
@@ -540,6 +605,7 @@ export class Figure extends GraphicObject {
             } else {
                 fig.yAxis.range = this.yAxis.range;
             }
+            // fig.updateRangeItems(range);
             fig.repaint();
         }
         for (const fig of this.xyRangeLinks) {
@@ -548,6 +614,7 @@ export class Figure extends GraphicObject {
             } else {
                 fig.yAxis.range = this.xAxis.range;
             }
+            // fig.updateRangeItems(range);
             fig.repaint();
         }
         for (const fig of this.yxRangeLinks) {
@@ -556,6 +623,7 @@ export class Figure extends GraphicObject {
             } else {
                 fig.xAxis.range = this.yAxis.range;
             }
+            // fig.updateRangeItems(range);
             fig.repaint();
         }
         // console.log(this.range);
@@ -1777,7 +1845,7 @@ export class Colorbar extends Figure {
     }
 
     public repaintFigure() {
-        (this.parent as Figure).repaint();
+        (this.parent as Figure).replot();
     }
 
     public renderHeatmap() {
@@ -1819,7 +1887,7 @@ export class Colorbar extends Figure {
             repaint = true;
         }
 
-        if (repaint) f.repaint();
+        if (repaint) f.replot();
 
     }
 

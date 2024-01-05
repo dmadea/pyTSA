@@ -67,23 +67,6 @@ export class DraggableLines extends GraphicObject {
         // this.setStickGrid(10, 3, 10, 4);
     }
 
-    private checkBounds(x: number, y: number, orientation: Orientation) {
-        let f = this.parent as Figure;
-        let pos = f.mapRange2Canvas(this.position);
-
-        let offset = 10;  // px
-
-        if ((this.orientation === Orientation.Vertical || this.orientation === Orientation.Both ) && orientation === Orientation.Vertical) {
-            return x >= pos.x - offset && x <= pos.x + offset;
-        }
-
-        if ((this.orientation === Orientation.Horizontal || this.orientation === Orientation.Both ) && orientation === Orientation.Horizontal) {
-            return y >= pos.y - offset && y <= pos.y + offset;
-        }
-
-        return false;
-    }
-
     public linkX(line: DraggableLines) {
         if (line === this) {
             return;
@@ -140,7 +123,7 @@ export class DraggableLines extends GraphicObject {
             f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
             const lastPos = {x: e.e.clientX, y: e.e.clientY};
 
-            var mousemove = (e: MouseEvent) => {
+            const mousemove = (e: MouseEvent) => {
                 // console.time('mousemove');
                 let dist: Point = {
                     x: window.devicePixelRatio * (e.x - lastPos.x),
@@ -169,9 +152,13 @@ export class DraggableLines extends GraphicObject {
                 let xRatio = rng.w / w;
                 let yRatio = rng.h / h;
     
+                // let pos = {
+                //     x: ((va) ? this.horizontalDragging : this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
+                //     y: ((va) ? this.verticalDragging : this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
+                // }
                 let pos = {
-                    x: ((va) ? this.horizontalDragging : this.verticalDragging) ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
-                    y: ((va) ? this.verticalDragging : this.horizontalDragging) ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
+                    x: this.verticalDragging ? this.lastPosition.x + xSign * dist.x * xRatio : this.lastPosition.x,
+                    y: this.horizontalDragging ? this.lastPosition.y + ySign * dist.y * yRatio : this.lastPosition.y
                 }
 
                 pos.x = Math.max(rng.x, Math.min(pos.x, rng.x + rng.w));
@@ -300,8 +287,17 @@ export class DraggableLines extends GraphicObject {
 
         const f = this.parent as Figure;
 
-        const vh = this.checkBounds(e.x, e.y, Orientation.Vertical);
-        const hh = this.checkBounds(e.x, e.y, Orientation.Horizontal);
+        const pos = f.mapRange2Canvas(this.position);
+        const offset = 10;  // px
+        
+        var vh = e.x >= pos.x - offset && e.x <= pos.x + offset;
+        var hh = e.y >= pos.y - offset && e.y <= pos.y + offset;
+
+        const va = f.axisAlignment === Orientation.Vertical;
+        
+        if (va) {
+            [vh, hh] = [hh, vh];
+        }
 
         // on change, repaint
         if (this.verticalHovering !== vh) {
@@ -317,37 +313,37 @@ export class DraggableLines extends GraphicObject {
         f.preventMouseEvents(undefined, this.verticalHovering || this.horizontalHovering);
 
         if (this.verticalHovering && !this.horizontalHovering) {
-            e.topCanvas.style.cursor = this.cursors.verticalResize;
+            e.topCanvas.style.cursor = (va) ? this.cursors.horizontalResize : this.cursors.verticalResize;
         } else if (!this.verticalHovering && this.horizontalHovering) {
-            e.topCanvas.style.cursor = this.cursors.horizontalResize;
+            e.topCanvas.style.cursor = (va) ? this.cursors.verticalResize : this.cursors.horizontalResize;
         } else if (this.verticalHovering && this.horizontalHovering) {
             e.topCanvas.style.cursor = this.cursors.move;
         }  else {
             e.topCanvas.style.cursor = this.cursors.crosshair;
         }
 
-        // console.log(this.verticalHovering, this.horizontalHovering);
+        // console.log("vh", this.verticalHovering, "hh", this.horizontalHovering);
     }
 
     public rangeChanged(range: Rect): void {
         if (this.position.x < range.x) {
             this.position.x = range.x;
-            this.positionChanged(true, false);
+            // this.positionChanged(true, false);
         }
 
         if (this.position.y < range.y) {
             this.position.y = range.y;
-            this.positionChanged(false, true);
+            // this.positionChanged(false, true);
         }
 
         if (this.position.x > range.x + range.w) {
             this.position.x = range.x + range.w;
-            this.positionChanged(true, false);
+            // this.positionChanged(true, false);
         }
 
         if (this.position.y > range.y + range.h) {
             this.position.y = range.y + range.h;
-            this.positionChanged(false, true);
+            // this.positionChanged(false, true);
         }
     }
 
@@ -457,6 +453,9 @@ export class DraggableLines extends GraphicObject {
 
     public paint(e: IPaintEvent): void {
         if (this.orientation === Orientation.None) return;
+        const f = this.parent as Figure;
+
+        // this.checkRangeChanged(f.internalRange);
 
         e.topCtx.save();
 
@@ -467,7 +466,6 @@ export class DraggableLines extends GraphicObject {
         // let pr = window.devicePixelRatio;
         e.topCtx.lineWidth = 2;
         e.topCtx.setLineDash([10, 6]);
-        var f = this.parent as Figure;
 
         var h = Orientation.Horizontal;
         var v = Orientation.Vertical;

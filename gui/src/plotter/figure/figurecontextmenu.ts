@@ -65,7 +65,7 @@ class AxisContextMenu extends ContextMenu {
         var autoscale = this.addCheckBox("Autoscale");
         autoscale.addEventListener("change", e => {
             this.axis.autoscale = autoscale.checked;
-            if (autoscale.checked) this.fig.repaint();
+            if (autoscale.checked) this.fig.replot();
         });
 
         var keepcentered = this.addCheckBox("Keep centered");
@@ -80,13 +80,13 @@ class AxisContextMenu extends ContextMenu {
             if (this.fig.heatmap) {
                 this.fig.heatmap.recalculateImage();
             }
-            this.fig.repaint();
+            this.fig.replot();
         });
 
         var axLabel = this.addTextInput("Label", this.axis.label);
         axLabel.addEventListener("change", e => {
             this.axis.label = axLabel.value ?? "";
-            this.fig.repaint();
+            this.fig.replot();
         });
 
         var options = ["Linear", "Logarithmic", "Symmetric logarithmic", "Data bound"];
@@ -98,7 +98,7 @@ class AxisContextMenu extends ContextMenu {
         var axisScale = this.addSelect("Scale", ...options);
         axisScale.addEventListener("change", e => {
             this.axis.scale = this.getScaleFromText(axisScale.selectedOptions[0].text);
-            this.fig.repaint();
+            this.fig.replot();
         });
 
         var linthresh = this.addNumberInput("Linthresh", 1, 0, undefined, 0.1);
@@ -109,14 +109,14 @@ class AxisContextMenu extends ContextMenu {
             var num = parseFloat(linthresh.value);
             var num = (num === 0) ? 1 : num;
             this.axis.symlogLinthresh = num;
-            this.fig.repaint();
+            this.fig.replot();
         });
 
         linscale.addEventListener("change", e => {
             var num = parseFloat(linscale.value);
             var num = (num === 0) ? 1 : num;
             this.axis.symlogLinscale = num;
-            this.fig.repaint();
+            this.fig.replot();
         });
 
         this.addUpdateUICallback(() => {
@@ -148,19 +148,27 @@ export class FigureContextMenu extends ContextMenu {
             this.fig.viewAll();
         });
 
-        // var a2 = this.addAction("action 2");
-        // this.addDivider();
         var copy = this.addAction("Copy this to clipboard");
         copy.addEventListener("click", e => {
+            const cr = this.fig.canvasRect;
 
-            // TODO copy only canvas rect
-            this.fig.bottomCanvas?.toBlob(blob => {
-                if (blob) navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+            const ofc = new OffscreenCanvas(cr.w, cr.h);
+            const ctx = ofc.getContext("2d");
+            if (!ctx || !this.fig.bottomCanvas) return;
 
+            ctx.drawImage(this.fig.bottomCanvas, cr.x, cr.y, cr.w, cr.h, 0, 0, cr.w, cr.h);
+
+            ofc.convertToBlob().then(blob => {
+                navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
             });
         });
-        // this.addAction("action 3");
-        // this.addCheckBox('checkbox 1');
+
+        var title = this.addTextInput("Title", this.fig.title);
+
+        title.addEventListener("change", e => {
+            this.fig.title = title.value;
+            this.fig.replot();
+        });
 
         var xAxisMenu = new AxisContextMenu(this.fig, this.fig.xAxis);
         var yAxisMenu = new AxisContextMenu(this.fig, this.fig.yAxis);
@@ -172,11 +180,12 @@ export class FigureContextMenu extends ContextMenu {
         axAlign.addEventListener("change", e => {
             const opt = axAlign.selectedOptions[0].text;
             this.fig.axisAlignment = opt == "Vertical" ? Orientation.Vertical : Orientation.Horizontal;
-            this.fig.repaint();
+            this.fig.replot();
         });
 
         this.addUpdateUICallback(() => {
             axAlign.selectedIndex = this.fig.axisAlignment === Orientation.Vertical ? 1 : 0;
+            title.value = this.fig.title;
         });
     }
 
@@ -209,7 +218,7 @@ class ColorbarAxisContextMenu extends AxisContextMenu {
         var axLabel = this.addTextInput("Label", this.axis.label);
         axLabel.addEventListener("change", e => {
             this.axis.label = axLabel.value ?? "";
-            this.fig.repaint();
+            this.fig.replot();
         });
 
         var options = ["Linear", "Logarithmic", "Symmetric logarithmic"];

@@ -4,8 +4,9 @@ export class Dataset {
     public data: Matrix;
     public x: NumberArray;
     public y: NumberArray;
+    public name: string;
 
-    constructor(data: Matrix, x: NumberArray, y: NumberArray) {
+    constructor(data: Matrix, x: NumberArray, y: NumberArray, name: string = "") {
         //usually first dimension is time (rows) and second is wavelength (columns)
         if (data.ncols !== x.length || data.nrows !== y.length) {
             throw TypeError("Dimensions are not aligned with x and y arrays.");
@@ -13,6 +14,7 @@ export class Dataset {
         this.data = data;
         this.x = x;
         this.y = y;
+        this.name = name;
     }
 
     public transpose(): Dataset {

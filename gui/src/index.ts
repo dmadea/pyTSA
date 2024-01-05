@@ -1,7 +1,7 @@
 import { Colormap, Colormaps } from "./plotter/color";
 import { Matrix, NumberArray } from "./plotter/types";
 import { Dataset, loadData } from "./plotter/utils";
-import { SceneUser } from "./scene";
+import { SceneUser } from "./sceneuser";
 import { Splitter } from "./splitter";
 import 'bootstrap/dist/css/bootstrap.min.css';  // https://getbootstrap.com/docs/4.0/getting-started/webpack/
 // import styles from "./styles.css";

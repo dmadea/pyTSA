@@ -56,8 +56,6 @@ export class SceneUser extends LayoutScene {
 
         console.log(num);
 
-
-
     }
 
     public loadFiles(files: FileList) {
@@ -67,7 +65,7 @@ export class SceneUser extends LayoutScene {
         this.datasets = [];
         var processed: boolean[] = new Array<boolean>(files.length);
         processed.fill(false);
-        var names: string[] = [];
+        // var names: string[] = [];
 
         // console.log(processed);
 
@@ -95,16 +93,17 @@ export class SceneUser extends LayoutScene {
                     dataset?.transpose();
                 }
                 processed[index] = true;
-                names[index] = file.name;
+                // names[index] = file.name;
 
                 if (dataset) {
+                    dataset.name = file.name;
                     t.datasets[index] = dataset;
                 }
 
                 // console.log(index, "processing", file);
 
                 if (processed.every(entry => entry)) {
-                    t.processDatasets(names);
+                    t.processDatasets();
                 }
             });
             reader.readAsBinaryString(file);
@@ -112,7 +111,7 @@ export class SceneUser extends LayoutScene {
         }
     }
 
-    private processDatasets(names: string[]) {
+    private processDatasets() {
         
         // this.clear();
 
@@ -133,8 +132,8 @@ export class SceneUser extends LayoutScene {
             const tracePlot = this.groupPlots[i].tracePlot;
             const spectrumPlot = this.groupPlots[i].spectrumPlot;
 
-            hfig.yAxis.inverted = true;
-            trace.xAxis.inverted = true;
+            // hfig.yAxis.inverted = true;
+            // trace.xAxis.inverted = true;
 
             const cbar = hfig.addColorbar();
             const hmap = hfig.plotHeatmap(ds, new Colormap(Colormaps.symgrad));
@@ -142,6 +141,7 @@ export class SceneUser extends LayoutScene {
             cbar.viewAll();
             hfig.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
             hfig.yAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
+            hfig.title = ds.name;
 
             trace.xAxis.scale = hfig.yAxis.scale;
             spectrum.xAxis.scale = hfig.xAxis.scale;
@@ -157,14 +157,14 @@ export class SceneUser extends LayoutScene {
                     let idxy = hmap.dataset.y.nearestIndex(e.realPosition.y);
                     let row = hmap.dataset.data.getRow(idxy);
                     spectrumPlot.y = row;
-                    spectrum.repaint();
+                    spectrum.replot();
                 }
 
                 if (e.xChanged) {
                     let idxx = hmap.dataset.x.nearestIndex(e.realPosition.x);
                     let col = hmap.dataset.data.getCol(idxx);
                     tracePlot.y = col;
-                    trace.repaint();
+                    trace.replot();
                 }
             });
 
@@ -172,18 +172,16 @@ export class SceneUser extends LayoutScene {
                 let idxx = hmap.dataset.x.nearestIndex(e.realPosition.x);
                 let col = hmap.dataset.data.getCol(idxx);
                 tracePlot.y = col;
-                trace.repaint();
+                trace.replot();
             });
 
             this.groupPlots[i].traceDLines.addPositionChangedListener((e) => {
                 let idxy = hmap.dataset.y.nearestIndex(e.realPosition.x);
                 let row = hmap.dataset.data.getRow(idxy);
                 spectrumPlot.y = row;
-                spectrum.repaint();
+                spectrum.replot();
 
             });
-
-            
             
         }
 
@@ -469,7 +467,7 @@ export class SceneUser extends LayoutScene {
                     let idxy = this.fig.heatmap.dataset.y.nearestIndex(e.realPosition.y);
                     let row = this.fig.heatmap.dataset.data.getRow(idxy);
                     linePlot.y = row;
-                    this.figx?.repaint();
+                    this.figx?.replot();
                 }
 
                 if (e.xChanged) {
@@ -481,7 +479,7 @@ export class SceneUser extends LayoutScene {
                     }
                     linePlotCol.x = this.fig.heatmap.dataset.y;
                     linePlotCol.y = col;
-                    fy.repaint();
+                    fy.replot();
                 }
 
             }            
@@ -497,7 +495,7 @@ export class SceneUser extends LayoutScene {
 
                 linePlot.y = row;
 
-                this.figx?.repaint();
+                this.figx?.replot();
             }
         });
 
@@ -510,7 +508,7 @@ export class SceneUser extends LayoutScene {
                 linePlotCol.x = this.fig.heatmap.dataset.y;
                 linePlotCol.y = col;
 
-                fy.repaint();
+                fy.replot();
             }
         });
 

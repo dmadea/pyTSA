@@ -158,11 +158,15 @@ export abstract class GraphicObject{
         }
     }
 
-    public repaint() {
+    protected repaint() {
         if (this.bottomCtx && this.bottomCanvas && this.topCanvas && this.topCtx) {
             const e: IPaintEvent = {bottomCanvas: this.bottomCanvas, bottomCtx: this.bottomCtx, topCanvas: this.topCanvas, topCtx: this.topCtx};
             this.paint(e);
         }
+    }
+
+    public replot() {
+        this.repaint();
     }
 
     public clear() {
