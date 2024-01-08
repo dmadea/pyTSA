@@ -17,13 +17,6 @@ from matplotlib.ticker import *
 from plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
 
 
-def get_mu(wls, parmu=(1, 0, 0), lambda_c=433):
-    mu = np.ones(wls.shape[0], dtype=np.float64) * parmu[0]
-    for i in range(1, len(parmu)):
-        mu += parmu[i] * ((wls - lambda_c) / 100) ** i
-
-    return mu
-
 
 class Dataset(object):
 
@@ -136,6 +129,8 @@ class Dataset(object):
         if name is None and self.filepath is not None:
             tail = os.path.split(self.filepath)[1]
             self.name = os.path.splitext(tail)[0]  # without extension
+        else:
+            self.name = name
 
         # self._SVD_filter = False
         # self._ICA_filter = False
@@ -467,7 +462,7 @@ class Dataset(object):
 
         return self
 
-    def baseline_correction(self, t0=0, t1=200):
+    def baseline_correct(self, t0=0, t1=200):
         """Subtracts a average of specified time range from all data.
         Deep copies the object and new averaged one is returned."""
 
@@ -501,6 +496,10 @@ class Dataset(object):
         self._set_D()
 
         return self
+    
+    def dimension_multiply(self, times_factor: float = 1.0, wavelengths_factor: float = 1.0):
+        self.times *= times_factor
+        self.wavelengths *= wavelengths_factor
 
     def restore_original_data(self):
         self.wavelengths = self.wavelengths_o
@@ -526,6 +525,18 @@ class Dataset(object):
         self.SVD()
         # update matrix D
         self._set_D()
+
+    def plot(self, filepath=None, **kwargs):
+        fig, ax = plt.subplots(1, 1, figsize=kwargs.get('figsize', (5.5, 4.5)))
+        plot_data_ax(fig, ax, self.matrix, self.times, self.wavelengths, 
+                     title=self.name, **kwargs)
+
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
+        else:
+            plt.show()
+
 
     # def plot_log_of_S(self, n=10):
 

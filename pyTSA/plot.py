@@ -758,7 +758,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
 
 
 def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1,
-                 legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=False,
+                 legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True,
                  area_plot_data=(None, None), area_plot_color='violet', area_plot_data2=(None, None),
                  area_plot_color2='blue', title="",
                  area_plot_alpha=0.2, area_plot_alpha2=0.1, w_lim=(None, None), **kwargs):
