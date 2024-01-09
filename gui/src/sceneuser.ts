@@ -121,7 +121,7 @@ export class SceneUser extends LayoutScene {
 
         const n = this.datasets.length;
 
-        this.arangeFigures(n);
+        this.populateFigures(n);
 
         for (let i = 0; i < n; i++) {
             const idx = i;
@@ -184,6 +184,8 @@ export class SceneUser extends LayoutScene {
             });
             
         }
+
+        this.arangeFigures();
 
         this.repaint();
         setTimeout(() => this.resize(), 100);

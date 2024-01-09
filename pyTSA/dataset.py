@@ -61,7 +61,7 @@ class Dataset(object):
         self._set_D()
 
     def _set_D(self):
-        pass
+        self.matrix_fac = self.matrix
         # if self.Yr is None:
         #     self.Yr = self.matrix
         # self.matrix_fac = self.matrix.copy() if self._SVD_filter else self.matrix.copy()
@@ -264,14 +264,22 @@ class Dataset(object):
 
         self._save_matrix(self.matrix_fac, fname=filepath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
 
-    def save_matrix(self, filepath='file.txt', delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
+    def save_matrix(self, filepath: str | None = 'file.txt', directory: str | None = None, extension: str | None = None, 
+                    delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
+        """If filepath is None and directory and extension is provided, it will use the name of the dataset and save in the directory."""
+
+        if directory is not None and extension is not None:
+            fpath = os.path.join(directory, f"{self.name}.{extension}")
+        else:
+            assert filepath is not None
+            fpath = filepath
 
         # _, fname = os.path.split(self.filepath)
         # name, ext = os.path.splitext(fname)
         #
         # fpath = os.path.join(output_dir, f'{name}.{extension}')
 
-        self._save_matrix(self.matrix, fname=filepath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
+        self._save_matrix(self.matrix, fname=fpath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
 
     def _save_matrix(self, D=None, fname='output.txt', delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
         # cut data if necessary

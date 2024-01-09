@@ -68,7 +68,7 @@ export class DraggableLines extends GraphicObject {
     }
 
     public linkX(line: DraggableLines) {
-        if (line === this) {
+        if (line === this && this.xLinks.includes(line)) {
             return;
         }
 
@@ -77,7 +77,7 @@ export class DraggableLines extends GraphicObject {
     }
 
     public linkY(line: DraggableLines) {
-        if (line === this) {
+        if (line === this && this.yLinks.includes(line)) {
             return;
         }
 
@@ -86,7 +86,7 @@ export class DraggableLines extends GraphicObject {
     }
 
     public linkXY(line: DraggableLines) {
-        if (line === this) {
+        if (line === this && this.xyLinks.includes(line)) {
             return;
         }
 
@@ -95,12 +95,88 @@ export class DraggableLines extends GraphicObject {
     }
 
     public linkYX(line: DraggableLines) {
-        if (line === this) {
+        if (line === this && this.yxLinks.includes(line)) {
             return;
         }
 
         line.xyLinks.push(this);
         this.yxLinks.push(line);
+    }
+
+    public unlinkAllX(){
+        for (const line of this.xLinks) {
+            const idx = line.xLinks.indexOf(this);
+            line.xLinks.splice(idx);
+        }
+        this.xLinks = [];
+    }
+
+    public unlinkAllY(){
+        for (const line of this.yLinks) {
+            const idx = line.yLinks.indexOf(this);
+            line.yLinks.splice(idx);
+        }
+        this.yLinks = [];
+    }
+
+    public unlinkAllXY(){
+        for (const line of this.xyLinks) {
+            const idx = line.yxLinks.indexOf(this);
+            line.yxLinks.splice(idx);
+        }
+        this.xyLinks = [];
+    }
+
+    public unlinkAllYX(){
+        for (const line of this.yxLinks) {
+            const idx = line.xyLinks.indexOf(this);
+            line.xyLinks.splice(idx);
+        }
+        this.yxLinks = [];
+    }
+
+    public unlinkX(line: DraggableLines) {
+        if (line === this) {
+            return;
+        }
+        let idx = line.xLinks.indexOf(this);
+        line.xLinks.splice(idx);
+
+        idx = this.xLinks.indexOf(line);
+        this.xLinks.splice(idx);
+    }
+
+    public unlinkY(line: DraggableLines) {
+        if (line === this) {
+            return;
+        }
+        let idx = line.yLinks.indexOf(this);
+        line.yLinks.splice(idx);
+
+        idx = this.yLinks.indexOf(line);
+        this.yLinks.splice(idx);
+    }
+
+    public unlinkXY(line: DraggableLines) {
+        if (line === this) {
+            return;
+        }
+        let idx = line.yxLinks.indexOf(this);
+        line.yxLinks.splice(idx);
+
+        idx = this.xyLinks.indexOf(line);
+        this.xyLinks.splice(idx);
+    }
+
+    public unlinkYX(line: DraggableLines) {
+        if (line === this) {
+            return;
+        }
+        let idx = line.xyLinks.indexOf(this);
+        line.xyLinks.splice(idx);
+
+        idx = this.yxLinks.indexOf(line);
+        this.yxLinks.splice(idx);
     }
 
     public setStickGrid(xdiff: number, xOffset: number, ydiff: number, yOffset: number) {
@@ -222,7 +298,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.x = lf.xAxis.invTransform(xT(this.position.x));
             }
-            // line.fireEvent(xChanged, yChanged);
+            line.fireEvent(true, false);
             lf.repaintItems();
         }
         for (const line of this.yLinks) {
@@ -232,7 +308,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.y = lf.yAxis.invTransform(yT(this.position.y));
             }
-            // line.fireEvent(xChanged, yChanged);
+            line.fireEvent(false, true);
             lf.repaintItems();
         }
         for (const line of this.xyLinks) {
@@ -242,7 +318,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.y = lf.yAxis.invTransform(xT(this.position.x));
             }
-            // line.fireEvent(xChanged, yChanged);
+            line.fireEvent(false, true);
             lf.repaintItems();
         }
         for (const line of this.yxLinks) {
@@ -252,7 +328,7 @@ export class DraggableLines extends GraphicObject {
             } else {
                 line.position.x = lf.xAxis.invTransform(yT(this.position.y));
             }
-            // line.fireEvent(xChanged, yChanged);
+            line.fireEvent(true, false);
             lf.repaintItems();
         }
 
