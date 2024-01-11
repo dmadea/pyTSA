@@ -48,7 +48,8 @@ module.exports = {
     // watchContentBase: true,
     proxy: {
       '/api': {
-           target: 'http://localhost:6000',
+           target: 'http://127.0.0.1:6969/',
+           secure: false
           //  router: () => 'http://localhost:6969',
           //  logLevel: 'debug' /*optional*/
       }

@@ -37,7 +37,11 @@ function benchmark() {
 
 // }
 
+
+
 function abc(): void {
+
+    var xhr: XMLHttpRequest = new XMLHttpRequest();;
 
     var leftPane = document.querySelector(".left") as HTMLDivElement;
     var splitbar = document.querySelector(".splitbar") as HTMLDivElement;
@@ -52,21 +56,59 @@ function abc(): void {
     // scene.testAddGrid();
     // fig.paint();
 
+    var btnPing = document.getElementById('btnPing') as HTMLInputElement;
+    btnPing.addEventListener("click", (ev) => {
+
+        const time = Date.now();
+
+        xhr.onreadystatechange = () => {
+            // console.log(xhr.responseText);
+            if (xhr.readyState == 4 && xhr.status == 200) {  //  && xhr.responseText == "pong"
+                console.log("ping: ", Date.now() - time, 'ms');
+            }
+        };
+        // asynchronous requests
+        xhr.open("GET", "/api/ping", true);
+        // Send the request over the network
+        xhr.send(null);
+
+    });
+
+
+
     var testbtn = document.getElementById('btnTest') as HTMLInputElement;
+
     testbtn.addEventListener("click", (ev) => {
 
-        let x = NumberArray.linspace(-1, 1, 10);  // wls
-        let y = NumberArray.linspace(-1, 1, 10);  // time
+        // console.log("Get users...");
 
-        var arr = NumberArray.linspace(0, 10, x.length * y.length, true);
-        var m = new Matrix(y.length, x.length, arr);
+        xhr.onreadystatechange = () => {
+            if (xhr.readyState == 4 && xhr.status == 201) {
+                var obj = JSON.parse(xhr.response);
+                console.log(obj);
+            }
+        };
+        // asynchronous requests
+        // xhr.open("GET", "http://localhost:6969/api/ping", true);
+        xhr.open("POST", "/api/testpost", true);
+        xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
 
-        let d = new Dataset(m, x, y);
-        d.data.log();
-        d.transpose();
-        d.data.log();
+        // Send the request over the network
+        xhr.send(JSON.stringify({"data": {test: "OK"}}));
 
-        scene.fig?.plotHeatmap(d, new Colormap(Colormaps.symgrad));
+
+        // let x = NumberArray.linspace(-1, 1, 10);  // wls
+        // let y = NumberArray.linspace(-1, 1, 10);  // time
+
+        // var arr = NumberArray.linspace(0, 10, x.length * y.length, true);
+        // var m = new Matrix(y.length, x.length, arr);
+
+        // let d = new Dataset(m, x, y);
+        // d.data.log();
+        // d.transpose();
+        // d.data.log();
+
+        // scene.fig?.plotHeatmap(d, new Colormap(Colormaps.symgrad));
 
     });
 
