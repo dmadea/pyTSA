@@ -30,7 +30,7 @@ module.exports = {
   },
   output: {
     filename: 'bundle.js',
-    path: path.resolve(__dirname, 'dist'),
+    path: path.resolve(__dirname, 'backend/static/dist'),
   },
   plugins: [
     new HtmlWebpackPlugin({
@@ -40,9 +40,24 @@ module.exports = {
       //     filename:"bundle.css"})
    ],
   devServer: {
-    static: path.join(__dirname, "dist"),
+    static: path.join(__dirname, "backend/static/dist"),
+    // contentBase: path.join(__dirname, './backend/'),
     compress: true,
-    port: 4000,
+    // publicPath: path.join(__dirname, "backend/static/dist"),
+    port: 3000,
+    // watchContentBase: true,
+    proxy: {
+      '/api': {
+           target: 'http://localhost:6000',
+          //  router: () => 'http://localhost:6969',
+          //  logLevel: 'debug' /*optional*/
+      }
+   }
+    // proxy: {
+    //   '!(/static/dist/**.*)': {
+    //       target: 'http://127.0.0.1:5000',
+    //   },
+  // },
   },
   // runtimeCompiler: true,
   // externals: {

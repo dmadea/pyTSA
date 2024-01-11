@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request
 # from flask_cors import CORS
 
 app  = Flask(__name__)
@@ -6,9 +6,9 @@ app  = Flask(__name__)
 host, port = 'localhost', 6969
 
 
-@app.route('/')
+@app.route('/', methods=["GET", "POST"])
 def test():
-    return render_template("index.html")
+    return "Hello"
 
 if __name__ == '__main__':
     app.run(host, port)
