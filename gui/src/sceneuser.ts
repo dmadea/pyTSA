@@ -6,6 +6,7 @@ import { LayoutScene } from "./plotter/layoutscene";
 import { Scene } from "./plotter/scene";
 import { NumberArray } from "./plotter/types";
 import { Dataset, loadData } from "./plotter/utils";
+import { arr2json } from "./utils";
 
 
 export class SceneUser extends LayoutScene {
@@ -105,6 +106,7 @@ export class SceneUser extends LayoutScene {
 
                 if (processed.every(entry => entry)) {
                     t.processDatasets();
+                    t.postDatasets();
                 }
             });
             reader.readAsBinaryString(file);
@@ -112,7 +114,43 @@ export class SceneUser extends LayoutScene {
         }
     }
 
-    private processDatasets() {
+    private postDatasets() {
+        const xhr = new XMLHttpRequest();
+
+        var datasets = [];
+        for (const d of this.datasets) {
+            datasets.push({
+                times: arr2json(d.y),
+                wavelengths: arr2json(d.x),
+                matrix: {
+                    data: arr2json(d.data),
+                    c_contiguous: d.data.isCContiguous
+                },
+                name: d.name
+            });
+        }
+
+        var data = {
+            data: {
+                datasets: datasets
+            }
+        }
+        console.log(datasets[0]);
+
+        xhr.onreadystatechange = () => {
+            if (xhr.readyState == 4 && xhr.status == 200) {
+                console.log('Success');
+            }
+        };
+        // asynchronous requests
+        xhr.open("POST", "/api/post_datasets", true);
+        xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+
+        // Send the request over the network
+        xhr.send(JSON.stringify(data));
+    }
+
+    public processDatasets() {
         
         // this.clear();
 

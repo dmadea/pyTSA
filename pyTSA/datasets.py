@@ -21,6 +21,12 @@ class Datasets(object):
         
         self._datasets[key] = newvalue
 
+    def length(self):
+        return len(self._datasets)
+
+    def append(self, dataset: Dataset):
+        self._datasets.append(dataset)
+
     def __iter__(self):
         for d in self._datasets:
             yield d

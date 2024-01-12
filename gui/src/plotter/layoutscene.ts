@@ -227,6 +227,12 @@ export class LayoutScene extends Scene {
             var h = new Figure();
             var s = new Figure();
             var t = new Figure();
+            
+            if (this.wasm){
+                h.setWasm(this.wasm);
+                s.setWasm(this.wasm);
+                t.setWasm(this.wasm);
+            }
 
             this.groupPlots.push({
                 heatmapFig: h,

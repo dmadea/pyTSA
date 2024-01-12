@@ -37,6 +37,14 @@ export class NumberArray extends Array<number> {
         return arr;
     }
 
+    static fromTypedArray(array: Float32Array | Float64Array): NumberArray {
+        const arr = new NumberArray(array.length);
+        for (let i = 0; i < array.length; i++) {
+            arr[i] = array[i];
+        }
+        return arr;
+    }
+
     static diff(array: number[] | NumberArray): NumberArray {
         if (array.length < 2) {
             throw TypeError("Array has to have at least 2 elements.");
@@ -90,6 +98,11 @@ export class NumberArray extends Array<number> {
         } else {
             super();
         }
+    }
+
+    public toFloat64Array() {
+        const arr = new Float64Array(this);
+        return arr;
     }
 
 
@@ -299,6 +312,10 @@ export class Matrix extends NumberArray {
 
     get isCContiguous() {
         return this._isCContiguous;
+    }
+
+    set isCContiguous(value: boolean) {
+        this._isCContiguous = value;
     }
 
     public get(row: number, column: number) {

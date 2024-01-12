@@ -303,10 +303,10 @@ export class HeatMap {
             return;
         }
 
-        // if (this.figure.wasm) {
-        //     this.recalcImageNative();
-        //     return;
-        // }
+        if (this.figure.wasm) {
+            this.recalcImageNative();
+            return;
+        }
 
         console.time("recalculateImage");
 
