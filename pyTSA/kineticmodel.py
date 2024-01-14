@@ -8,13 +8,17 @@ import numpy as np
 # from scipy.integrate import odeint
 from lmfit import Parameters, Minimizer
 from lmfit.minimizer import MinimizerResult
+from typing import TYPE_CHECKING
 
 from abc import abstractmethod
 
 # from .fit import Fitter
 # from numba import njit
 
-from mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq
+from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq
+from .plot import plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax
+if TYPE_CHECKING:
+    from .dataset import Dataset
 
 import matplotlib.pyplot as plt
 
@@ -23,11 +27,7 @@ import matplotlib.pyplot as plt
 import scipy.constants as sc
 # from scipy.linalg import lstsq
 
-from typing import TYPE_CHECKING
 
-from plot import plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax
-if TYPE_CHECKING:
-    from .dataset import Dataset
 
 
 # abstract class that every model must inherits

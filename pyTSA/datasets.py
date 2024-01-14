@@ -1,6 +1,7 @@
 
-from plot import plot_data_ax
-from dataset import Dataset
+from .plot import plot_data_ax
+from .dataset import Dataset
+
 import numpy as np
 import matplotlib.pyplot as plt
 import os

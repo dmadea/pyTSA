@@ -4,18 +4,17 @@ from scipy.linalg import svd
 
 import os
 import matplotlib.pyplot as plt
-
-from kineticmodel import FirstOrderModel, KineticModel
-from mathfuncs import crop_data, fi, chirp_correction
-
+from matplotlib.ticker import *
 from matplotlib import cm
+
 from sklearn.decomposition import NMF
 from sklearn.decomposition import FastICA
 from numpy import ma
 
-from matplotlib.ticker import *
-from plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
 
+from .kineticmodel import FirstOrderModel, KineticModel
+from .mathfuncs import crop_data, fi, chirp_correction
+from .plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
 
 
 class Dataset(object):

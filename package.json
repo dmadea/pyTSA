@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "frontend": "cd ./packages/frontend && webpack-dev-server --mode development --stats-error-details",
+    "backend": "cd ./packages/pyTSAgui && flask --app __main__.py --debug run -p 6969"  
+  },
+  "workspaces": [
+    "packages/*"
+  ]
+}

@@ -1,1 +1,1 @@
-# pyTSA python package
+# pyTSA python package for fitting
