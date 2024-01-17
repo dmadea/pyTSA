@@ -3,16 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "serve": "vue-cli-service lint --fix && vue-cli-service serve",
+    "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "lint": "vue-cli-service lint --fix"
   },
   "dependencies": {
+    "@pytsa/ts-graph": "~1.0.0",
     "core-js": "^3.8.3",
     "vue": "^3.2.13",
     "vue-class-component": "^8.0.0-0"
   },
   "devDependencies": {
+    "@types/offscreencanvas": "^2019.7.3",
     "@typescript-eslint/eslint-plugin": "^5.4.0",
     "@typescript-eslint/parser": "^5.4.0",
     "@vue/cli-plugin-babel": "~5.0.0",
@@ -41,7 +43,14 @@
     "parserOptions": {
       "ecmaVersion": 2020
     },
-    "rules": {"prettier/prettier": ["error", {"endOfLine": "auto"}]}
+    "rules": {
+      "prettier/prettier": [
+        "error",
+        {
+          "endOfLine": "auto"
+        }
+      ]
+    }
   },
   "browserslist": [
     "> 1%",

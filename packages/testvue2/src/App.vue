@@ -1,13 +1,23 @@
-<template>
-  <TestComponent test=" test string to test test -------- ">abc</TestComponent>
-</template>
-
 <script setup lang="ts">
 import { provide } from "vue";
 import TestComponent from "./components/TestComponent.vue";
+import LeftPanel from "./components/LeftPanel.vue";
+import CanvasComponent from "./components/CanvasComponent.vue";
 
 provide("backendUrl", "http://localhost:6969/");
 </script>
+
+<template>
+  <div>
+    <LeftPanel :datasets="[{ name: 'a' }, { name: 'b' }]"></LeftPanel>
+  </div>
+  <div>
+    <CanvasComponent
+      :datasets="[{ name: 'a' }, { name: 'b' }]"
+    ></CanvasComponent>
+  </div>
+  <TestComponent test=" test string to test test -------- ">abc</TestComponent>
+</template>
 
 <!-- <style>
 #app {

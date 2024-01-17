@@ -16,6 +16,7 @@
     "popper": "^1.0.1"
   },
   "devDependencies": {
+    "@types/offscreencanvas": "^2019.7.3",
     "typescript": "^5.2.2"
   }
 }
