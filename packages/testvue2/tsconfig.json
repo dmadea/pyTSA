@@ -16,7 +16,8 @@
     "baseUrl": ".",
     "types": [
       "webpack-env",
-      "offscreencanvas"
+      "offscreencanvas",
+      "splitpanes"
     ],
     "paths": {
       "@/*": [

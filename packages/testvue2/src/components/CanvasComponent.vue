@@ -2,22 +2,33 @@
 import { SceneUser } from "@/sceneuser";
 import { defineProps, inject, ref, onMounted } from "vue";
 
-onMounted(() => {
-  const canvasDiv = document.getElementById("canvas") as HTMLDivElement;
-  const scene = new SceneUser(canvasDiv);
-});
-
 const props = defineProps({
   datasets: {
     type: Object,
+    required: false,
+  },
+  tabindex: {
+    type: Number,
     required: true,
   },
+  currentTab: {
+    type: Number,
+    required: true,
+  },
+});
+
+onMounted(() => {
+  const canvasDiv = document.getElementById(
+    `canvas${props.tabindex}`
+  ) as HTMLDivElement;
+  const scene = new SceneUser(canvasDiv);
 });
 </script>
 
 <template>
   <div>
-    <div id="canvas"></div>
+    <div :id="`canvas${tabindex}`"></div>
+    <p>Canvas component here, index {{ tabindex }}</p>
   </div>
 </template>
 
