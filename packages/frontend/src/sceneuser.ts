@@ -82,7 +82,7 @@ export class SceneUser extends LayoutScene {
                 const ext = file.name.split('.').pop()?.toLowerCase();
 
                 const dataset = loadData(reader.result, (ext === 'csv') ? ',' : '\t');
-                // dataset?.transpose();
+                // dataset?.transpose(); 
                 console.timeEnd('start loading');
 
                 if (ext === 'txt') {

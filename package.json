@@ -1,6 +1,7 @@
 {
   "scripts": {
     "frontend": "cd ./packages/frontend && webpack-dev-server --mode development --stats-error-details",
+    "vueapp": "cd ./packages/testvue2 && vue-cli-service serve",
     "backend": "cd ./packages/pyTSAgui && flask --app __main__.py --debug run -p 6969"  
   },
   "workspaces": [

@@ -271,7 +271,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
                           marker_linewidth=1, n_lin_bins=10, n_log_bins=10, t_axis_formatter=ScalarFormatter(), log_y=False,
                           marker_facecolor='white', alpha=0.8, y_lim=(None, None), plot_tilts=True, wl_unit='nm', t_unit='ps',
                           linthresh=1, linscale=1, colors=None, D_mul_factor=1, legend_spacing=0.2, lw=1.5,
-                          legend_loc='best', y_label=dA_unit, x_label='Time', symlog=True,
+                          legend_loc='best', z_unit=dA_unit, x_label='Time', symlog=True,
                           t_lim=(None, None), plot_zero_line=True, **kwargs):
     
     """wls can contain a range of wavelengths, in this case, the integrated intensity will be calculated in this range and plotted"""
@@ -284,7 +284,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
 
     t_lim = ((times - mu.min())[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
 
-    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=y_label, x_label=f"{x_label} / {t_unit}",
+    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=z_unit, x_label=f"{x_label} / {t_unit}",
                   y_minor_locator=None, x_minor_locator=None)
 
     if plot_zero_line:
