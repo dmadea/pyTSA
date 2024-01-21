@@ -59,61 +59,6 @@ export class SceneUser extends LayoutScene {
     console.log(num);
   }
 
-  public loadFiles(files: FileList) {
-    if (!files) return;
-
-    this.datasets = [];
-    const processed: boolean[] = new Array<boolean>(files.length);
-    processed.fill(false);
-    // var names: string[] = [];
-
-    // console.log(processed);
-
-    const datasets = this.datasets;
-    const post = this.postDatasets;
-    const process = this.processDatasets;
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const reader = new FileReader();
-      const index = i;
-      console.time("start loading");
-      reader.addEventListener("load", function (e) {
-        // if (reader.result instanceof ArrayBuffer) {
-        //   t.testWasmLoad(reader.result);
-        // }
-
-        if (!(typeof reader.result === "string")) return;
-
-        const ext = file.name.split(".").pop()?.toLowerCase();
-
-        const dataset = loadData(reader.result, ext === "csv" ? "," : "\t");
-        // dataset?.transpose();
-        console.timeEnd("start loading");
-
-        if (ext === "txt") {
-          dataset?.transpose();
-        }
-        processed[index] = true;
-        // names[index] = file.name;
-
-        if (dataset) {
-          dataset.name = file.name;
-          datasets[index] = dataset;
-        }
-
-        // console.log(index, "processing", file);
-
-        if (processed.every((entry) => entry)) {
-          process();
-          post();
-        }
-      });
-      reader.readAsBinaryString(file);
-      // reader.readAsArrayBuffer(file);
-    }
-  }
-
   private postDatasets() {
     const xhr = new XMLHttpRequest();
 

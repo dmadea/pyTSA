@@ -17,7 +17,8 @@
     "types": [
       "webpack-env",
       "offscreencanvas",
-      "splitpanes"
+      "splitpanes",
+      "uuid"
     ],
     "paths": {
       "@/*": [

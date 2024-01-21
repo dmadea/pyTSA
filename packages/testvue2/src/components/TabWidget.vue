@@ -1,46 +1,54 @@
 <script setup lang="ts">
-import { defineProps, inject, ref, onMounted } from "vue";
+import { defineProps, inject, ref, defineEmits, computed } from "vue";
 import CanvasComponent from "./CanvasComponent.vue";
+import { Dataset } from "@pytsa/ts-graph";
 
 const props = defineProps({
-  datasets: {
+  data: {
     type: Object,
     required: true,
   },
 });
 
-const activeTab = ref<number>(0);
+const datasets = computed(() => {
+  const ret = [];
+  for (const tab of props.data.tabs) {
+    ret.push(
+      props.data.datasets.filter((dataset: Dataset, index: number) =>
+        tab.selectedDatasets.includes(index)
+      )
+    );
+  }
+  return ret;
+});
 
-const tabs = ref([
-  {
-    name: "Tab 1",
-  },
-]);
-
-const addNewTab = () => {
-  tabs.value.push({
-    name: `Tab ${tabs.value.length + 1}`,
-  });
-  activeTab.value = tabs.value.length - 1;
-};
+const emit = defineEmits<{
+  (e: "addNewTab"): void;
+  (e: "tabIndexChanged", value: number): void;
+  // (e: 'update', value: string): void
+}>();
 </script>
 
 <template>
   <div class="card">
     <div class="card-header">
       <ul class="nav nav-tabs card-header-tabs">
-        <li v-for="(tab, index) in tabs" :key="index" class="nav-item">
+        <li v-for="(tab, index) in data.tabs" :key="index" class="nav-item">
           <button
             class="nav-link"
-            :class="{ active: index === activeTab }"
+            :class="{ active: index === data.activeTab }"
             aria-current="true"
-            @click="activeTab = index"
+            @click="emit('tabIndexChanged', index)"
           >
-            {{ tab.name }}
+            {{ `Set ${1 + index}` }}
           </button>
         </li>
         <li class="nav-item">
-          <a class="nav-link" @click="addNewTab()" aria-current="true" href="#"
+          <a
+            class="nav-link"
+            @click="emit('addNewTab')"
+            aria-current="true"
+            href="#"
             >+</a
           >
         </li>
@@ -52,12 +60,12 @@ const addNewTab = () => {
         With supporting text below as a natural lead-in to additional content.
       </p> -->
 
-      <div v-for="(tab, index) in tabs" :key="index">
-        <div
+      <div v-for="(tab, index) in data.tabs" :key="index">
+        <!-- <div
           class="btn-group"
           role="group"
           aria-label="Basic radio toggle button group"
-          v-show="index === activeTab"
+          v-show="index === data.activeTab"
         >
           <input
             type="radio"
@@ -80,12 +88,11 @@ const addNewTab = () => {
           <label class="btn btn-outline-primary" :for="`btnfit${index}`"
             >Fit</label
           >
-        </div>
+        </div> -->
 
         <CanvasComponent
-          v-show="index === activeTab"
-          :tabindex="index"
-          :currentTab="activeTab"
+          v-show="index === data.activeTab"
+          :datasets="datasets[index]"
         ></CanvasComponent>
       </div>
     </div>

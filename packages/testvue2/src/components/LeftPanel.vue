@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { loadFiles } from "@/utils";
 import { Dataset } from "@pytsa/ts-graph";
-import { defineProps, inject, ref, defineEmits } from "vue";
+import { defineProps, inject, ref, defineEmits, PropType } from "vue";
 
 const props = defineProps({
   datasets: {
-    type: Object,
+    type: Array,
+    required: true,
+  },
+  checked: {
+    type: Array as PropType<boolean[]>,
     required: true,
   },
 });
@@ -13,6 +17,7 @@ const props = defineProps({
 const backendUrl = inject("backendUrl");
 const emit = defineEmits<{
   (e: "datasetsLoaded", datasets: Dataset[]): void;
+  (e: "checkedChanged", index: number): void;
   // (e: 'update', value: string): void
 }>();
 
@@ -47,6 +52,10 @@ const loadDatasets = (payload: Event) => {
 const syncData = () => {
   console.log("syncata");
 };
+
+const transpose = (index: number) => {
+  (props.datasets[index] as Dataset).transpose();
+};
 </script>
 
 <template>
@@ -68,10 +77,12 @@ const syncData = () => {
       <input
         class="form-check-input me-1"
         type="checkbox"
-        :checked="dataset.checked"
+        :checked="checked[index]"
+        @change="emit('checkedChanged', index)"
         aria-label="..."
       />
-      {{ dataset.datasetData.name }}
+      {{ (dataset as Dataset).name }}
+      <button class="btn btn-secondary" @click="transpose(index)">Tr</button>
     </li>
   </ul>
 </template>

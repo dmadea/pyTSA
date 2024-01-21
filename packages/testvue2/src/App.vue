@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { provide, ref } from "vue";
+import { provide, reactive, ref, computed } from "vue";
 // import TestComponent from "./components/TestComponent.vue";
 import LeftPanel from "./components/LeftPanel.vue";
 // import CanvasComponent from "./components/CanvasComponent.vue";
@@ -10,26 +10,65 @@ import "splitpanes/dist/splitpanes.css";
 
 provide("backendUrl", "http://localhost:6969/");
 
-interface DatasetData {
-  datasetData: Dataset | null;
-  checked: boolean;
+// interface DatasetData {
+//   datasetData: Dataset | null;
+//   checked: boolean;
+// }
+
+interface TabData {
+  selectedDatasets: number[];
 }
 
-const createDataset = (
-  datasetData: Dataset | null,
-  checked = false
-): DatasetData => {
-  return {
-    datasetData,
-    checked,
-  };
-};
+interface Data {
+  activeTab: number;
+  tabs: TabData[];
+  datasets: Dataset[];
+}
 
-const datasets = ref<DatasetData[]>([]);
+const data = ref<Data>({
+  activeTab: 0,
+  tabs: [
+    {
+      selectedDatasets: [],
+    },
+  ],
+  datasets: [],
+});
 
 const datasetsLoaded = (ds: Dataset[]) => {
-  const newDatasets = ds.map((d) => createDataset(d, false));
-  datasets.value = [...datasets.value, ...newDatasets];
+  data.value.datasets = [...data.value.datasets, ...ds];
+};
+
+const checkedDatasets = computed<boolean[]>(() => {
+  const selTab = data.value.tabs[data.value.activeTab];
+  const isChecked: boolean[] = [];
+  for (let i = 0; i < data.value.datasets.length; i++) {
+    isChecked.push(selTab.selectedDatasets.includes(i));
+  }
+
+  return isChecked;
+});
+
+const addNewTab = () => {
+  data.value.tabs.push({
+    selectedDatasets: [],
+  });
+  data.value.activeTab = data.value.tabs.length - 1;
+};
+
+const tabIndexChanged = (index: number) => {
+  data.value.activeTab = index;
+};
+
+const checkedChanged = (index: number) => {
+  const selTab = data.value.tabs[data.value.activeTab];
+  if (selTab.selectedDatasets.includes(index)) {
+    selTab.selectedDatasets = selTab.selectedDatasets.filter(
+      (entry) => entry !== index
+    );
+  } else {
+    selTab.selectedDatasets.push(index);
+  }
 };
 </script>
 
@@ -37,12 +76,18 @@ const datasetsLoaded = (ds: Dataset[]) => {
   <splitpanes style="height: 100%">
     <pane min-size="10">
       <LeftPanel
-        :datasets="datasets"
+        :datasets="data.datasets"
+        :checked="checkedDatasets"
         @datasets-loaded="datasetsLoaded"
+        @checked-changed="checkedChanged"
       ></LeftPanel>
     </pane>
     <pane min-size="10">
-      <TabWidget :datasets="datasets"></TabWidget>
+      <TabWidget
+        :data="data"
+        @add-new-tab="addNewTab"
+        @tab-index-changed="tabIndexChanged"
+      ></TabWidget>
     </pane>
     <pane min-size="10">
       <h4>Fit widget</h4>
