@@ -7,8 +7,10 @@ import TabWidget from "./components/TabWidget.vue";
 import { Dataset } from "@pytsa/ts-graph";
 import { Splitpanes, Pane } from "splitpanes"; // from https://antoniandre.github.io/splitpanes/?ref=madewithvuejs.com
 import "splitpanes/dist/splitpanes.css";
+import { APICallPOST } from "./utils";
 
-provide("backendUrl", "http://localhost:6969/");
+const backendUrl = "http://localhost:6969/";
+provide("backendUrl", backendUrl);
 
 // interface DatasetData {
 //   datasetData: Dataset | null;
@@ -39,6 +41,10 @@ const datasetsLoaded = (ds: Dataset[]) => {
   data.value.datasets = [...data.value.datasets, ...ds];
 };
 
+const datasetsUpdated = (ds: Dataset[]) => {
+  data.value.datasets = ds;
+};
+
 const checkedDatasets = computed<boolean[]>(() => {
   const selTab = data.value.tabs[data.value.activeTab];
   const isChecked: boolean[] = [];
@@ -60,37 +66,53 @@ const tabIndexChanged = (index: number) => {
   data.value.activeTab = index;
 };
 
+var canvasInterfaces: any[] = [];
+
+const getCanvasInterfaces = (ifaces: any[]) => {
+  canvasInterfaces = ifaces;
+};
+
 const checkedChanged = (index: number) => {
   const selTab = data.value.tabs[data.value.activeTab];
   if (selTab.selectedDatasets.includes(index)) {
     selTab.selectedDatasets = selTab.selectedDatasets.filter(
       (entry) => entry !== index
     );
+    // remove dataset from tab
+    canvasInterfaces[data.value.activeTab].removeDataset(index);
+    APICallPOST(
+      `${backendUrl}api/remove_dataset/${index}/${data.value.activeTab}`
+    );
   } else {
-    selTab.selectedDatasets.push(index);
+    selTab.selectedDatasets = [...selTab.selectedDatasets, index];
+    // add dataset to tab
+    canvasInterfaces[data.value.activeTab].addDataset(index);
+    // sync with a backend
+    APICallPOST(
+      `${backendUrl}api/add_dataset/${index}/${data.value.activeTab}`
+    );
   }
 };
 </script>
 
 <template>
   <splitpanes style="height: 100%">
-    <pane min-size="10">
+    <pane min-size="10" size="100">
       <LeftPanel
         :datasets="data.datasets"
         :checked="checkedDatasets"
         @datasets-loaded="datasetsLoaded"
         @checked-changed="checkedChanged"
+        @datasets-updated="datasetsUpdated"
       ></LeftPanel>
     </pane>
-    <pane min-size="10">
+    <pane min-size="10" size="500">
       <TabWidget
         :data="data"
         @add-new-tab="addNewTab"
         @tab-index-changed="tabIndexChanged"
+        @canvas-interfaces="getCanvasInterfaces"
       ></TabWidget>
-    </pane>
-    <pane min-size="10">
-      <h4>Fit widget</h4>
     </pane>
   </splitpanes>
 </template>

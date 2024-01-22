@@ -10,26 +10,34 @@ import os
 class Datasets(object):
 
     def __init__(self):
-        self._datasets: list[Dataset] = []
+        self._datasets: list[dict[Dataset, int | str]] = []
 
-    def __getitem__(self, key: int):
-        return self._datasets[key]
+    def __getitem__(self, key: int) -> Dataset:
+        return self._datasets[key]['dataset']
     
     def __setitem__(self, key: int, newvalue: Dataset): 
 
         if not isinstance(newvalue, Dataset):
             raise ValueError("Only Dataset type must be assigned to datasets.")
         
-        self._datasets[key] = newvalue
+        self._datasets[key]['dataset'] = newvalue
 
     def length(self):
         return len(self._datasets)
 
-    def append(self, dataset: Dataset):
-        self._datasets.append(dataset)
+    def append(self, dataset: Dataset, key: str | int | None = None):
+        self._datasets.append(dict(dataset=dataset, key=len(self._datasets) if key is None else key))
+
+    def remove(self, index: int | None = None, key: int | str | None = None):
+        if key is not None:
+            self._datasets = list(filter(lambda d: d['key'] != key, self._datasets))
+            return
+        
+        if index is not None:
+            self._datasets.pop(index)
 
     def __iter__(self):
-        for d in self._datasets:
+        for d in map(lambda d: d['dataset'], self._datasets):
             yield d
 
     @classmethod
@@ -37,7 +45,7 @@ class Datasets(object):
         """kwargs are passed to np.getnfromtxt"""
 
         ds = cls()
-        ds._datasets = [Dataset.from_file(fname, transpose, **kwargs) for fname in filenames]
+        ds._datasets = [dict(dataset=Dataset.from_file(fname, transpose, **kwargs), key=i) for i, fname in enumerate(filenames)]
         return ds
 
     def crop(self, t0=None, t1=None, w0=None, w1=None):
@@ -63,13 +71,13 @@ class Datasets(object):
         if len(self._datasets) == 0:
             raise ValueError("No datasets.")
         
-        times = np.hstack(list(map(lambda d: d.times, self._datasets))) if axis == 0 else self[0].times
+        times = np.hstack(list(map(lambda d: d.times, iter(self)))) if axis == 0 else self[0].times
         wavelengths = np.hstack(list(map(lambda d: d.wavelengths, self._datasets))) if axis == 1 else self[0].wavelengths
 
         if axis == 0:
-            mat = np.vstack(list(map(lambda d: d.matrix, self._datasets)))
+            mat = np.vstack(list(map(lambda d: d.matrix, iter(self))))
         else:
-            mat = np.hstack(list(map(lambda d: d.matrix, self._datasets)))
+            mat = np.hstack(list(map(lambda d: d.matrix, iter(self))))
 
         return Dataset(mat, times, wavelengths, name=self[0].name)
     
@@ -84,7 +92,7 @@ class Datasets(object):
         if nrows * ncols == 1:
             axes = np.asarray([axes])
 
-        for d, ax in zip(self._datasets, axes.flatten()):
+        for d, ax in zip(iter(self), axes.flatten()):
             plot_data_ax(fig, ax, d.matrix, d.times, d.wavelengths, title=d.name, **kwargs)
 
         plt.tight_layout()

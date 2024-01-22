@@ -23,8 +23,11 @@ def json2arr(base64_text: str) -> np.ndarray:
     return np.frombuffer(bytes, dtype=np.float64)
 
 def arr2json(arr: np.ndarray) -> str:
-    _arr = arr if arr.data.c_contiguous else arr.T
-    b64 = base64.b64encode(_arr)
+    # _arr = arr if arr.data.c_contiguous else arr.T
+    # if not _arr.data.c_contiguous:
+    #     _arr = np.ascontiguousarray(arr)
+    b64 = base64.b64encode(arr)
+
     return b64.decode('utf-8')
 
 
@@ -42,10 +45,27 @@ class BackendSession(object):
 
     def __init__(self, app):
         self.datasets: Datasets = Datasets()
+        self.tabs = [Datasets()]
         self.app = app
 
         d = Dataset.from_file(fname, transpose=True, delimiter='\t')
         self.datasets.append(d)
+
+    def add_dataset(self, index: int, tab_index: int):
+        if (len(self.tabs) == tab_index):
+            self.tabs.append(Datasets())
+
+        self.tabs[tab_index].append(self.datasets[index].copy(), key=index)
+
+    def remove_dataset(self, index: int, tab_index: int):
+        self.tabs[tab_index].remove(key=index)
+
+    def perform_operation(self, op: str, tab_index: int, **kwargs):
+        getattr(self.tabs[tab_index], op)(**kwargs)
+        return self.get_datasets(self.tabs[tab_index])
+
+    def transpose_dataset(self, index: int):
+        self.datasets[index].transpose()
 
     def post_datasets(self, data: dict):
         ds: list = data['data']['datasets']
@@ -57,14 +77,14 @@ class BackendSession(object):
 
         return ""
     
-    def get_datasets(self):
+    def get_datasets(self, datasets: Datasets):
         def _put_dataset(d: Dataset):
             obj = {
                 'times': arr2json(d.times),
                 'wavelengths': arr2json(d.wavelengths),
                 'matrix': {
-                    'data': arr2json(d.matrix),
-                    'c_contiguous': d.matrix.data.c_contiguous
+                    'data': arr2json(np.ascontiguousarray(d.matrix)),
+                    'c_contiguous': True  #d.matrix.data.c_contiguous
                 },
                 'name': d.name
             }
@@ -73,7 +93,7 @@ class BackendSession(object):
 
         data = {
             'data': {
-                'datasets': [_put_dataset(d) for d in self.datasets]
+                'datasets': [_put_dataset(d) for d in datasets]
             }
         }
 

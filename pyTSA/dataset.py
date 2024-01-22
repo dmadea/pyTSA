@@ -97,6 +97,9 @@ class Dataset(object):
 
         return cls(mat, t, w, filepath=fname)
 
+    def copy(self):
+        return Dataset(self.matrix.copy(), self.times.copy(), self.wavelengths.copy(), filepath=self.filepath, name=self.name)
+
     def __init__(self, matrix: np.ndarray, times: np.ndarray, wavelengths: np.ndarray,
                  filepath: str | None = None, name: str | None = None):
 
@@ -463,6 +466,8 @@ class Dataset(object):
 
         self.matrix, self.times, self.wavelengths = crop_data(self.matrix, self.times, self.wavelengths,
                                                                t0, t1, w0, w1)
+        
+        a = 3
 
         self.SVD()
         self._set_D()

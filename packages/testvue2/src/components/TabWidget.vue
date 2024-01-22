@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { defineProps, inject, ref, defineEmits, computed } from "vue";
 import CanvasComponent from "./CanvasComponent.vue";
-import { Dataset } from "@pytsa/ts-graph";
+import { Dataset, Matrix } from "@pytsa/ts-graph";
+import { json2arr } from "@/utils";
 
 const props = defineProps({
   data: {
@@ -10,23 +11,59 @@ const props = defineProps({
   },
 });
 
-const datasets = computed(() => {
-  const ret = [];
-  for (const tab of props.data.tabs) {
-    ret.push(
-      props.data.datasets.filter((dataset: Dataset, index: number) =>
-        tab.selectedDatasets.includes(index)
-      )
-    );
-  }
-  return ret;
-});
+const backendUrl = inject("backendUrl");
 
 const emit = defineEmits<{
   (e: "addNewTab"): void;
   (e: "tabIndexChanged", value: number): void;
-  // (e: 'update', value: string): void
+  (e: "canvasInterfaces", iface: any): void;
 }>();
+
+var canvasInterfaces: any[] = [];
+
+const getInterface = (iface: any) => {
+  canvasInterfaces.push(iface);
+  emit("canvasInterfaces", canvasInterfaces);
+};
+
+const crop = () => {
+  const xhr = new XMLHttpRequest();
+  xhr.onreadystatechange = () => {
+    if (xhr.readyState == 4 && xhr.status == 201) {
+      var obj = JSON.parse(xhr.response);
+      const datasets: Dataset[] = [];
+
+      for (const d of obj.data.datasets) {
+        var t = json2arr(d.times);
+        var w = json2arr(d.wavelengths);
+        var m = json2arr(d.matrix.data);
+        var mat = new Matrix(t.length, w.length, m);
+        mat.isCContiguous = d.matrix.c_contiguous;
+
+        datasets.push(new Dataset(mat, w, t, d.name));
+      }
+      console.log(datasets);
+      // emit("datasetsUpdated", datasets);
+    }
+  };
+
+  const kwargs = {
+    w0: 350,
+    w1: 500,
+  };
+
+  const op = "crop";
+  // asynchronous requests
+  xhr.open(
+    "POST",
+    `${backendUrl}api/perform/${op}/${props.data.activeTab}`,
+    true
+  );
+  xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+
+  // Send the request over the network
+  xhr.send(JSON.stringify(kwargs));
+};
 </script>
 
 <template>
@@ -89,10 +126,16 @@ const emit = defineEmits<{
             >Fit</label
           >
         </div> -->
+        <div v-show="index === data.activeTab">
+          <button @click="crop">Crop</button>
+          <button>Baseline correct</button>
+          <button>Dimension multiply</button>
+        </div>
 
         <CanvasComponent
           v-show="index === data.activeTab"
-          :datasets="datasets[index]"
+          :datasets="props.data.datasets"
+          @interface="getInterface"
         ></CanvasComponent>
       </div>
     </div>

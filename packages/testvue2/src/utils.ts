@@ -180,3 +180,17 @@ export async function loadFiles(
     // reader.readAsArrayBuffer(file);
   }
 }
+
+export function APICallPOST(url: string) {
+  const xhr = new XMLHttpRequest();
+
+  xhr.onreadystatechange = () => {
+    if (xhr.readyState == 4 && xhr.status == 200) {
+      console.log("Success");
+    }
+  };
+  // asynchronous requests
+  xhr.open("POST", url, true);
+  // Send the request over the network
+  xhr.send(null);
+}

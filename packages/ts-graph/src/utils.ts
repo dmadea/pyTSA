@@ -29,6 +29,10 @@ export class Dataset {
 
         return this.data.get(row, col);
     }
+
+    public copy() {
+        return new Dataset(this.data.copy(), this.x.copy(), this.y.copy(), this.name);
+    }
 }
 
 export function determineSigFigures(num: number): number {

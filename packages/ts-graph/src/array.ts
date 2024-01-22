@@ -347,4 +347,10 @@ export class Matrix extends NumberArray {
         console.log(str);
     }
 
+    public copy(): Matrix {
+        const mat = new Matrix(this.nrows, this.ncols, super.copy());
+        mat._isCContiguous = this._isCContiguous;
+        return mat;
+    }
+
 }
