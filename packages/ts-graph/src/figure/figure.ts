@@ -692,7 +692,12 @@ export class Figure extends GraphicObject {
     }
 
     public plotHeatmap(dataset: Dataset, colormap: Colormap): HeatMap {
-        this.heatmap = new HeatMap(this, dataset, colormap);
+
+        if (!this.heatmap) {
+            this.heatmap = new HeatMap(this, dataset, colormap);
+        } else {
+            this.heatmap.updateData(dataset);
+        }
 
         let x, y, h, w;
 
@@ -704,15 +709,9 @@ export class Figure extends GraphicObject {
             this.xAxis.scale = dataset.x;
             x = 0;
             w = dataset.x.length - 1;
-            // xdiff = 1;
-            // xOffset = 0;
-            // this.figureSettings.xAxis.viewBounds = [x, w];
         } else {
             x = dataset.x[0];
             w = dataset.x[dataset.x.length - 1] - x;
-            // xdiff = w / (dataset.x.length - 1);
-            // xOffset = x;
-            // this.figureSettings.xAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
             this.xAxis.scale = 'lin';
         }
 
@@ -722,24 +721,11 @@ export class Figure extends GraphicObject {
             this.yAxis.scale = dataset.y;
             y = 0;
             h = dataset.y.length - 1;
-            // ydiff = 1;
-            // yOffset = 0;
-            // this.figureSettings.yAxis.viewBounds = [y, h];
         } else {
             y = dataset.y[0];
             h = dataset.y[dataset.y.length - 1] - y;
             this.yAxis.scale = 'lin';
-            // ydiff = h / (dataset.y.length - 1);
-            // yOffset = y;
-            // this.figureSettings.yAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
         }
-
-
-
-        // this.heatmap.zRange = [-0.02, 0.02];
-        // this.heatmap.recalculateHeatMapImage();
-
-        // set range to heatmap
 
         this.internalRange = {x, y, w, h};
 

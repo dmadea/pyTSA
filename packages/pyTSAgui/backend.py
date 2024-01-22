@@ -48,12 +48,17 @@ class BackendSession(object):
         self.tabs = [Datasets()]
         self.app = app
 
-        d = Dataset.from_file(fname, transpose=True, delimiter='\t')
-        self.datasets.append(d)
+        # d = Dataset.from_file(fname, transpose=True, delimiter='\t')
+        # self.datasets.append(d)
+
+    def clear(self):
+        self.datasets.clear()
+        self.tabs = [Datasets()]
 
     def add_dataset(self, index: int, tab_index: int):
-        if (len(self.tabs) == tab_index):
-            self.tabs.append(Datasets())
+        if (tab_index >= len(self.tabs)):
+            for i in range(tab_index - len(self.tabs) + 1):
+                self.tabs.append(Datasets())
 
         self.tabs[tab_index].append(self.datasets[index].copy(), key=index)
 

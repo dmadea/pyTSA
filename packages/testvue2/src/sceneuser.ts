@@ -39,59 +39,57 @@ export class SceneUser extends LayoutScene {
     return figure;
   }
 
-  public testWasmLoad(buffer: ArrayBuffer) {
-    if (!this.wasm) return;
+  // public testWasmLoad(buffer: ArrayBuffer) {
+  //   if (!this.wasm) return;
 
-    console.log(buffer);
+  //   console.log(buffer);
 
-    const view = new Uint8Array(this.wasm.memory.buffer);
-    console.log(view);
+  //   const view = new Uint8Array(this.wasm.memory.buffer);
+  //   console.log(view);
 
-    const dataPtr = 0;
-    view.set(new Uint8Array(buffer), dataPtr);
+  //   const dataPtr = 0;
+  //   view.set(new Uint8Array(buffer), dataPtr);
 
-    const byteLength = buffer.byteLength;
+  //   const byteLength = buffer.byteLength;
 
-    const f = this.wasm.exports._Z5abcdePcm as CallableFunction;
-    const num = f(dataPtr, byteLength);
+  //   const f = this.wasm.exports._Z5abcdePcm as CallableFunction;
+  //   const num = f(dataPtr, byteLength);
 
-    console.log(num);
-  }
+  //   console.log(num);
+  // }
 
-  private postDatasets() {
-    const xhr = new XMLHttpRequest();
-
-    const datasets = [];
-    for (const d of this.datasets) {
-      datasets.push({
-        times: arr2json(d.y),
-        wavelengths: arr2json(d.x),
-        matrix: {
-          data: arr2json(d.data),
-          c_contiguous: d.data.isCContiguous,
-        },
-        name: d.name,
-      });
+  public updateData(datasets: Dataset[]) {
+    if (datasets.length !== this.datasets.length) {
+      throw Error("Length of updated datasets must me the same as those plotted.");
     }
 
-    const data = {
-      data: {
-        datasets: datasets,
-      },
-    };
-    console.log(datasets[0]);
+    const n = this.datasets.length;
 
-    xhr.onreadystatechange = () => {
-      if (xhr.readyState == 4 && xhr.status == 200) {
-        console.log("Success");
-      }
-    };
-    // asynchronous requests
-    xhr.open("POST", "/api/post_datasets", true);
-    xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    for (let i = 0; i < n; i++) {
+      this.datasets[i] = datasets[i];
 
-    // Send the request over the network
-    xhr.send(JSON.stringify(data));
+      const ds = this.datasets[i];
+      const hfig = this.groupPlots[i].heatmapFig;
+      const spectrum = this.groupPlots[i].spectrum;
+      const trace = this.groupPlots[i].trace;
+      const tracePlot = this.groupPlots[i].tracePlot;
+      const spectrumPlot = this.groupPlots[i].spectrumPlot;
+
+      hfig.plotHeatmap(ds, new Colormap(Colormaps.symgrad));
+      hfig.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
+      hfig.yAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
+      hfig.title = ds.name;
+
+      spectrumPlot.x = ds.x;
+      tracePlot.x = ds.y;
+      trace.xAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
+      spectrum.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
+      
+      hfig.heatmap?.recalculateImage();
+    }
+
+    this.repaint();
+    setTimeout(() => this.resize(), 100);
   }
 
   public processDatasets() {
@@ -131,8 +129,8 @@ export class SceneUser extends LayoutScene {
       trace.xAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
       spectrum.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
 
-      spectrumPlot.x = hmap.dataset.x;
-      tracePlot.x = hmap.dataset.y;
+      spectrumPlot.x = ds.x;
+      tracePlot.x = ds.y;
 
       this.groupPlots[i].heatmapDLines.addPositionChangedListener((e) => {
         if (e.yChanged) {

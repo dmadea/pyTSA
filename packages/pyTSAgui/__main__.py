@@ -70,6 +70,12 @@ def r_transpose(index: str):
     if request.method == "POST":
         session.transpose_dataset(int(index))
         return Response(status=201)
+    
+@app.route("/api/clear", methods=["POST"])
+def r_clear():
+    if request.method == "POST":
+        session.clear()
+        return Response(status=201)
 
 
 if __name__ == '__main__':

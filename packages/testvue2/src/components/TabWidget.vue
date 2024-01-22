@@ -42,23 +42,20 @@ const crop = () => {
 
         datasets.push(new Dataset(mat, w, t, d.name));
       }
-      console.log(datasets);
+
+      canvasInterfaces[props.data.activeTab].updateData(datasets);
       // emit("datasetsUpdated", datasets);
     }
   };
 
   const kwargs = {
-    w0: 350,
-    w1: 500,
+    w0: 600,
+    w1: 700,
   };
 
   const op = "crop";
   // asynchronous requests
-  xhr.open(
-    "POST",
-    `${backendUrl}api/perform/${op}/${props.data.activeTab}`,
-    true
-  );
+  xhr.open("POST", `${backendUrl}api/perform/${op}/${props.data.activeTab}`, true);
   xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
 
   // Send the request over the network
@@ -96,6 +93,9 @@ const crop = () => {
       <p class="card-text">
         With supporting text below as a natural lead-in to additional content.
       </p> -->
+      <button @click="crop">Crop</button>
+      <button>Baseline correct</button>
+      <button>Dimension multiply</button>
 
       <div v-for="(tab, index) in data.tabs" :key="index">
         <!-- <div
@@ -126,12 +126,6 @@ const crop = () => {
             >Fit</label
           >
         </div> -->
-        <div v-show="index === data.activeTab">
-          <button @click="crop">Crop</button>
-          <button>Baseline correct</button>
-          <button>Dimension multiply</button>
-        </div>
-
         <CanvasComponent
           v-show="index === data.activeTab"
           :datasets="props.data.datasets"

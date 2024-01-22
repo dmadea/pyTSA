@@ -93,6 +93,19 @@ const checkedChanged = (index: number) => {
     );
   }
 };
+
+const clear = () => {
+  APICallPOST(`${backendUrl}api/clear`);
+  for (const ci of canvasInterfaces) {
+    ci.clear();
+  }
+  for (let i = 0; i < data.value.tabs.length; i++) {
+    data.value.tabs[i] = {selectedDatasets: []};
+    
+  }
+  data.value.datasets = [];
+};
+
 </script>
 
 <template>
@@ -101,6 +114,7 @@ const checkedChanged = (index: number) => {
       <LeftPanel
         :datasets="data.datasets"
         :checked="checkedDatasets"
+        @clear="clear"
         @datasets-loaded="datasetsLoaded"
         @checked-changed="checkedChanged"
         @datasets-updated="datasetsUpdated"

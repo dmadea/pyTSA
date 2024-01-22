@@ -74,6 +74,17 @@ export class HeatMap {
         this.recalculateImage();
     }
 
+    public updateData(dataset: Dataset) {
+        this.dataset = dataset;
+        this._isXRegular = HeatMap.isRegularlySpaced(this.dataset.x);
+        this._isYRegular = HeatMap.isRegularlySpaced(this.dataset.y);
+        this.offScreenCanvas = new OffscreenCanvas(dataset.x.length, dataset.y.length);
+        this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
+        this.imageData = new ImageData(dataset.x.length, dataset.y.length);
+        this.matrixDataPtr = null;
+        this.recalculateImage();
+    }
+
     static isRegularlySpaced(arr: NumberArray): boolean {
         // from numpy https://github.com/numpy/numpy/blob/v1.26.0/numpy/core/numeric.py#L2249-L2371
         // check all differences of the array

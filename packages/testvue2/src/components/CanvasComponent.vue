@@ -1,14 +1,7 @@
 <script setup lang="ts">
 import { SceneUser } from "@/sceneuser";
 import {
-  defineProps,
-  inject,
-  ref,
-  onMounted,
-  watch,
-  onUnmounted,
-  defineEmits,
-} from "vue";
+  defineProps,  inject,  ref,  onMounted,  watch,  onUnmounted,  defineEmits} from "vue";
 import { v4 } from "uuid";
 import { Dataset } from "@pytsa/ts-graph";
 
@@ -27,6 +20,8 @@ const emit = defineEmits<{
     iface: {
       addDataset: (index: number) => void;
       removeDataset: (index: number) => void;
+      updateData: (datasets: Dataset[]) => void;
+      clear: () => void;
     }
   ): void;
 }>();
@@ -56,6 +51,17 @@ onMounted(() => {
       scene.datasets = assignedDatasets.map((d) => d.dataset);
       scene.processDatasets();
     },
+    updateData: (datasets: Dataset[]) => {
+      console.log(`updateData called, id: ${id}`);
+      scene.updateData(datasets);
+    },
+    clear: () => {
+      scene.clear();
+      scene.datasets = [];
+      assignedDatasets = [];
+      scene.replot();
+      console.log(`cleared: ${id}`)
+    }
   });
 });
 

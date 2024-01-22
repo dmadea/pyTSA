@@ -19,6 +19,7 @@ const emit = defineEmits<{
   (e: "datasetsLoaded", datasets: Dataset[]): void;
   (e: "datasetsUpdated", datasets: Dataset[]): void;
   (e: "checkedChanged", index: number): void;
+  (e: "clear"): void;
   // (e: 'update', value: string): void
 }>();
 
@@ -115,6 +116,8 @@ const transpose = (index: number) => {
   (props.datasets[index] as Dataset).transpose();
   APICallPOST(`${backendUrl}api/transpose_dataset/${index}`);
 };
+
+
 </script>
 
 <template>
@@ -124,6 +127,7 @@ const transpose = (index: number) => {
     <button class="btn btn-outline-primary button" @click="syncData">
       Sync data with backend
     </button>
+    <button class="btn btn-secondary button" @click="emit('clear')">Clear</button>
   </div>
 
   <h4>List of loaded datasets</h4>

@@ -185,6 +185,11 @@ export class LayoutScene extends Scene {
         this.arangeFigures();
     }
 
+    public clear() {
+        this.grid.clear();
+        this.groupPlots = [];
+    }
+
     private setDefaultPlotSettings() {
         for (const p of this.groupPlots) {
             p.heatmapFig.showTickNumbers = ['left', 'bottom'];

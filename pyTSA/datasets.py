@@ -24,6 +24,9 @@ class Datasets(object):
 
     def length(self):
         return len(self._datasets)
+    
+    def clear(self):
+        self._datasets.clear()
 
     def append(self, dataset: Dataset, key: str | int | None = None):
         self._datasets.append(dict(dataset=dataset, key=len(self._datasets) if key is None else key))

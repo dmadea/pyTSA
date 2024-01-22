@@ -25,7 +25,7 @@ export class Scene extends GraphicObject {
         super();
         
         var wrapper = document.createElement("div");
-        wrapper.style.cssText = "position: relative; width: 100%; height: 1150px";
+        wrapper.style.cssText = `position: relative; width: 100%; height: ${0.8 * document.body.clientHeight}px`;
 
         this.setNavBar();
 
