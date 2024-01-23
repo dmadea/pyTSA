@@ -3,6 +3,10 @@ import { defineProps, inject, ref, defineEmits, computed } from "vue";
 import CanvasComponent from "./CanvasComponent.vue";
 import { Dataset, Matrix } from "@pytsa/ts-graph";
 import { json2arr } from "@/utils";
+import { Icon } from '@iconify/vue';
+import { ModalsContainer, useModal } from 'vue-final-modal'
+import ModalCrop from './ModalCrop.vue'
+
 
 const props = defineProps({
   data: {
@@ -26,7 +30,12 @@ const getInterface = (iface: any) => {
   emit("canvasInterfaces", canvasInterfaces);
 };
 
-const crop = () => {
+
+
+const iconWidth: string = "30";
+
+const cropDatasets = (data: any) => {
+
   const xhr = new XMLHttpRequest();
   xhr.onreadystatechange = () => {
     if (xhr.readyState == 4 && xhr.status == 201) {
@@ -48,10 +57,7 @@ const crop = () => {
     }
   };
 
-  const kwargs = {
-    w0: 600,
-    w1: 700,
-  };
+  console.log(data);
 
   const op = "crop";
   // asynchronous requests
@@ -59,8 +65,30 @@ const crop = () => {
   xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
 
   // Send the request over the network
-  xhr.send(JSON.stringify(kwargs));
+  xhr.send(JSON.stringify(data));
+}
+
+const crop = () => {
+  const { open, close } = useModal({
+    component: ModalCrop,
+    attrs: {
+      title: 'Crop datasets',
+      onSubmit(data: any) {
+        cropDatasets(data)
+        close();
+      },
+      onCancel() {
+        close();
+      }
+    },
+    // slots: {
+    //   default: '',
+    // },
+  });
+
+  open();
 };
+
 </script>
 
 <template>
@@ -93,9 +121,21 @@ const crop = () => {
       <p class="card-text">
         With supporting text below as a natural lead-in to additional content.
       </p> -->
-      <button @click="crop">Crop</button>
-      <button>Baseline correct</button>
-      <button>Dimension multiply</button>
+      <button class="btn btn-outline-primary btn-icon" @click="crop">
+        <Icon icon="solar:crop-bold" :width="iconWidth"></Icon>
+      </button>
+      <button class="btn btn-outline-primary btn-icon" @click="console.log('baseline correct clicked')">
+        <Icon icon="ph:arrow-line-up-bold" :width="iconWidth" :rotate="2"></Icon>
+      </button>
+      <button class="btn btn-outline-primary btn-icon" @click="console.log('dimension multiply clicked')">
+        <Icon icon="iconoir:axes" :width="iconWidth"></Icon>
+      </button>
+
+      <button class="btn btn-outline-primary btn-icon" @click="">
+        <Icon icon="solar:test-tube-bold" :width="iconWidth"></Icon>
+      </button>
+
+      <ModalsContainer />
 
       <div v-for="(tab, index) in data.tabs" :key="index">
         <!-- <div
@@ -136,4 +176,12 @@ const crop = () => {
   </div>
 </template>
 
-<style></style>
+<style scoped>
+
+.btn-icon {
+  padding: 5px;
+  border: none;
+  border-radius: 100%;
+}
+
+</style>

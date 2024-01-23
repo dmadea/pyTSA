@@ -23,11 +23,7 @@ def json2arr(base64_text: str) -> np.ndarray:
     return np.frombuffer(bytes, dtype=np.float64)
 
 def arr2json(arr: np.ndarray) -> str:
-    # _arr = arr if arr.data.c_contiguous else arr.T
-    # if not _arr.data.c_contiguous:
-    #     _arr = np.ascontiguousarray(arr)
     b64 = base64.b64encode(arr)
-
     return b64.decode('utf-8')
 
 

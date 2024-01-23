@@ -34,7 +34,7 @@ onMounted(() => {
   var assignedDatasets: any[] = [];
 
   emit("interface", {
-    addDataset: (index: number) => {
+    addDataset(index: number) {
       console.log(`addDataset called ${index}, id: ${id}`);
 
       assignedDatasets.push({
@@ -45,17 +45,17 @@ onMounted(() => {
       scene.datasets = assignedDatasets.map((d) => d.dataset);
       scene.processDatasets();
     },
-    removeDataset: (index: number) => {
+    removeDataset(index: number) {
       console.log(`removeDataset called ${index}, id: ${id}`);
       assignedDatasets = assignedDatasets.filter((d) => d.index !== index);
       scene.datasets = assignedDatasets.map((d) => d.dataset);
       scene.processDatasets();
     },
-    updateData: (datasets: Dataset[]) => {
+    updateData(datasets: Dataset[]) {
       console.log(`updateData called, id: ${id}`);
       scene.updateData(datasets);
     },
-    clear: () => {
+    clear() {
       scene.clear();
       scene.datasets = [];
       assignedDatasets = [];
