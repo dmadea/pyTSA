@@ -42,21 +42,21 @@ import { CropData } from "./types";
       <h1>{{ title }}</h1>
       <slot />
 
-      <div class="form-row">
-        <label>w0</label>
-        <input type="text" v-model="data.w0"/>
+      <div class="input-group input-group-sm mb-3">
+        <span class="input-group-text" id="basic-addon1">w0</span>
+        <input type="text" class="form-control" v-model="data.w0" placeholder="" aria-describedby="basic-addon1">
       </div>
-      <div class="form-row">
-        <label>w1</label>
-        <input type="text" v-model="data.w1"/>
+      <div class="input-group input-group-sm mb-3">
+        <span class="input-group-text" id="basic-addon1">w1</span>
+        <input type="text" class="form-control" v-model="data.w1" placeholder="" aria-describedby="basic-addon1">
       </div>
-      <div class="form-row">
-        <label>t0</label>
-        <input type="text" v-model="data.t0"/>
+      <div class="input-group input-group-sm mb-3">
+        <span class="input-group-text" id="basic-addon1">t0</span>
+        <input type="text" class="form-control" v-model="data.t0" placeholder="" aria-describedby="basic-addon1">
       </div>
-      <div class="form-row">
-        <label>t1</label>
-        <input type="text" v-model="data.t1"/>
+      <div class="input-group input-group-sm mb-3">
+        <span class="input-group-text" id="basic-addon1">t1</span>
+        <input type="text" class="form-control" v-model="data.t1" placeholder="" aria-describedby="basic-addon1">
       </div>
       
       <div>
