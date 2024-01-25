@@ -1,7 +1,8 @@
 <script setup lang="ts">
-  import { reactive, defineEmits } from 'vue';
+  import { reactive, defineEmits , ref} from 'vue';
 import { VueFinalModal } from 'vue-final-modal'
 import { CropData } from "./types";
+import { parse } from 'uuid';
 
   defineProps<{
     title?: string
@@ -20,15 +21,40 @@ import { CropData } from "./types";
     t1: "",
   })
 
+const errorMessage: string = "Invalid input, provide a number or keep the area blank!";
+const errors = ref<boolean[]>([false, false, false, false]);
+
   const submit = () =>  {
+
     const parsedData = {
       w0: data.w0 === "" ? null : parseFloat(data.w0),
       w1: data.w1 === "" ? null : parseFloat(data.w1),
       t0: data.t0 === "" ? null : parseFloat(data.t0),
       t1: data.t1 === "" ? null : parseFloat(data.t1)
     }
+    
+    if (Number.isNaN(parsedData.w0)) {
+      errors.value[0] = true;
+    }
+    if (Number.isNaN(parsedData.w1)) {
+      errors.value[1] = true;
+    }
+    if (Number.isNaN(parsedData.t0)) {
+      errors.value[2] = true;
+    }
+    if (Number.isNaN(parsedData.t1)) {
+      errors.value[3] = true;
+    }
+
+    console.log(parsedData, errors.value);
+
+    if (errors.value.includes(true)) {
+      return;
+    }
+
     emit('submit', parsedData)
   };
+
 
   </script>
 
@@ -46,18 +72,23 @@ import { CropData } from "./types";
         <span class="input-group-text" id="basic-addon1">w0</span>
         <input type="text" class="form-control" v-model="data.w0" placeholder="" aria-describedby="basic-addon1">
       </div>
+      <span class="error" v-show="errors[0]">{{ errorMessage }}</span>
       <div class="input-group input-group-sm mb-3">
         <span class="input-group-text" id="basic-addon1">w1</span>
         <input type="text" class="form-control" v-model="data.w1" placeholder="" aria-describedby="basic-addon1">
       </div>
+      <span class="error" v-show="errors[1]">{{ errorMessage }}</span>
       <div class="input-group input-group-sm mb-3">
         <span class="input-group-text" id="basic-addon1">t0</span>
         <input type="text" class="form-control" v-model="data.t0" placeholder="" aria-describedby="basic-addon1">
+
       </div>
+      <span class="error" v-show="errors[2]">{{ errorMessage }}</span>
       <div class="input-group input-group-sm mb-3">
         <span class="input-group-text" id="basic-addon1">t1</span>
         <input type="text" class="form-control" v-model="data.t1" placeholder="" aria-describedby="basic-addon1">
       </div>
+      <span class="error" v-show="errors[3]">{{ errorMessage }}</span>
       
       <div>
           <button class="btn btn-outline-danger" @click="emit('cancel')">
@@ -73,6 +104,13 @@ import { CropData } from "./types";
   </template>
 
   <style>
+  .error {
+    color: red;
+    font-size: small;
+    /* padding-top: -50px;
+    margin-top: -50px; */
+  }
+
   .confirm-modal {
     display: flex;
     justify-content: center;
