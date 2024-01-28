@@ -31,7 +31,7 @@ export class Axis {
             this.axisType = axisType;
             this.label = label ?? '';
             this._scale = scale ?? 'lin';
-            this._viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];
+            this._viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];  // in internal range coordinates
             this.autoscale = autoscale ?? true;
             this.inverted = inverted ?? false;
             this._symlogLinscale = symlogLinscale ?? 1;
@@ -41,18 +41,22 @@ export class Axis {
     }
 
     set viewBounds(bounds: [number, number]) {
-        // this._viewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
-        this._viewBounds = bounds;
-
+        this._viewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
+        // this._viewBounds = bounds;
     }
 
     get viewBounds() {
+        return [this.transform(this._viewBounds[0]), this.transform(this._viewBounds[1])]
+        // return this._viewBounds;
+    }
+
+    get internalViewBounds(){
         return this._viewBounds;
     }
 
-    public setViewBounds(bounds: [number, number]) {
-        this._viewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
-    }
+    // public setViewBounds(bounds: [number, number]) {
+    //     this._viewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
+    // }
 
     get internalRange(): [number, number] {
         const rng = this.figure.internalRange;
@@ -112,7 +116,7 @@ export class Axis {
             this._scale = scale;
             this.viewBounds = prevBounds;
             this.range = prevRange;
-            console.log(this.range);
+            // console.log(this.viewBounds);
         }
     }
 

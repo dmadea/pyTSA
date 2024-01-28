@@ -76,14 +76,14 @@ export class SceneUser extends LayoutScene {
       const spectrumPlot = this.groupPlots[i].spectrumPlot;
 
       hfig.plotHeatmap(ds, new Colormap(Colormaps.symgrad));
-      hfig.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
-      hfig.yAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
+      hfig.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
+      hfig.yAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
       hfig.title = ds.name;
 
       spectrumPlot.x = ds.x;
       tracePlot.x = ds.y;
-      trace.xAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
-      spectrum.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
+      trace.xAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
+      spectrum.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
       
       hfig.heatmap?.recalculateImage();
     }
@@ -119,15 +119,19 @@ export class SceneUser extends LayoutScene {
       const hmap = hfig.plotHeatmap(ds, new Colormap(Colormaps.symgrad));
       cbar.linkHeatMap(hmap);
       cbar.viewAll();
-      hfig.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
-      hfig.yAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
+
+      hfig.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
+      hfig.yAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
+      console.log("x", hfig.xAxis.scale, "y", hfig.yAxis.scale);
+      console.log("x", hfig.xAxis.viewBounds, "y", hfig.yAxis.viewBounds);
+
       hfig.title = ds.name;
 
       trace.xAxis.scale = hfig.yAxis.scale;
       spectrum.xAxis.scale = hfig.xAxis.scale;
 
-      trace.xAxis.setViewBounds([ds.y[0], ds.y[ds.y.length - 1]]);
-      spectrum.xAxis.setViewBounds([ds.x[0], ds.x[ds.x.length - 1]]);
+      trace.xAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
+      spectrum.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
 
       spectrumPlot.x = ds.x;
       tracePlot.x = ds.y;

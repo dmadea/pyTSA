@@ -370,12 +370,12 @@ export class Figure extends GraphicObject {
     }
 
     public viewAll() {
-        const lastRng = {...this.internalRange};
+        // const lastRng = {...this.internalRange};
         this.autoscale(true);
-        if (this.internalRange.x !== lastRng.x || this.internalRange.y !== lastRng.y || this.internalRange.w !== lastRng.w || this.internalRange.h !== lastRng.h) {
-            this.rangeChanged(this.internalRange);
-            this.repaint();
-        }
+        this.rangeChanged(this.internalRange);
+        this.repaint();
+        // if (this.internalRange.x !== lastRng.x || this.internalRange.y !== lastRng.y || this.internalRange.w !== lastRng.w || this.internalRange.h !== lastRng.h) {
+        // }
     }
 
     public doubleClick(e: IMouseEvent): void {
@@ -545,8 +545,8 @@ export class Figure extends GraphicObject {
     }
 
     private getBoundedRange(rect: Rect, dontZoom: boolean): Rect {
-        const xvb = this.xAxis.viewBounds;
-        const yvb = this.yAxis.viewBounds;
+        const xvb = this.xAxis.internalViewBounds;
+        const yvb = this.yAxis.internalViewBounds;
 
         const [xB0, xB1] = [xvb[0], xvb[1]];
         const [yB0, yB1] = [yvb[0], yvb[1]];
@@ -834,8 +834,8 @@ export class Figure extends GraphicObject {
 
             const diff = y1 - y0;
 
-            y0 = Math.max(this.yAxis.viewBounds[0], y0 - fy * diff);
-            y1 = Math.min(this.yAxis.viewBounds[1], y1 + fy * diff);
+            y0 = Math.max(this.yAxis.internalViewBounds[0], y0 - fy * diff);
+            y1 = Math.min(this.yAxis.internalViewBounds[1], y1 + fy * diff);
 
             this.internalRange.y = y0;
             this.internalRange.h = y1 - y0;
@@ -862,8 +862,8 @@ export class Figure extends GraphicObject {
 
             const diff = x1 - x0;
 
-            x0 = Math.max(this.xAxis.viewBounds[0], x0 - fx * diff);
-            x1 = Math.min(this.xAxis.viewBounds[1], x1 + fx * diff);
+            x0 = Math.max(this.xAxis.internalViewBounds[0], x0 - fx * diff);
+            x1 = Math.min(this.xAxis.internalViewBounds[1], x1 + fx * diff);
 
             this.internalRange.x = x0;
             this.internalRange.w = x1 - x0;
