@@ -181,16 +181,50 @@ export async function loadFiles(
   }
 }
 
-export function APICallPOST(url: string) {
+export function parseDatasets(obj: any): Dataset[] {
+  const datasets: Dataset[] = [];
+
+  for (const d of obj.data.datasets) {
+    var t = json2arr(d.times);
+    var w = json2arr(d.wavelengths);
+    var m = json2arr(d.matrix.data);
+    var mat = new Matrix(t.length, w.length, m);
+    mat.isCContiguous = d.matrix.c_contiguous;
+
+    datasets.push(new Dataset(mat, w, t, d.name));
+  }
+
+  return datasets
+}
+
+export function APICall(url: string, method: string, data2send?: any | null, callback?: (obj: any) => void) {
   const xhr = new XMLHttpRequest();
 
   xhr.onreadystatechange = () => {
-    if (xhr.readyState == 4 && xhr.status == 200) {
-      console.log("Success");
+    if (xhr.readyState == 4 && xhr.status == 201) {
+      if (xhr.response) {
+        var obj = JSON.parse(xhr.response);
+        if (callback) callback(obj);
+      }
+      // console.log("Success");
     }
   };
   // asynchronous requests
-  xhr.open("POST", url, true);
-  // Send the request over the network
-  xhr.send(null);
+  xhr.open(method, url, true);
+  if (data2send) {
+    xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+    xhr.send(JSON.stringify(data2send));
+  } else {
+    // Send the request over the network
+    xhr.send(null);
+  }
 }
+
+export function APICallPOST(url: string, data2send?: any | null, callback?: (obj: any) => void) {
+  APICall(url, 'POST', data2send, callback);
+}
+
+export function APICallGET(url: string, data2send?: any | null, callback?: (obj: any) => void) {
+  APICall(url, 'GET', data2send, callback);
+}
+

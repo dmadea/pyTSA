@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { APICallPOST, arr2json, json2arr, loadFiles } from "@/utils";
+import { APICallGET, APICallPOST, arr2json, json2arr, loadFiles, parseDatasets } from "@/utils";
 import { Dataset, Matrix } from "@pytsa/ts-graph";
 import { defineProps, inject, ref, defineEmits, PropType } from "vue";
 
@@ -23,28 +23,17 @@ const emit = defineEmits<{
   // (e: 'update', value: string): void
 }>();
 
-// const picked = ref<string>("One");
-
-const xhr = new XMLHttpRequest();
 
 const pingClicked = () => {
   const time = Date.now();
 
-  xhr.onreadystatechange = () => {
-    // console.log(xhr.responseText);
-    if (xhr.readyState == 4 && xhr.status == 200) {
-      //  && xhr.responseText == "pong"
-      console.log("ping: ", Date.now() - time, "ms");
-    }
-  };
-  // asynchronous requests
-  xhr.open("GET", `${backendUrl}api/ping`, true);
-  // Send the request over the network
-  xhr.send(null);
+  APICallGET(`${backendUrl}api/ping`, null, (obj) => {
+    console.log("ping: ", Date.now() - time, "ms");
+
+  })
 };
 
 const postDatasets = (datasets: Dataset[]) => {
-  const xhr = new XMLHttpRequest();
 
   var dataset2send = [];
   for (const d of datasets) {
@@ -65,17 +54,7 @@ const postDatasets = (datasets: Dataset[]) => {
     },
   };
 
-  xhr.onreadystatechange = () => {
-    if (xhr.readyState == 4 && xhr.status == 200) {
-      console.log("Success");
-    }
-  };
-  // asynchronous requests
-  xhr.open("POST", `${backendUrl}api/post_datasets`, true);
-  xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-
-  // Send the request over the network
-  xhr.send(JSON.stringify(data));
+  APICallPOST(`${backendUrl}api/post_datasets`, data);
 };
 
 const loadDatasets = (payload: Event) => {
@@ -88,35 +67,16 @@ const loadDatasets = (payload: Event) => {
 };
 
 const syncData = () => {
-  xhr.onreadystatechange = () => {
-    if (xhr.readyState == 4 && xhr.status == 200) {
-      var obj = JSON.parse(xhr.response);
-      const datasets: Dataset[] = [];
-
-      for (const d of obj.data.datasets) {
-        var t = json2arr(d.times);
-        var w = json2arr(d.wavelengths);
-        var m = json2arr(d.matrix.data);
-        var mat = new Matrix(t.length, w.length, m);
-        mat.isCContiguous = d.matrix.c_contiguous;
-
-        datasets.push(new Dataset(mat, w, t, d.name));
-      }
-      emit("datasetsUpdated", datasets);
-    }
-  };
-  // asynchronous requests
-  xhr.open("GET", `${backendUrl}api/get_datasets`, true);
-
-  // Send the request over the network
-  xhr.send(null);
+  APICallGET(`${backendUrl}api/get_datasets`, null, (obj) => {
+    const datasets = parseDatasets(obj);
+    emit("datasetsUpdated", datasets);
+  })
 };
 
 const transpose = (index: number) => {
   (props.datasets[index] as Dataset).transpose();
   APICallPOST(`${backendUrl}api/transpose_dataset/${index}`);
 };
-
 
 </script>
 

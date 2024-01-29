@@ -17,24 +17,12 @@ session = BackendSession(app)
 
 @app.route("/api/ping", methods=["GET"])
 def ping():
-    return jsonify('pong')
-
-
-# @app.route("/api/testpost", methods=["POST"])
-# def test():
-
-#     if request.method == "POST":
-#         received_data = request.get_json()
-#         print(f"received data: {received_data}")
-
-#         return_data = get_data()
-#         return Response(response=json.dumps(return_data), status=201)
-
+    return Response(response=json.dumps("pong"), status=201)
 
 @app.route("/api/get_datasets", methods=["GET"])
 def r_get_datasets():
     return_data = session.get_datasets(session.datasets)
-    return Response(response=json.dumps(return_data), status=200)
+    return Response(response=json.dumps(return_data), status=201)
 
 
 @app.route("/api/post_datasets", methods=["POST"])

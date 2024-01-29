@@ -1,17 +1,10 @@
 <script setup lang="ts">
   import { reactive, defineEmits , ref} from 'vue';
-import { VueFinalModal } from 'vue-final-modal'
-import { CropData } from "./types";
-import { parse } from 'uuid';
-
-  defineProps<{
-    title?: string
-  }>()
+import CustomModal from './CustomModal.vue'
 
   const emit = defineEmits<{
     (e: 'submit', data: any): void
     (e: 'cancel'): void
-
   }>()
 
   const data = reactive({
@@ -32,6 +25,8 @@ const errors = ref<boolean[]>([false, false, false, false]);
       t0: data.t0 === "" ? null : parseFloat(data.t0),
       t1: data.t1 === "" ? null : parseFloat(data.t1)
     }
+
+    errors.value.fill(false);
     
     if (Number.isNaN(parsedData.w0)) {
       errors.value[0] = true;
@@ -45,9 +40,6 @@ const errors = ref<boolean[]>([false, false, false, false]);
     if (Number.isNaN(parsedData.t1)) {
       errors.value[3] = true;
     }
-
-    console.log(parsedData, errors.value);
-
     if (errors.value.includes(true)) {
       return;
     }
@@ -59,83 +51,38 @@ const errors = ref<boolean[]>([false, false, false, false]);
   </script>
 
   <template>
-    <VueFinalModal
-      class="confirm-modal"
-      content-class="confirm-modal-content"
-      overlay-transition="vfm-fade"
-      content-transition="vfm-fade"
-    >
-      <h1>{{ title }}</h1>
-      <slot />
+    <CustomModal title="Crop datasets" @cancel="emit('cancel')" @submit="submit">
+      <span>Wavelength range:</span>
 
-      <div class="input-group input-group-sm mb-3">
-        <span class="input-group-text" id="basic-addon1">w0</span>
-        <input type="text" class="form-control" v-model="data.w0" placeholder="" aria-describedby="basic-addon1">
+      <div class="input-group input-group-sm" :class="{'mb-3': !errors[0]}">
+        <span class="input-group-text" id="basic-addon1">Start</span>
+        <input type="text" class="form-control" v-model="data.w0" placeholder="">
       </div>
-      <span class="error" v-show="errors[0]">{{ errorMessage }}</span>
-      <div class="input-group input-group-sm mb-3">
-        <span class="input-group-text" id="basic-addon1">w1</span>
-        <input type="text" class="form-control" v-model="data.w1" placeholder="" aria-describedby="basic-addon1">
-      </div>
-      <span class="error" v-show="errors[1]">{{ errorMessage }}</span>
-      <div class="input-group input-group-sm mb-3">
-        <span class="input-group-text" id="basic-addon1">t0</span>
-        <input type="text" class="form-control" v-model="data.t0" placeholder="" aria-describedby="basic-addon1">
+      <div class="error" v-show="errors[0]">{{ errorMessage }}</div>
 
+      <div class="input-group input-group-sm" :class="{'mb-3': !errors[1]}">
+        <span class="input-group-text" id="basic-addon1">End</span>
+        <input type="text" class="form-control" v-model="data.w1" placeholder="">
       </div>
-      <span class="error" v-show="errors[2]">{{ errorMessage }}</span>
-      <div class="input-group input-group-sm mb-3">
-        <span class="input-group-text" id="basic-addon1">t1</span>
-        <input type="text" class="form-control" v-model="data.t1" placeholder="" aria-describedby="basic-addon1">
+      <div class="error" v-show="errors[1]">{{ errorMessage }}</div>
+
+      <span>Time range:</span>
+      <div class="input-group input-group-sm" :class="{'mb-3': !errors[2]}">
+        <span class="input-group-text" id="basic-addon1">Start</span>
+        <input type="text" class="form-control" v-model="data.t0" placeholder="">
       </div>
-      <span class="error" v-show="errors[3]">{{ errorMessage }}</span>
-      
+      <div class="error" v-show="errors[2]">{{ errorMessage }}</div>
+
+      <div class="input-group input-group-sm" :class="{'mb-3': !errors[3]}">
+        <span class="input-group-text" id="basic-addon1">End</span>
+        <input type="text" class="form-control" v-model="data.t1" placeholder="">
+      </div>
+      <div class="error" v-show="errors[3]">{{ errorMessage }}</div>
+
       <div>
-          <button class="btn btn-outline-danger" @click="emit('cancel')">
-            Cancel
-          </button>
-          <button class="btn btn-outline-success" @click="submit">
-            Confirm
-          </button>
-
+        <button class="btn btn-secondary" @click="">
+              Use selection
+        </button>
       </div>
-
-    </VueFinalModal>
+    </CustomModal>
   </template>
-
-  <style>
-  .error {
-    color: red;
-    font-size: small;
-    /* padding-top: -50px;
-    margin-top: -50px; */
-  }
-
-  .confirm-modal {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  .confirm-modal-content {
-    display: flex;
-    flex-direction: column;
-    padding: 1rem;
-    background: #fff;
-    border-radius: 0.5rem;
-  }
-  .confirm-modal-content > * + *{
-    margin: 0.5rem 0;
-  }
-  .confirm-modal-content h1 {
-    font-size: 1.375rem;
-  }
-  .confirm-modal-content button {
-    margin: 0.25rem 0 0 auto;
-    padding: 0 8px;
-    border: 1px solid;
-    border-radius: 0.5rem;
-  }
-  .dark .confirm-modal-content {
-    background: #000;
-  }
-  </style>

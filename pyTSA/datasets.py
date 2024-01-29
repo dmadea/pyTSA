@@ -63,9 +63,9 @@ class Datasets(object):
         for d in self:
             d.transpose()
 
-    def dimension_multiply(self, times_factor: float = 1.0, wavelengths_factor: float = 1.0):
+    def dimension_multiply(self, x: float = 1.0, y: float = 1.0, z: float = 1.0):
         for d in self:
-            d.dimension_multiply(times_factor, wavelengths_factor)
+            d.dimension_multiply(x, y, z)
 
     def get_averaged_dataset(self) -> Dataset:
         pass

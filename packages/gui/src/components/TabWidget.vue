@@ -2,10 +2,12 @@
 import { defineProps, inject, ref, defineEmits, computed } from "vue";
 import CanvasComponent from "./CanvasComponent.vue";
 import { Dataset, Matrix } from "@pytsa/ts-graph";
-import { json2arr } from "@/utils";
+import { APICallPOST, json2arr, parseDatasets } from "@/utils";
 import { Icon } from '@iconify/vue';
 import { ModalsContainer, useModal } from 'vue-final-modal'
 import ModalCrop from './ModalCrop.vue'
+import ModalBaselineCorrect from "./ModalBaselineCorrect.vue";
+import ModalDimensionMultiply from "./ModalDimensionMultiply.vue";
 
 
 const props = defineProps({
@@ -34,56 +36,61 @@ const getInterface = (iface: any) => {
 
 const iconWidth: string = "30";
 
-const cropDatasets = (data: any) => {
-
-  const xhr = new XMLHttpRequest();
-  xhr.onreadystatechange = () => {
-    if (xhr.readyState == 4 && xhr.status == 201) {
-      var obj = JSON.parse(xhr.response);
-      const datasets: Dataset[] = [];
-
-      for (const d of obj.data.datasets) {
-        var t = json2arr(d.times);
-        var w = json2arr(d.wavelengths);
-        var m = json2arr(d.matrix.data);
-        var mat = new Matrix(t.length, w.length, m);
-        mat.isCContiguous = d.matrix.c_contiguous;
-
-        datasets.push(new Dataset(mat, w, t, d.name));
-      }
-
-      canvasInterfaces[props.data.activeTab].updateData(datasets);
-      // emit("datasetsUpdated", datasets);
-    }
-  };
-
-  console.log(data);
-
-  const op = "crop";
-  // asynchronous requests
-  xhr.open("POST", `${backendUrl}api/perform/${op}/${props.data.activeTab}`, true);
-  xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-
-  // Send the request over the network
-  xhr.send(JSON.stringify(data));
-}
-
 const crop = () => {
   const { open, close } = useModal({
     component: ModalCrop,
     attrs: {
-      title: 'Crop datasets',
       onSubmit(data: any) {
-        cropDatasets(data)
+        APICallPOST(`${backendUrl}api/perform/crop/${props.data.activeTab}`, data, obj => {
+          const datasets = parseDatasets(obj);
+          canvasInterfaces[props.data.activeTab].updateData(datasets);
+        })
         close();
       },
       onCancel() {
         close();
       }
     },
-    // slots: {
-    //   default: '',
-    // },
+  });
+
+  open();
+};
+
+const bcorrect = () => {
+  const { open, close } = useModal({
+    component: ModalBaselineCorrect,
+    attrs: {
+      onSubmit(data: any) {
+        APICallPOST(`${backendUrl}api/perform/baseline_correct/${props.data.activeTab}`, data, obj => {
+          const datasets = parseDatasets(obj);
+          canvasInterfaces[props.data.activeTab].updateData(datasets);
+        })
+        close();
+      },
+      onCancel() {
+        close();
+      }
+    },
+  });
+
+  open();
+};
+
+const dimensionMultiply = () => {
+  const { open, close } = useModal({
+    component: ModalDimensionMultiply,
+    attrs: {
+      onSubmit(data: any) {
+        APICallPOST(`${backendUrl}api/perform/dimension_multiply/${props.data.activeTab}`, data, obj => {
+          const datasets = parseDatasets(obj);
+          canvasInterfaces[props.data.activeTab].updateData(datasets);
+        })
+        close();
+      },
+      onCancel() {
+        close();
+      }
+    },
   });
 
   open();
@@ -106,13 +113,12 @@ const crop = () => {
           </button>
         </li>
         <li class="nav-item">
-          <a
+          <button
             class="nav-link"
             @click="emit('addNewTab')"
             aria-current="true"
             href="#"
-            >+</a
-          >
+            >+</button>
         </li>
       </ul>
     </div>
@@ -124,10 +130,10 @@ const crop = () => {
       <button class="btn btn-outline-primary btn-icon" @click="crop">
         <Icon icon="solar:crop-bold" :width="iconWidth"></Icon>
       </button>
-      <button class="btn btn-outline-primary btn-icon" @click="console.log('baseline correct clicked')">
+      <button class="btn btn-outline-primary btn-icon" @click="bcorrect">
         <Icon icon="ph:arrow-line-up-bold" :width="iconWidth" :rotate="2"></Icon>
       </button>
-      <button class="btn btn-outline-primary btn-icon" @click="console.log('dimension multiply clicked')">
+      <button class="btn btn-outline-primary btn-icon" @click="dimensionMultiply">
         <Icon icon="iconoir:axes" :width="iconWidth"></Icon>
       </button>
 

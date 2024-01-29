@@ -509,9 +509,10 @@ class Dataset(object):
 
         return self
     
-    def dimension_multiply(self, times_factor: float = 1.0, wavelengths_factor: float = 1.0):
-        self.times *= times_factor
-        self.wavelengths *= wavelengths_factor
+    def dimension_multiply(self, x: float = 1.0, y: float = 1.0, z: float = 1.0):
+        self.times *= y
+        self.wavelengths *= x
+        self.matrix *= z
 
     def restore_original_data(self):
         self.wavelengths = self.wavelengths_o
