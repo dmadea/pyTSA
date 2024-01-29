@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { defineProps, inject, ref, defineEmits, computed } from "vue";
 import CanvasComponent from "./CanvasComponent.vue";
-import { Dataset, Matrix } from "@pytsa/ts-graph";
+// import { Dataset, Matrix } from "@pytsa/ts-graph";
 import { APICallPOST, json2arr, parseDatasets } from "@/utils";
 import { Icon } from '@iconify/vue';
 import { ModalsContainer, useModal } from 'vue-final-modal'
 import ModalCrop from './ModalCrop.vue'
 import ModalBaselineCorrect from "./ModalBaselineCorrect.vue";
 import ModalDimensionMultiply from "./ModalDimensionMultiply.vue";
+import FitWidget from "./FitWidget.vue";
 
 
 const props = defineProps({
@@ -106,7 +107,6 @@ const dimensionMultiply = () => {
           <button
             class="nav-link"
             :class="{ active: index === data.activeTab }"
-            aria-current="true"
             @click="emit('tabIndexChanged', index)"
           >
             {{ `Set ${1 + index}` }}
@@ -116,68 +116,52 @@ const dimensionMultiply = () => {
           <button
             class="nav-link"
             @click="emit('addNewTab')"
-            aria-current="true"
             href="#"
             >+</button>
         </li>
       </ul>
     </div>
     <div class="card-body">
-      <!-- <h5 class="card-title">Special title treatment</h5>
-      <p class="card-text">
-        With supporting text below as a natural lead-in to additional content.
-      </p> -->
-      <button class="btn btn-outline-primary btn-icon" @click="crop">
-        <Icon icon="solar:crop-bold" :width="iconWidth"></Icon>
-      </button>
-      <button class="btn btn-outline-primary btn-icon" @click="bcorrect">
-        <Icon icon="ph:arrow-line-up-bold" :width="iconWidth" :rotate="2"></Icon>
-      </button>
-      <button class="btn btn-outline-primary btn-icon" @click="dimensionMultiply">
-        <Icon icon="iconoir:axes" :width="iconWidth"></Icon>
-      </button>
+      <div class="row">
+        <div class="col-7">
+              
+          <button class="btn btn-outline-primary btn-icon" @click="crop" data-bs-toggle="tooltip" data-bs-placement="top" title="Tooltip on top">
+              <Icon icon="solar:crop-bold" :width="iconWidth"></Icon>
+            </button>
+            <button class="btn btn-outline-primary btn-icon" @click="bcorrect">
+              <Icon icon="ph:arrow-line-up-bold" :width="iconWidth" :rotate="2"></Icon>
+            </button>
+            <button class="btn btn-outline-primary btn-icon" @click="dimensionMultiply">
+              <Icon icon="iconoir:axes" :width="iconWidth"></Icon>
+            </button>
+            
+            <!-- <button class="btn btn-outline-primary btn-icon" @click="">
+              <Icon icon="solar:test-tube-bold" :width="iconWidth"></Icon>
+            </button> -->
+            
+            <ModalsContainer />
+            
+            <div v-for="(tab, index) in data.tabs" :key="index">
+              <CanvasComponent
+              v-show="index === data.activeTab"
+              :datasets="props.data.datasets"
+              @interface="getInterface"
+              />
+            </div>
 
-      <button class="btn btn-outline-primary btn-icon" @click="">
-        <Icon icon="solar:test-tube-bold" :width="iconWidth"></Icon>
-      </button>
+        </div>
 
-      <ModalsContainer />
+        <div class="col-4">
+            <FitWidget></FitWidget>
 
-      <div v-for="(tab, index) in data.tabs" :key="index">
-        <!-- <div
-          class="btn-group"
-          role="group"
-          aria-label="Basic radio toggle button group"
-          v-show="index === data.activeTab"
-        >
-          <input
-            type="radio"
-            class="btn-check"
-            name="btnradio"
-            :id="`btndata${index}`"
-            autocomplete="off"
-          />
-          <label class="btn btn-outline-primary" :for="`btndata${index}`"
-            >Data</label
-          >
-
-          <input
-            type="radio"
-            class="btn-check"
-            name="btnradio"
-            :id="`btnfit${index}`"
-            autocomplete="off"
-          />
-          <label class="btn btn-outline-primary" :for="`btnfit${index}`"
-            >Fit</label
-          >
-        </div> -->
-        <CanvasComponent
-          v-show="index === data.activeTab"
-          :datasets="props.data.datasets"
-          @interface="getInterface"
-        ></CanvasComponent>
+        </div>
       </div>
+           
+
+          
+
+
+
     </div>
   </div>
 </template>
@@ -189,5 +173,7 @@ const dimensionMultiply = () => {
   border: none;
   border-radius: 100%;
 }
+
+
 
 </style>
