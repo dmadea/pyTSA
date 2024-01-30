@@ -1,90 +1,70 @@
 <script setup lang="ts">
-import { defineProps, inject, ref, defineEmits, computed } from "vue";
+import { defineProps, inject, ref, defineEmits, computed, reactive } from "vue";
 // import { APICallPOST, json2arr, parseDatasets } from "@/utils";
 // import { Icon } from '@iconify/vue';
 // import { ModalsContainer, useModal } from 'vue-final-modal'
-import { v4 } from "uuid";
 import { FirstOrderModel, FitModel } from "@/fitmodel";
 
 
 const props = defineProps({
-  model: {
+  fitmodel: {
     type: Object,
-    required: false,
+    required: true,
   },
 });
 
-const backendUrl = inject("backendUrl");
+// const backendUrl = inject("backendUrl");
 
 const emit = defineEmits<{
-  (e: "fit"): void;
-  (e: "simulate"): void;
+  (e: "modelChanged", model: FitModel | any): void;
 }>();
 
-const iconWidth: string = "30";
+// const dataparams = reactive([
+//   {
+//     name: "param1",
+//     min: "-inf",
+//     value: "1",
+//     max: "inf",
+//     error: "0",
+//     fixed: false
+//   },
+//   {
+//     name: "param2",
+//     min: "-inf",
+//     value: "4",
+//     max: "inf",
+//     error: "0",
+//     fixed: false
 
-// const dimensionMultiply = () => {
-//   const { open, close } = useModal({
-//     component: ModalDimensionMultiply,
-//     attrs: {
-//       onSubmit(data: any) {
-//         APICallPOST(`${backendUrl}api/perform/dimension_multiply/${props.data.activeTab}`, data, obj => {
-//           const datasets = parseDatasets(obj);
-//           canvasInterfaces[props.data.activeTab].updateData(datasets);
-//         })
-//         close();
-//       },
-//       onCancel() {
-//         close();
-//       }
-//     },
-//   });
+//   },
+//   {
+//     name: "param3",
+//     min: "-inf",
+//     value: "10.08345",
+//     max: "inf",
+//     error: "0",
+//     fixed: true
 
-//   open();
-// };
-
-const model = new FirstOrderModel("asdd", 0);
-
-
-const dataparams = [
-  {
-    name: "param1",
-    min: "-inf",
-    value: "1",
-    max: "inf",
-    error: "0",
-    vary: false
-  },
-  {
-    name: "param2",
-    min: "-inf",
-    value: "4",
-    max: "inf",
-    error: "0",
-    vary: false
-
-  },
-  {
-    name: "param3",
-    min: "-inf",
-    value: "10.08345",
-    max: "inf",
-    error: "0",
-    vary: true
-
-  }
-]
+//   }
+// ]);
 
 const kineticModels = ['First order', 'First order with LPL']
 
 const onChangeModel = (obj: Event) => {
-  var s = obj.target as HTMLSelectElement
+  var s = obj.target as HTMLSelectElement;
   console.log(s.selectedIndex);
+  emit('modelChanged', FirstOrderModel);
 };
 
-const onChange = (index: number) => {
-  console.log(model.options[index].value, index);
+const optionChanged = (index: number) => {
+  props.fitmodel.updateModelOptions(index);
 };
+
+const paramChanged = (index: number) => {
+  props.fitmodel.updateModelParams(index);
+};
+
+const collapsed = ref<boolean>(true);
 
 </script>
 
@@ -95,39 +75,50 @@ const onChange = (index: number) => {
   <div class="input-group input-group-sm mb-3">
     <label class="input-group-text" for="inputGroupSelect01">Kinetic model</label>
     <select class="form-select" id="inputGroupSelect01" :onchange="onChangeModel">
+      <option disabled value="">Please select one</option>
       <option v-for="(opt, index) in kineticModels" :key="index" :value="index">{{ opt }}</option>
     </select>
   </div>
 
-  <h6 class=""> Model options</h6>
+  <div class="accordion">
+  <div class="accordion-item">
+    <h3 class="accordion-header">
+      <button class="accordion-button small" :class="{'collapsed': collapsed}" 
+      type="button" data-bs-toggle="collapse" @click="() => {collapsed = !collapsed}">
+        Model options
+      </button>
+    </h3>
+    <div class="accordion-collapse" :class="{'collapse': collapsed}">
+      <div class="accordion-body">
+        <div v-for="(option, index) in fitmodel.options" :key="index">
+        <div v-if="option.type === 'checkbox'" class="form-check">
+          <input class="form-check-input" type="checkbox" :id="`cb${index}`" v-model="option.value" :onchange="() => optionChanged(index)">
+          <label class="form-check-label small" :for="`cb${index}`">
+            {{ option.name }}
+          </label>
+        </div>
 
-  <div v-for="(option, index) in model.options" :key="index">
-    <div v-if="option.type === 'checkbox'" class="form-check">
-      <input class="form-check-input" type="checkbox" :id="`cb${index}`" v-model="option.value" :onchange="() => onChange(index)">
-      <label class="form-check-label small" :for="`cb${index}`">
-        {{ option.name }}
-      </label>
-    </div>
+        <div v-else-if="option.type === 'text' || option.type === 'number'" class="input-group input-group-sm mb-3">
+            <span class="input-group-text">{{ option.name }}</span>
+            <input :type="option.type" class="form-control" v-model="option.value" :onchange="() => optionChanged(index)"
+            placeholder="" :min="option.min" :max="option.max" :step="option.step" >
+        </div>
 
-    <div v-else-if="option.type === 'text' || option.type === 'number'" class="input-group input-group-sm mb-3">
-        <span class="input-group-text">{{ option.name }}</span>
-        <input :type="option.type" class="form-control" v-model="option.value" :onchange="() => onChange(index)"
-        placeholder="" :min="option.min" :max="option.max" :step="option.step" >
-    </div>
-
-    <div v-else-if="option.type === 'select'" class="input-group input-group-sm mb-3">
-      <label class="input-group-text" :for="`select${index}`">{{ option.name }}</label>
-      <select class="form-select" :id="`select${index}`" v-model="option.value" :onchange="() => onChange(index)">
-        <option disabled value="">Please select one</option>
-        <option v-for="(opt, i2) in option.options" :key="i2">{{ opt }}</option>  
-      </select>
+        <div v-else-if="option.type === 'select'" class="input-group input-group-sm mb-3">
+          <label class="input-group-text" :for="`select${index}`">{{ option.name }}</label>
+          <select class="form-select" :id="`select${index}`" v-model="option.value" :onchange="() => optionChanged(index)">
+            <option disabled value="">Please select one</option>
+            <option v-for="(opt, i2) in option.options" :key="i2">{{ opt }}</option>  
+          </select>
+        </div>
+      </div>
+      </div>
     </div>
   </div>
+</div>
 
-  <!-- :selected="i2 === option.value" -->
-
-  <button class="btn btn-outline-success">Simulate model</button>
-  <button class="btn btn-outline-secondary">Fit</button>
+  <button class="btn btn-outline-success" @click="fitmodel.simulateModel()">Simulate model</button>
+  <button class="btn btn-outline-secondary" @click="fitmodel.fit()">Fit</button>
   
   <h4 class=""> Params</h4>
 
@@ -143,75 +134,17 @@ const onChange = (index: number) => {
     </tr>
   </thead>
   <tbody>
-    <tr v-for="(entry, index) in dataparams" :key="index">
+    <tr v-for="(entry, index) in fitmodel.params" :key="index">
       <th scope="row">{{ entry.name }}</th>
-      <td><input class="input-group-text" type="text" size="2" :value="entry.min"/></td>
-      <td><input class="input-group-text" type="text" size="5" :value="entry.value"/></td>
-      <td><input class="input-group-text" type="text" size="2" :value="entry.max"/></td>
+      <td><input class="" type="text" size="2" v-model="entry.min" :disabled="entry.fixed" :onchange="() => paramChanged(index)"/></td>
+      <td><input class="" type="text" size="5" v-model="entry.value" :onchange="() => paramChanged(index)"/></td>
+      <td><input class="" type="text" size="2" v-model="entry.max" :disabled="entry.fixed" :onchange="() => paramChanged(index)"/></td>
       <td>{{ entry.error }}</td>
-      <td><input class="form-check-input" type="checkbox" :checked="!entry.vary"/></td>
+      <td><input class="form-check-input" type="checkbox" v-model="entry.fixed" :onchange="() => paramChanged(index)" /></td>
     </tr>
   </tbody>
 </table>
 
-
-<!-- 
-  <div>
-    <div class="accordion" id="accordionPanelsStayOpenExample">
-  <div class="accordion-item">
-    <h2 class="accordion-header" id="panelsStayOpen-headingOne">
-      <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-collapseOne" aria-expanded="true" aria-controls="panelsStayOpen-collapseOne">
-        Accordion Item #1
-      </button>
-    </h2>
-    <div id="panelsStayOpen-collapseOne" class="accordion-collapse collapse show" aria-labelledby="panelsStayOpen-headingOne">
-      <div class="accordion-body">
-        <strong>This is the first item's accordion body.</strong> It is shown by default, until the collapse plugin adds the appropriate classes that we use to style each element. These classes control the overall appearance, as well as the showing and hiding via CSS transitions. You can modify any of this with custom CSS or overriding our default variables. It's also worth noting that just about any HTML can go within the <code>.accordion-body</code>, though the transition does limit overflow.
-      </div>
-    </div>
-  </div>
-  <div class="accordion-item">
-    <h2 class="accordion-header" id="panelsStayOpen-headingTwo">
-      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-collapseTwo" aria-expanded="false" aria-controls="panelsStayOpen-collapseTwo">
-        Accordion Item #2
-      </button>
-    </h2>
-    <div id="panelsStayOpen-collapseTwo" class="accordion-collapse collapse" aria-labelledby="panelsStayOpen-headingTwo">
-      <div class="accordion-body">
-        <strong>This is the second item's accordion body.</strong> It is hidden by default, until the collapse plugin adds the appropriate classes that we use to style each element. These classes control the overall appearance, as well as the showing and hiding via CSS transitions. You can modify any of this with custom CSS or overriding our default variables. It's also worth noting that just about any HTML can go within the <code>.accordion-body</code>, though the transition does limit overflow.
-      </div>
-    </div>
-  </div>
-  <div class="accordion-item">
-    <h2 class="accordion-header" id="panelsStayOpen-headingThree">
-      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-collapseThree" aria-expanded="false" aria-controls="panelsStayOpen-collapseThree">
-        Accordion Item #3
-      </button>
-    </h2>
-    <div id="panelsStayOpen-collapseThree" class="accordion-collapse collapse" aria-labelledby="panelsStayOpen-headingThree">
-      <div class="accordion-body">
-        <div data-bs-spy="scroll" data-bs-target="#navbar-example3" data-bs-offset="0" tabindex="0">
-      <h4 id="item-1">Item 1</h4>
-      <p>...</p>
-      <h5 id="item-1-1">Item 1-1</h5>
-      <p>...</p>
-      <h5 id="item-1-2">Item 1-2</h5>
-      <p>...</p>
-      <h4 id="item-2">Item 2</h4>
-      <p>...</p>
-      <h4 id="item-3">Item 3</h4>
-      <p>...</p>
-      <h5 id="item-3-1">Item 3-1</h5>
-      <p>...</p>
-      <h5 id="item-3-2">Item 3-2</h5>
-      <p>...</p>
-      </div>
-    </div>
-  </div>
-</div>
-  </div> -->
-  
-<!-- </div> -->
 </template>
 
 <style scoped>

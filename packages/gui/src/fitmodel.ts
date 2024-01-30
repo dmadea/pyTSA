@@ -8,7 +8,7 @@ export interface Param {
   value: number,
   max: string,
   error: number,
-  vary: boolean
+  fixed: boolean
 }
 
 export interface Option {
@@ -16,10 +16,15 @@ export interface Option {
   backendName: string,
   type: string,
   value: string | number | boolean,
-  options?: string[],
+  options?: string[], // for type select
   min?: number,
   max?: number,
   step?: number
+}
+
+export interface OptionAPI {
+  name: string,
+  value: string | number | boolean
 }
 
 // export interface FitResults {
@@ -46,29 +51,47 @@ export class FitModel {
 
   public fit() {
     APICallPOST(`${this.backendUrl}/api/fit_model/${this.tabIndex}`, null, (obj) => {
-
+      this.isFitting = false;
     });
     this.isFitting = true;
   }
 
   public simulateModel() {
-
+    APICallPOST(`${this.backendUrl}/api/simulate_model/${this.tabIndex}`, null, (obj) => {
+    });
   }
   
-  public updateModelOptions(optionIndex: number) {
-    const data = JSON.stringify(this.options);
-    APICallPOST(`${this.backendUrl}/api/update_model_options/${this.tabIndex}`, data, (obj) => {
-      this.params = obj as Param[];
+  public updateModelOptions(optionIndex?: number) {
+    var data = {};
+    if (optionIndex) {
+      data = {[this.options[optionIndex].backendName]: this.options[optionIndex].value}
+    } else {
+      for (const op of this.options) {
+        data = {...data, [op.backendName]: op.value};
+      }
+    }
+    console.log(data);
+    APICallPOST(`${this.backendUrl}/api/update_model_options/${this.tabIndex}`, JSON.stringify(data), (obj) => {
+      this.params = [...this.params, ...obj as Param[]];
     });
   }
 
-  public updateModelParams() {
-    const data = JSON.stringify(this.params);
-    APICallPOST(`${this.backendUrl}/api/update_model_params/${this.tabIndex}`, data);
+  public updateModelParams(paramIndex: number) {
+    const data = JSON.stringify(this.params[paramIndex]);
+    APICallPOST(`${this.backendUrl}/api/update_model_param/${this.tabIndex}`, data);
   }
 
   public setOptions() {
-    this.options = [...this.options];
+    this.options = [...this.options,
+      {
+        name: "Fitting algorithm",
+        backendName: "fit_algorithm",
+        type: "select",
+        value: "least_squares",
+        options: ["leastsq", "least_squares", "differential_evolution", "brute", "basinhopping", "ampgo", "nelder", "lbfgsb", 
+                "powell", "cg", "newton", "cobyla", "bfgs"]
+      },
+    ];
   }
 
 }
@@ -77,7 +100,17 @@ export class FirstOrderModel extends FitModel {
 
 
 public setOptions(): void {
+  super.setOptions();
   this.options = [ ...this.options,
+    {
+      name: "Number of species",
+      backendName: "n_species",
+      type: "number",
+      value: 1,
+      step: 1,
+      min: 1,
+      max: 20
+    },
     {
       name: "Central wavelength",
       backendName: "central_wave",

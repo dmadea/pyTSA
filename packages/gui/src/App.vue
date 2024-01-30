@@ -8,6 +8,7 @@ import { Dataset } from "@pytsa/ts-graph";
 import { Splitpanes, Pane } from "splitpanes"; // from https://antoniandre.github.io/splitpanes/?ref=madewithvuejs.com
 import "splitpanes/dist/splitpanes.css";
 import { APICallPOST } from "./utils";
+import { FirstOrderModel, FitModel } from "./fitmodel";
 
 const backendUrl = "http://localhost:6969/";
 provide("backendUrl", backendUrl);
@@ -19,7 +20,7 @@ provide("backendUrl", backendUrl);
 
 interface TabData {
   selectedDatasets: number[];
-  fitmodel: null
+  fitmodel: null | FitModel
 }
 
 interface Data {
@@ -33,7 +34,7 @@ const data = ref<Data>({
   tabs: [
     {
       selectedDatasets: [],
-      fitmodel: null
+      fitmodel: new FirstOrderModel(backendUrl, 0)
     },
   ],
   datasets: [],
@@ -60,7 +61,7 @@ const checkedDatasets = computed<boolean[]>(() => {
 const addNewTab = () => {
   data.value.tabs.push({
     selectedDatasets: [],
-    fitmodel: null
+    fitmodel: new FirstOrderModel(backendUrl, 0)
   });
   data.value.activeTab = data.value.tabs.length - 1;
 };

@@ -12,6 +12,7 @@ except ImportError:
         sys.path.append(os.path.abspath(r'C:\Users\domin\Documents\Python + JS\pyTSA'))  # append library path to 
     from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel
 
+from lmfit import Parameters, Parameter
 
 fname = "HAP-3tBuTPA toluene degassed.txt"
 # fname = "test.txt"
@@ -99,6 +100,58 @@ class BackendSession(object):
         }
 
         return data
+    
+    def _get_params_obj(self, params: Parameters) -> list:
+        def _put_param(p: Parameter):
+            obj = {
+                'name': p.name,
+                'min': p.min,
+                'max': p.max,
+                'value': p.value,
+                'error': p.stderr,
+                'fixed': not p.vary
+            }
+
+            return obj
+
+        return [_put_param(param) for param in params]
+
+    
+    def update_model_options(self, tab_index: int, **options):
+        print(options)
+        if self.tabs[tab_index].length == 0:
+            return
+        
+        if self.tabs[tab_index][0].model is None:
+            self.tabs[tab_index][0].set_model(FirstOrderModel())
+        
+        model = self.tabs[tab_index][0].model
+
+        model.update_options(**options)
+        return self._get_params_obj(model.params)
+    
+    def update_model_param(self, tab_index: int, param_data: dict):
+        if self.tabs[tab_index].length == 0:
+            return
+        
+        if self.tabs[tab_index][0].model is None:
+            self.tabs[tab_index][0].set_model(FirstOrderModel())
+        
+        model = self.tabs[tab_index][0].model
+        name = param_data['name']
+        model.params[name].min = param_data['min']
+        model.params[name].max = param_data['max']
+        model.params[name].value = param_data['value']
+        model.params[name].vary = not param_data['fixed']
+
+    def fit_model(self, tab_index: int):
+        if self.tabs[tab_index].length == 0 or self.tabs[tab_index][0].model is None:
+            return
+        
+        model = self.tabs[tab_index][0].model
+        model.fit()
+
+
 
 
 def get_data():

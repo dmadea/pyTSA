@@ -33,8 +33,6 @@ const getInterface = (iface: any) => {
   emit("canvasInterfaces", canvasInterfaces);
 };
 
-
-
 const iconWidth: string = "30";
 
 const crop = () => {
@@ -152,7 +150,7 @@ const dimensionMultiply = () => {
         </div>
 
         <div class="col-4">
-            <FitWidget></FitWidget>
+            <FitWidget :fitmodel="data.tabs[data.activeTab].fitmodel"></FitWidget>
 
         </div>
       </div>

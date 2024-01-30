@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, Response
 import json
 from flask_cors import CORS
-from .backend import BackendSession
+from backend import BackendSession
 
 app  = Flask(__name__)
 CORS(app, resources={r'/*': {'origins': '*'}})
@@ -50,14 +50,38 @@ def r_remove_dataset(index: str, tab_index: str):
 def r_perform_operation(operation: str, tab_index: str):
     if request.method == "POST":
         received_data = request.get_json()
+        print(received_data)
         return_data = session.perform_operation(operation, int(tab_index), **received_data)
         return Response(response=json.dumps(return_data), status=201)
+    
+@app.route("/api/update_model_options/<tab_index>", methods=["POST"])
+def r_update_model_options(tab_index: str):
+    if request.method == "POST":
+        received_data = request.get_json()
+        print(received_data)
+        return_data = session.update_model_options(int(tab_index), **received_data)
+        return Response(response=json.dumps(return_data), status=201)
+    
+@app.route("/api/update_model_param/<tab_index>", methods=["POST"])
+def r_update_model_param(tab_index: str):
+    if request.method == "POST":
+        received_data = request.get_json()
+        session.update_model_param(int(tab_index), received_data)
+        return Response(status=201)
 
 @app.route("/api/transpose_dataset/<index>", methods=["POST"])
 def r_transpose(index: str):
     if request.method == "POST":
         session.transpose_dataset(int(index))
         return Response(status=201)
+    
+@app.route("/api/fit_model/<tab_index>", methods=["POST"])
+def r_fit_model(tab_index: str):
+    if request.method == "POST":
+        session.fit_model(int(tab_index))
+        return Response(status=201)
+    
+    
     
 @app.route("/api/clear", methods=["POST"])
 def r_clear():
