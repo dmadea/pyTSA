@@ -123,7 +123,7 @@ const dimensionMultiply = () => {
     </div>
     <div class="card-body">
       <div class="row">
-        <div class="col-7">
+        <div class="col-8">
               
           <button class="btn btn-outline-primary btn-icon" @click="crop" data-bs-toggle="tooltip" data-bs-placement="top" title="Tooltip on top">
               <Icon icon="solar:crop-bold" :width="iconWidth"></Icon>

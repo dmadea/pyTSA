@@ -4,10 +4,11 @@ import { defineProps, inject, ref, defineEmits, computed } from "vue";
 // import { Icon } from '@iconify/vue';
 // import { ModalsContainer, useModal } from 'vue-final-modal'
 import { v4 } from "uuid";
+import { FirstOrderModel, FitModel } from "@/fitmodel";
 
 
 const props = defineProps({
-  params: {
+  model: {
     type: Object,
     required: false,
   },
@@ -42,6 +43,7 @@ const iconWidth: string = "30";
 //   open();
 // };
 
+const model = new FirstOrderModel("asdd", 0);
 
 
 const dataparams = [
@@ -75,9 +77,13 @@ const dataparams = [
 
 const kineticModels = ['First order', 'First order with LPL']
 
-const onChange = (obj: Event) => {
+const onChangeModel = (obj: Event) => {
   var s = obj.target as HTMLSelectElement
   console.log(s.selectedIndex);
+};
+
+const onChange = (index: number) => {
+  console.log(model.options[index].value, index);
 };
 
 </script>
@@ -85,37 +91,47 @@ const onChange = (obj: Event) => {
 <template>
 
   <h3 class=""> Fitting</h3>
-
-  
-  <h6 class=""> Model</h6>
   
   <div class="input-group input-group-sm mb-3">
     <label class="input-group-text" for="inputGroupSelect01">Kinetic model</label>
-    <select class="form-select" id="inputGroupSelect01" :onchange="onChange">
+    <select class="form-select" id="inputGroupSelect01" :onchange="onChangeModel">
       <option v-for="(opt, index) in kineticModels" :key="index" :value="index">{{ opt }}</option>
     </select>
   </div>
 
-  <div class="form-check">
-      <input class="form-check-input" type="checkbox" :id="v4()">
-      <label class="form-check-label" for="gridCheck">
-        Include chirp
+  <h6 class=""> Model options</h6>
+
+  <div v-for="(option, index) in model.options" :key="index">
+    <div v-if="option.type === 'checkbox'" class="form-check">
+      <input class="form-check-input" type="checkbox" :id="`cb${index}`" v-model="option.value" :onchange="() => onChange(index)">
+      <label class="form-check-label small" :for="`cb${index}`">
+        {{ option.name }}
       </label>
+    </div>
+
+    <div v-else-if="option.type === 'text' || option.type === 'number'" class="input-group input-group-sm mb-3">
+        <span class="input-group-text">{{ option.name }}</span>
+        <input :type="option.type" class="form-control" v-model="option.value" :onchange="() => onChange(index)"
+        placeholder="" :min="option.min" :max="option.max" :step="option.step" >
+    </div>
+
+    <div v-else-if="option.type === 'select'" class="input-group input-group-sm mb-3">
+      <label class="input-group-text" :for="`select${index}`">{{ option.name }}</label>
+      <select class="form-select" :id="`select${index}`" v-model="option.value" :onchange="() => onChange(index)">
+        <option disabled value="">Please select one</option>
+        <option v-for="(opt, i2) in option.options" :key="i2">{{ opt }}</option>  
+      </select>
+    </div>
   </div>
 
-  <div class="form-check">
-      <input class="form-check-input" type="checkbox" :id="v4()">
-      <label class="form-check-label" for="gridCheck">
-        Include IRF
-      </label>
-  </div>
+  <!-- :selected="i2 === option.value" -->
 
   <button class="btn btn-outline-success">Simulate model</button>
   <button class="btn btn-outline-secondary">Fit</button>
   
   <h4 class=""> Params</h4>
 
-  <table class="table table-striped">
+  <table class="table table-sm table-striped">
   <thead>
     <tr>
       <th scope="col">Name</th>
@@ -139,8 +155,8 @@ const onChange = (obj: Event) => {
 </table>
 
 
-
-  <!-- <div>
+<!-- 
+  <div>
     <div class="accordion" id="accordionPanelsStayOpenExample">
   <div class="accordion-item">
     <h2 class="accordion-header" id="panelsStayOpen-headingOne">
@@ -193,9 +209,9 @@ const onChange = (obj: Event) => {
     </div>
   </div>
 </div>
-  </div>
+  </div> -->
   
-</div> -->
+<!-- </div> -->
 </template>
 
 <style scoped>

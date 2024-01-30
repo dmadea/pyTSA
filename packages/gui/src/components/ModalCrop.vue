@@ -55,26 +55,26 @@ const errors = ref<boolean[]>([false, false, false, false]);
       <span>Wavelength range:</span>
 
       <div class="input-group input-group-sm" :class="{'mb-3': !errors[0]}">
-        <span class="input-group-text" id="basic-addon1">Start</span>
+        <span class="input-group-text">Start</span>
         <input type="text" class="form-control" v-model="data.w0" placeholder="">
       </div>
       <div class="error" v-show="errors[0]">{{ errorMessage }}</div>
 
       <div class="input-group input-group-sm" :class="{'mb-3': !errors[1]}">
-        <span class="input-group-text" id="basic-addon1">End</span>
+        <span class="input-group-text">End</span>
         <input type="text" class="form-control" v-model="data.w1" placeholder="">
       </div>
       <div class="error" v-show="errors[1]">{{ errorMessage }}</div>
 
       <span>Time range:</span>
       <div class="input-group input-group-sm" :class="{'mb-3': !errors[2]}">
-        <span class="input-group-text" id="basic-addon1">Start</span>
+        <span class="input-group-text">Start</span>
         <input type="text" class="form-control" v-model="data.t0" placeholder="">
       </div>
       <div class="error" v-show="errors[2]">{{ errorMessage }}</div>
 
       <div class="input-group input-group-sm" :class="{'mb-3': !errors[3]}">
-        <span class="input-group-text" id="basic-addon1">End</span>
+        <span class="input-group-text">End</span>
         <input type="text" class="form-control" v-model="data.t1" placeholder="">
       </div>
       <div class="error" v-show="errors[3]">{{ errorMessage }}</div>

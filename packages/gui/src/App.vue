@@ -19,6 +19,7 @@ provide("backendUrl", backendUrl);
 
 interface TabData {
   selectedDatasets: number[];
+  fitmodel: null
 }
 
 interface Data {
@@ -32,6 +33,7 @@ const data = ref<Data>({
   tabs: [
     {
       selectedDatasets: [],
+      fitmodel: null
     },
   ],
   datasets: [],
@@ -58,6 +60,7 @@ const checkedDatasets = computed<boolean[]>(() => {
 const addNewTab = () => {
   data.value.tabs.push({
     selectedDatasets: [],
+    fitmodel: null
   });
   data.value.activeTab = data.value.tabs.length - 1;
 };
@@ -75,22 +78,16 @@ const getCanvasInterfaces = (ifaces: any[]) => {
 const checkedChanged = (index: number) => {
   const selTab = data.value.tabs[data.value.activeTab];
   if (selTab.selectedDatasets.includes(index)) {
-    selTab.selectedDatasets = selTab.selectedDatasets.filter(
-      (entry) => entry !== index
-    );
+    selTab.selectedDatasets = selTab.selectedDatasets.filter((entry) => entry !== index);
     // remove dataset from tab
     canvasInterfaces[data.value.activeTab].removeDataset(index);
-    APICallPOST(
-      `${backendUrl}api/remove_dataset/${index}/${data.value.activeTab}`
-    );
+    APICallPOST(`${backendUrl}api/remove_dataset/${index}/${data.value.activeTab}`);
   } else {
     selTab.selectedDatasets = [...selTab.selectedDatasets, index];
     // add dataset to tab
     canvasInterfaces[data.value.activeTab].addDataset(index);
     // sync with a backend
-    APICallPOST(
-      `${backendUrl}api/add_dataset/${index}/${data.value.activeTab}`
-    );
+    APICallPOST(`${backendUrl}api/add_dataset/${index}/${data.value.activeTab}`);
   }
 };
 
@@ -100,8 +97,7 @@ const clear = () => {
     ci.clear();
   }
   for (let i = 0; i < data.value.tabs.length; i++) {
-    data.value.tabs[i] = {selectedDatasets: []};
-    
+    data.value.tabs[i] = {selectedDatasets: [], fitmodel: null};
   }
   data.value.datasets = [];
 };
