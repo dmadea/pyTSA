@@ -11,23 +11,16 @@ import ModalDimensionMultiply from "./ModalDimensionMultiply.vue";
 import FitWidget from "./FitWidget.vue";
 import { FitModel } from "@/fitmodel";
 import DataViewComponent from "./DataViewComponent.vue";
-import { Data } from "@/App.vue";
+import { GlobalState } from "@/state";
+// import { Data } from "@/App.vue";
 
 
 const props = defineProps({
-  data: {
-    type: Object, // as PropType<Data>,
+  state: {
+    type: Object as PropType<GlobalState>,
     required: true,
   },
 });
-
-const backendUrl = inject("backendUrl");
-
-const emit = defineEmits<{
-  (e: "addNewTab"): void;
-  (e: "tabIndexChanged", value: number): void;
-  (e: "modelChanged", model: typeof FitModel): void;
-}>();
 
 const iconWidth: string = "30";
 
@@ -36,10 +29,10 @@ const crop = () => {
     component: ModalCrop,
     attrs: {
       onSubmit(data: any) {
-        if (props.data.tabs[props.data.activeTab].selectedDatasets.length == 0) {close(); return;}
-        APICallPOST(`${backendUrl}api/perform/crop/${props.data.activeTab}`, data, obj => {
+        if (props.state.data.tabs[props.state.data.activeTab].selectedDatasets.length == 0) {close(); return;}
+        APICallPOST(`${props.state.backendUrl}api/perform/crop/${props.state.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
-          props.data.tabs[props.data.activeTab].dataview.updateData(datasets);
+          props.state.activeDataView.updateData(datasets);
         })
         close();
       },
@@ -58,10 +51,10 @@ const bcorrect = () => {
     component: ModalBaselineCorrect,
     attrs: {
       onSubmit(data: any) {
-        if (props.data.tabs[props.data.activeTab].selectedDatasets.length == 0) {close(); return;}
-        APICallPOST(`${backendUrl}api/perform/baseline_correct/${props.data.activeTab}`, data, obj => {
+        if (props.state.data.tabs[props.state.data.activeTab].selectedDatasets.length == 0) {close(); return;}
+        APICallPOST(`${props.state.backendUrl}api/perform/baseline_correct/${props.state.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
-          props.data.tabs[props.data.activeTab].dataview.updateData(datasets);
+          props.state.activeDataView.updateData(datasets);
         })
         close();
       },
@@ -79,10 +72,10 @@ const dimensionMultiply = () => {
     component: ModalDimensionMultiply,
     attrs: {
       onSubmit(data: any) {
-        if (props.data.tabs[props.data.activeTab].selectedDatasets.length == 0) {close(); return;}
-        APICallPOST(`${backendUrl}api/perform/dimension_multiply/${props.data.activeTab}`, data, obj => {
+        if (props.state.data.tabs[props.state.data.activeTab].selectedDatasets.length == 0) {close(); return;}
+        APICallPOST(`${props.state.backendUrl}api/perform/dimension_multiply/${props.state.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
-          props.data.tabs[props.data.activeTab].dataview.updateData(datasets);
+          props.state.activeDataView.updateData(datasets);
         })
         close();
       },
@@ -101,11 +94,11 @@ const dimensionMultiply = () => {
   <div class="card">
     <div class="card-header">
       <ul class="nav nav-tabs card-header-tabs">
-        <li v-for="(tab, index) in data.tabs" :key="index" class="nav-item">
+        <li v-for="(tab, index) in state.data.tabs" :key="index" class="nav-item">
           <button
             class="nav-link"
-            :class="{ active: index === data.activeTab }"
-            @click="emit('tabIndexChanged', index)"
+            :class="{ active: index === state.data.activeTab }"
+            @click="state.tabIndexChanged(index)"
           >
             {{ `Set ${1 + index}` }}
           </button>
@@ -113,7 +106,7 @@ const dimensionMultiply = () => {
         <li class="nav-item">
           <button
             class="nav-link"
-            @click="emit('addNewTab')"
+            @click="state.addNewTab()"
             href="#"
             >+</button>
         </li>
@@ -139,24 +132,16 @@ const dimensionMultiply = () => {
             
             <ModalsContainer />
 
-            <div v-for="(tab, index) in data.tabs" :key="index">
-              <DataViewComponent
-                v-show="index === data.activeTab"
-                :dataview="data.tabs[index].dataview"
-                />
-            </div>
+            <DataViewComponent v-for="(tab, index) in state.data.tabs" :key="index"
+              v-show="index === state.data.activeTab"
+              :dataview="state.views[index].dataview"
+              />
             
-              <!-- <CanvasComponent
-              v-show="index === data.activeTab"
-              :datasets="props.data.datasets"
-              /> -->
-
         </div>
 
         <div class="col-4">
-            <FitWidget :fitmodel="data.tabs[data.activeTab].fitmodel"
-             @model-changed="(model) => emit('modelChanged', model)">
-            </FitWidget>
+             <FitWidget :fitmodel="state.fitmodels.value[state.data.activeTab]"
+             @model-changed="(model) => state.kineticModelChanged(model)"></FitWidget> 
         </div>
       </div>
     </div>

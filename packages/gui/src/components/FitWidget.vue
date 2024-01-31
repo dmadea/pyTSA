@@ -1,14 +1,11 @@
 <script setup lang="ts">
-import { defineProps, inject, ref, defineEmits, computed, reactive } from "vue";
-// import { APICallPOST, json2arr, parseDatasets } from "@/utils";
-// import { Icon } from '@iconify/vue';
-// import { ModalsContainer, useModal } from 'vue-final-modal'
+import { defineProps, inject, ref, defineEmits, computed, reactive, PropType } from "vue";
 import { FirstOrderModel, FirstOrderModelLPL, FitModel } from "@/fitmodel";
 
 
 const props = defineProps({
   fitmodel: {
-    type: Object,
+    type: Object as PropType<FitModel>,
     required: true,
   },
 });
@@ -32,9 +29,6 @@ const optionChanged = (index: number) => {
 };
 
 const paramChanged = (index: number) => {
-
-
-
   props.fitmodel.updateModelParams(index);
 };
 

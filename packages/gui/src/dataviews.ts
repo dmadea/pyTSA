@@ -3,6 +3,7 @@ import { APICallPOST } from "./utils";
 import { reactive } from "vue";
 import { SceneUser } from "./sceneuser";
 import { v4 } from "uuid";
+import { GlobalState } from "./state";
 
 interface AssignedDataset {
   dataset: Dataset,
@@ -11,12 +12,14 @@ interface AssignedDataset {
 
 export class CanvasView {
 
+  public state: GlobalState;
   public backendUrl: string;
   public tabIndex: number;
   public id: string;
   public scene: Scene | null = null;
 
-  constructor(backendUrl: string, tabIndex: number) {
+  constructor(state: GlobalState, backendUrl: string, tabIndex: number) {
+    this.state = state;
     this.backendUrl = backendUrl;
     this.tabIndex = tabIndex;
     this.id = v4();
@@ -32,11 +35,11 @@ export class DataView extends CanvasView {
     this.scene = new SceneUser(document.getElementById(this.id) as HTMLDivElement);
   }
 
-  public addDataset(index: number, datasets: Dataset[]) {
+  public addDataset(index: number) {
     if (!this.scene) return;
 
     this.assignedDatasets.push({
-      dataset: (datasets[index] as Dataset).copy(),
+      dataset: (this.state.datasets.value[index] as Dataset).copy(),
       key: index,
     });
     

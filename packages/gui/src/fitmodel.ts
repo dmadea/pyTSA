@@ -1,8 +1,9 @@
 import { Matrix, NumberArray, formatNumber } from "@pytsa/ts-graph";
 import { APICallPOST } from "./utils";
 import { reactive } from "vue";
+import { GlobalState } from "./state";
 
-export interface Param {
+export interface IParam {
   name: string,
   min: string,
   value: number,
@@ -11,7 +12,7 @@ export interface Param {
   fixed: boolean
 }
 
-export interface Option {
+export interface IOption {
   name: string,
   backendName: string,
   type: string,
@@ -31,7 +32,7 @@ export interface OptionAPI {
 //   Cfit:  
 // }
 
-function formatParams(params: Param[]): Param[] {
+function formatParams(params: IParam[]): IParam[] {
   for (const param of params) {
     param.value = Number.parseFloat(formatNumber(param.value, 4));
     param.error = Number.parseFloat(formatNumber(param.error ?? 0, 4));
@@ -54,10 +55,12 @@ export class FitModel {
   public backendUrl: string;
   public tabIndex: number;
   public isFitting: boolean = false;
-  public params: Param[] = reactive<Param[]>([]);
-  public options: Option[] = reactive<Option[]>([]);
+  public params: IParam[] = [];  // = reactive<Param[]>([]);
+  public options: IOption[] = []; // = reactive<Option[]>([]);
+  public state: GlobalState;
 
-  constructor(backendUrl: string, tabIndex: number) {
+  constructor(state: GlobalState, backendUrl: string, tabIndex: number) {
+    this.state = state;
     this.backendUrl = backendUrl;
     this.tabIndex = tabIndex;
     this.setOptions();
@@ -70,7 +73,7 @@ export class FitModel {
   public fit() {
     APICallPOST(`${this.backendUrl}/api/fit_model/${this.tabIndex}`, null, (obj) => {
       this.isFitting = false;
-      this.params = formatParams(obj as Param[]);
+      this.params = formatParams(obj as IParam[]);
     });
     this.isFitting = true;
   }
@@ -92,7 +95,8 @@ export class FitModel {
     }
     // console.log(data);
     APICallPOST(`${this.backendUrl}/api/update_model_options/${this.tabIndex}`, data, (obj) => {
-      this.params = formatParams(obj as Param[]);
+      this.params = formatParams(obj as IParam[]);
+      console.log('params updated', this.params);
     });
   }
 

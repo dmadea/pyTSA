@@ -1,37 +1,25 @@
 <script setup lang="ts">
 import { APICallGET, APICallPOST, arr2json, json2arr, loadFiles, parseDatasets } from "@/utils";
 import { Dataset, Matrix } from "@pytsa/ts-graph";
-import { defineProps, inject, ref, defineEmits, PropType } from "vue";
+import { defineProps, inject, ref, defineEmits, PropType, computed } from "vue";
 import { Icon } from '@iconify/vue';
+import { GlobalState } from "@/state";
 
 const props = defineProps({
-  datasets: {
-    type: Array,
-    required: true,
-  },
-  checked: {
-    type: Array as PropType<boolean[]>,
+  state: {
+    type: Object as PropType<GlobalState>,
     required: true,
   },
 });
-const iconWidth: string = "30";
-const backendUrl = inject("backendUrl");
-const emit = defineEmits<{
-  (e: "datasetsLoaded", datasets: Dataset[]): void;
-  (e: "datasetsUpdated", datasets: Dataset[]): void;
-  (e: "checkedChanged", index: number): void;
-  (e: "clear"): void;
-  // (e: 'update', value: string): void
-}>();
 
+const iconWidth: string = "30";
 
 const pingClicked = () => {
   const time = Date.now();
 
-  APICallGET(`${backendUrl}api/ping`, null, (obj) => {
+  APICallGET(`${props.state.backendUrl}api/ping`, null, (obj) => {
     console.log("ping: ", Date.now() - time, "ms");
-
-  })
+  });
 };
 
 const postDatasets = (datasets: Dataset[]) => {
@@ -55,28 +43,38 @@ const postDatasets = (datasets: Dataset[]) => {
     },
   };
 
-  APICallPOST(`${backendUrl}api/post_datasets`, data);
+  APICallPOST(`${props.state.backendUrl}api/post_datasets`, data);
 };
+
+const checkedDatasets = computed<boolean[]>(() => {
+  const selTab = props.state.activeTab;
+  const isChecked: boolean[] = [];
+  for (let i = 0; i < props.state.datasets.value.length; i++) {
+    isChecked.push(selTab.selectedDatasets.includes(i));
+  }
+
+  return isChecked;
+});
 
 const loadDatasets = (payload: Event) => {
   const files = (payload.target as HTMLInputElement).files;
   if (!files) return;
   loadFiles(files, (datasets) => {
     postDatasets(datasets);
-    emit("datasetsLoaded", datasets);
+    props.state.loadDatasets(datasets);
   });
 };
 
 const syncData = () => {
-  APICallGET(`${backendUrl}api/get_datasets`, null, (obj) => {
+  APICallGET(`${props.state.backendUrl}api/get_datasets`, null, (obj) => {
     const datasets = parseDatasets(obj);
-    emit("datasetsUpdated", datasets);
+    props.state.updateDatasets(datasets);
   })
 };
 
 const transpose = (index: number) => {
-  (props.datasets[index] as Dataset).transpose();
-  APICallPOST(`${backendUrl}api/transpose_dataset/${index}`);
+  // (props.datasets[index] as Dataset).transpose();
+  // APICallPOST(`${backendUrl}api/transpose_dataset/${index}`);
 };
 
 </script>
@@ -84,26 +82,30 @@ const transpose = (index: number) => {
 <template>
   <div>
     <input type="file" class="btn button" @change="loadDatasets" multiple />
-    <button class="btn btn-secondary button" @click="pingClicked">Ping</button>
-    <button class="btn btn-outline-primary button" @click="syncData">
-      Sync data with backend
+
+    <button class="btn btn-outline-primary btn-icon" @click="pingClicked">
+        <Icon icon="mdi:ping-pong" :width="iconWidth"></Icon>
     </button>
-    <button class="btn btn-secondary button" @click="emit('clear')">Clear</button>
+    <button class="btn btn-outline-primary btn-icon" @click="syncData">
+        <Icon icon="material-symbols:sync" :width="iconWidth"></Icon>
+    </button>
+    <button class="btn btn-outline-primary btn-icon" @click="state.clear()">
+        <Icon icon="lets-icons:blank" :rotate="2" :width="iconWidth"></Icon>
+    </button>
   </div>
 
   <h4>List of loaded datasets</h4>
   <ul class="list-group">
     <li
-      v-for="(dataset, index) in datasets"
+      v-for="(dataset, index) in state.datasets.value"
       :key="index"
       class="list-group-item small"
     >
       <input
         class="form-check-input me-1"
         type="checkbox"
-        :checked="checked[index]"
-        @change="emit('checkedChanged', index)"
-        aria-label="..."
+        :checked="checkedDatasets[index]"
+        @change="state.leftPanelCheckedChanged(index)"
       />
       {{ (dataset as Dataset).name }}
       <button class="btn btn-outline-primary btn-icon" @click="transpose(index)">
