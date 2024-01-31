@@ -9,6 +9,7 @@ import { Splitpanes, Pane } from "splitpanes"; // from https://antoniandre.githu
 import "splitpanes/dist/splitpanes.css";
 import { APICallPOST } from "./utils";
 import { FirstOrderModel, FitModel } from "./fitmodel";
+import { DataView } from "./dataviews";
 
 const backendUrl = "http://localhost:6969/";
 provide("backendUrl", backendUrl);
@@ -18,89 +19,92 @@ provide("backendUrl", backendUrl);
 //   checked: boolean;
 // }
 
-interface TabData {
-  selectedDatasets: number[];
-  fitmodel: null | FitModel
+export interface TabData {
+  selectedDatasets: number[],
+  fitmodel: FitModel,
+  dataview: DataView
 }
 
-interface Data {
-  activeTab: number;
-  tabs: TabData[];
-  datasets: Dataset[];
+export interface Data {
+  activeTab: number,
+  tabs: TabData[],
+  datasets: Dataset[]
 }
 
-const data = ref<Data>({
+const data = reactive<Data>({
   activeTab: 0,
   tabs: [
     {
       selectedDatasets: [],
-      fitmodel: new FirstOrderModel(backendUrl, 0)
+      fitmodel: new FirstOrderModel(backendUrl, 0),
+      dataview: new DataView(backendUrl, 0)
     },
   ],
   datasets: [],
 });
 
 const datasetsLoaded = (ds: Dataset[]) => {
-  data.value.datasets = [...data.value.datasets, ...ds];
+  data.datasets = [...data.datasets, ...ds];
 };
 
 const datasetsUpdated = (ds: Dataset[]) => {
-  data.value.datasets = ds;
+  data.datasets = ds;
 };
 
 const checkedDatasets = computed<boolean[]>(() => {
-  const selTab = data.value.tabs[data.value.activeTab];
+  const selTab = data.tabs[data.activeTab];
   const isChecked: boolean[] = [];
-  for (let i = 0; i < data.value.datasets.length; i++) {
+  for (let i = 0; i < data.datasets.length; i++) {
     isChecked.push(selTab.selectedDatasets.includes(i));
   }
 
   return isChecked;
 });
 
+const modelChanged = (model: typeof FitModel) => {
+  const m = new model(backendUrl, data.activeTab);
+  data.tabs[data.activeTab].fitmodel = m;
+  APICallPOST(`${backendUrl}/api/set_model/${data.activeTab}/${model.backendName}`);
+  m.updateModelOptions();
+};
+
 const addNewTab = () => {
-  data.value.tabs.push({
+  data.tabs.push({
     selectedDatasets: [],
-    fitmodel: new FirstOrderModel(backendUrl, 0)
+    fitmodel: new FirstOrderModel(backendUrl, data.tabs.length),
+    dataview: new DataView(backendUrl, data.tabs.length)
   });
-  data.value.activeTab = data.value.tabs.length - 1;
+  data.activeTab = data.tabs.length - 1;
 };
 
 const tabIndexChanged = (index: number) => {
-  data.value.activeTab = index;
-};
-
-var canvasInterfaces: any[] = [];
-
-const getCanvasInterfaces = (ifaces: any[]) => {
-  canvasInterfaces = ifaces;
+  data.activeTab = index;
 };
 
 const checkedChanged = (index: number) => {
-  const selTab = data.value.tabs[data.value.activeTab];
+  const selTab = data.tabs[data.activeTab];
   if (selTab.selectedDatasets.includes(index)) {
     selTab.selectedDatasets = selTab.selectedDatasets.filter((entry) => entry !== index);
     // remove dataset from tab
-    canvasInterfaces[data.value.activeTab].removeDataset(index);
-    APICallPOST(`${backendUrl}api/remove_dataset/${index}/${data.value.activeTab}`);
+    data.tabs[data.activeTab].dataview.removeDataset(index);
   } else {
     selTab.selectedDatasets = [...selTab.selectedDatasets, index];
-    // add dataset to tab
-    canvasInterfaces[data.value.activeTab].addDataset(index);
-    // sync with a backend
-    APICallPOST(`${backendUrl}api/add_dataset/${index}/${data.value.activeTab}`);
+    // add dataset to tab and sync with backend
+    data.tabs[data.activeTab].dataview.addDataset(index, data.datasets as Dataset[]);
   }
 };
 
 const clear = () => {
   APICallPOST(`${backendUrl}api/clear`);
-  for (const ci of canvasInterfaces) {
-    ci.clear();
+  for (let i = 0; i < data.tabs.length; i++) {
+    data.tabs[i].dataview.clear();
+    data.tabs[i] = {
+        selectedDatasets: [],
+        fitmodel: new FirstOrderModel(backendUrl, i),
+        dataview: new DataView(backendUrl, i)
+    };
   }
-  for (let i = 0; i < data.value.tabs.length; i++) {
-    data.value.tabs[i] = {selectedDatasets: [], fitmodel: null};
-  }
-  data.value.datasets = [];
+  data.datasets = [];
 };
 
 </script>
@@ -122,7 +126,7 @@ const clear = () => {
         :data="data"
         @add-new-tab="addNewTab"
         @tab-index-changed="tabIndexChanged"
-        @canvas-interfaces="getCanvasInterfaces"
+        @model-changed="modelChanged"
       ></TabWidget>
     </pane>
   </splitpanes>

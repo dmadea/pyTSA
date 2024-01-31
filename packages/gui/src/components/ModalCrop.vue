@@ -1,6 +1,13 @@
 <script setup lang="ts">
-  import { reactive, defineEmits , ref} from 'vue';
+  import { reactive, defineEmits, defineProps, ref, PropType} from 'vue';
 import CustomModal from './CustomModal.vue'
+
+const props = defineProps({
+  selection: {
+    type: Array as PropType<string[]>,
+    required: false
+  }
+})
 
   const emit = defineEmits<{
     (e: 'submit', data: any): void
@@ -47,6 +54,14 @@ const errors = ref<boolean[]>([false, false, false, false]);
     emit('submit', parsedData)
   };
 
+  const useSelection = () => {
+    if (props.selection) {
+      data.w0 = props.selection[0];
+      data.w1 = props.selection[1];
+      data.t0 = props.selection[2];
+      data.t1 = props.selection[3];
+    }
+  };
 
   </script>
 
@@ -80,7 +95,7 @@ const errors = ref<boolean[]>([false, false, false, false]);
       <div class="error" v-show="errors[3]">{{ errorMessage }}</div>
 
       <div>
-        <button class="btn btn-secondary" @click="">
+        <button class="btn btn-secondary" @click="() => useSelection()">
               Use selection
         </button>
       </div>

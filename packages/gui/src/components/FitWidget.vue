@@ -3,7 +3,7 @@ import { defineProps, inject, ref, defineEmits, computed, reactive } from "vue";
 // import { APICallPOST, json2arr, parseDatasets } from "@/utils";
 // import { Icon } from '@iconify/vue';
 // import { ModalsContainer, useModal } from 'vue-final-modal'
-import { FirstOrderModel, FitModel } from "@/fitmodel";
+import { FirstOrderModel, FirstOrderModelLPL, FitModel } from "@/fitmodel";
 
 
 const props = defineProps({
@@ -16,44 +16,15 @@ const props = defineProps({
 // const backendUrl = inject("backendUrl");
 
 const emit = defineEmits<{
-  (e: "modelChanged", model: FitModel | any): void;
+  (e: "modelChanged", model: typeof FitModel): void;
 }>();
 
-// const dataparams = reactive([
-//   {
-//     name: "param1",
-//     min: "-inf",
-//     value: "1",
-//     max: "inf",
-//     error: "0",
-//     fixed: false
-//   },
-//   {
-//     name: "param2",
-//     min: "-inf",
-//     value: "4",
-//     max: "inf",
-//     error: "0",
-//     fixed: false
-
-//   },
-//   {
-//     name: "param3",
-//     min: "-inf",
-//     value: "10.08345",
-//     max: "inf",
-//     error: "0",
-//     fixed: true
-
-//   }
-// ]);
-
-const kineticModels = ['First order', 'First order with LPL']
+const kineticModels = [FirstOrderModel, FirstOrderModelLPL];
 
 const onChangeModel = (obj: Event) => {
   var s = obj.target as HTMLSelectElement;
-  console.log(s.selectedIndex);
-  emit('modelChanged', FirstOrderModel);
+  // console.log(s.selectedIndex);
+  emit('modelChanged', kineticModels[s.selectedIndex - 1]);
 };
 
 const optionChanged = (index: number) => {
@@ -61,6 +32,9 @@ const optionChanged = (index: number) => {
 };
 
 const paramChanged = (index: number) => {
+
+
+
   props.fitmodel.updateModelParams(index);
 };
 
@@ -76,7 +50,7 @@ const collapsed = ref<boolean>(true);
     <label class="input-group-text" for="inputGroupSelect01">Kinetic model</label>
     <select class="form-select" id="inputGroupSelect01" :onchange="onChangeModel">
       <option disabled value="">Please select one</option>
-      <option v-for="(opt, index) in kineticModels" :key="index" :value="index">{{ opt }}</option>
+      <option v-for="(opt, index) in kineticModels" :key="index" :value="index">{{ opt.modelName }}</option>
     </select>
   </div>
 
@@ -136,9 +110,9 @@ const collapsed = ref<boolean>(true);
   <tbody>
     <tr v-for="(entry, index) in fitmodel.params" :key="index">
       <th scope="row">{{ entry.name }}</th>
-      <td><input class="" type="text" size="2" v-model="entry.min" :disabled="entry.fixed" :onchange="() => paramChanged(index)"/></td>
-      <td><input class="" type="text" size="5" v-model="entry.value" :onchange="() => paramChanged(index)"/></td>
-      <td><input class="" type="text" size="2" v-model="entry.max" :disabled="entry.fixed" :onchange="() => paramChanged(index)"/></td>
+      <td><input class="input-group-text text-field" type="text" v-model="entry.min" :disabled="entry.fixed" :onchange="() => paramChanged(index)"/></td>
+      <td><input class="input-group-text text-field" type="number" v-model="entry.value" :onchange="() => paramChanged(index)"/></td>
+      <td><input class="input-group-text text-field" type="text" v-model="entry.max" :disabled="entry.fixed" :onchange="() => paramChanged(index)"/></td>
       <td>{{ entry.error }}</td>
       <td><input class="form-check-input" type="checkbox" v-model="entry.fixed" :onchange="() => paramChanged(index)" /></td>
     </tr>
@@ -150,8 +124,15 @@ const collapsed = ref<boolean>(true);
 <style scoped>
 
 .text-field {
-  /* width: 98%;
-  padding: 1%; */
+  width: 100%;
+  padding: 1% 2%;
+  margin: 0px;
+  text-align: left;
+  background-color: white;
+}
+
+.text-field:disabled {
+  background-color: rgb(234, 234, 234);
 }
 
 </style>

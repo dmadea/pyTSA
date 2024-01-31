@@ -2,6 +2,7 @@
 import { APICallGET, APICallPOST, arr2json, json2arr, loadFiles, parseDatasets } from "@/utils";
 import { Dataset, Matrix } from "@pytsa/ts-graph";
 import { defineProps, inject, ref, defineEmits, PropType } from "vue";
+import { Icon } from '@iconify/vue';
 
 const props = defineProps({
   datasets: {
@@ -13,7 +14,7 @@ const props = defineProps({
     required: true,
   },
 });
-
+const iconWidth: string = "30";
 const backendUrl = inject("backendUrl");
 const emit = defineEmits<{
   (e: "datasetsLoaded", datasets: Dataset[]): void;
@@ -105,7 +106,9 @@ const transpose = (index: number) => {
         aria-label="..."
       />
       {{ (dataset as Dataset).name }}
-      <button class="button" @click="transpose(index)">Tr</button>
+      <button class="btn btn-outline-primary btn-icon" @click="transpose(index)">
+        <Icon icon="carbon:transpose" :width="iconWidth"></Icon>
+      </button>
     </li>
   </ul>
 </template>
@@ -114,5 +117,11 @@ const transpose = (index: number) => {
 .button {
   margin: 2px;
   padding: 5px;
+}
+
+.btn-icon {
+  padding: 5px;
+  border: none;
+  border-radius: 100%;
 }
 </style>

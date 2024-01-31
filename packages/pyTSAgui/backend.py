@@ -52,12 +52,16 @@ class BackendSession(object):
         self.datasets.clear()
         self.tabs = [Datasets()]
 
-    def add_dataset(self, index: int, tab_index: int):
+    def _append_tabs(self, tab_index):
         if (tab_index >= len(self.tabs)):
             for i in range(tab_index - len(self.tabs) + 1):
                 self.tabs.append(Datasets())
 
-        self.tabs[tab_index].append(self.datasets[index].copy(), key=index)
+    def add_dataset(self, index: int, tab_index: int):
+        self._append_tabs(tab_index)
+        ds = self.tabs[tab_index]
+        ds.append(self.datasets[index].copy(), key=index)
+        ds.set_model(ds.model) # sets the model for the first dataset
 
     def remove_dataset(self, index: int, tab_index: int):
         self.tabs[tab_index].remove(key=index)
@@ -101,12 +105,22 @@ class BackendSession(object):
 
         return data
     
+    def set_model(self, tab_index: int, model_name: str):
+        self._append_tabs(tab_index)
+
+        model_map = {
+            'first_order': FirstOrderModel,
+            'first_order_lpl': FirstOrderLPLModel,
+        }
+
+        self.tabs[tab_index].set_model(model_map[model_name]())
+    
     def _get_params_obj(self, params: Parameters) -> list:
         def _put_param(p: Parameter):
             obj = {
                 'name': p.name,
-                'min': p.min,
-                'max': p.max,
+                'min': str(p.min),
+                'max': str(p.max),
                 'value': p.value,
                 'error': p.stderr,
                 'fixed': not p.vary
@@ -114,44 +128,32 @@ class BackendSession(object):
 
             return obj
 
-        return [_put_param(param) for param in params]
+        return [_put_param(par) for key, par in params.items()]
 
     
     def update_model_options(self, tab_index: int, **options):
-        print(options)
-        if self.tabs[tab_index].length == 0:
-            return
-        
-        if self.tabs[tab_index][0].model is None:
-            self.tabs[tab_index][0].set_model(FirstOrderModel())
-        
-        model = self.tabs[tab_index][0].model
+        self._append_tabs(tab_index)
+        model = self.tabs[tab_index].model
 
         model.update_options(**options)
         return self._get_params_obj(model.params)
     
     def update_model_param(self, tab_index: int, param_data: dict):
-        if self.tabs[tab_index].length == 0:
-            return
+        self._append_tabs(tab_index)
         
-        if self.tabs[tab_index][0].model is None:
-            self.tabs[tab_index][0].set_model(FirstOrderModel())
-        
-        model = self.tabs[tab_index][0].model
+        model = self.tabs[tab_index].model
         name = param_data['name']
-        model.params[name].min = param_data['min']
-        model.params[name].max = param_data['max']
-        model.params[name].value = param_data['value']
+        model.params[name].min = float(param_data['min'])
+        model.params[name].max = float(param_data['max'])
+        model.params[name].value = float(param_data['value'])
         model.params[name].vary = not param_data['fixed']
 
     def fit_model(self, tab_index: int):
-        if self.tabs[tab_index].length == 0 or self.tabs[tab_index][0].model is None:
+        if self.tabs[tab_index].model.dataset is None:
             return
         
-        model = self.tabs[tab_index][0].model
-        model.fit()
-
-
+        self.tabs[tab_index].model.fit()
+        return self._get_params_obj(self.tabs[tab_index].model.params)
 
 
 def get_data():

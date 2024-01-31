@@ -1,6 +1,7 @@
 
 from .plot import plot_data_ax
 from .dataset import Dataset
+from .kineticmodel import KineticModel, FirstOrderModel
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,6 +12,12 @@ class Datasets(object):
 
     def __init__(self):
         self._datasets: list[dict[Dataset, int | str]] = []
+        self.model: KineticModel = FirstOrderModel()
+
+    def set_model(self, model: KineticModel):
+        self.model = model
+        if self.length() > 0:
+            self.model.dataset = self[0]
 
     def __getitem__(self, key: int) -> Dataset:
         return self._datasets[key]['dataset']

@@ -1,4 +1,4 @@
-import { Matrix, NumberArray } from "@pytsa/ts-graph";
+import { Matrix, NumberArray, formatNumber } from "@pytsa/ts-graph";
 import { APICallPOST } from "./utils";
 import { reactive } from "vue";
 
@@ -7,7 +7,7 @@ export interface Param {
   min: string,
   value: number,
   max: string,
-  error: number,
+  error: number | null,
   fixed: boolean
 }
 
@@ -31,11 +31,25 @@ export interface OptionAPI {
 //   Cfit:  
 // }
 
+function formatParams(params: Param[]): Param[] {
+  for (const param of params) {
+    param.value = Number.parseFloat(formatNumber(param.value, 4));
+    param.error = Number.parseFloat(formatNumber(param.error ?? 0, 4));
+  }
+  return params;
+}
+
 export class FitModel {
+
+  public static modelName: string = "...";
+  public static backendName: string = "...";
 
   public Cfit: Matrix | null = null;
   public STfit: Matrix | null = null;
   public Dfit: Matrix | null = null;
+
+  public CfitNorm: Matrix | null = null;
+  public STfitNorm: Matrix | null = null;
 
   public backendUrl: string;
   public tabIndex: number;
@@ -47,37 +61,43 @@ export class FitModel {
     this.backendUrl = backendUrl;
     this.tabIndex = tabIndex;
     this.setOptions();
+
+    // try to create a model
+
+    this.updateModelOptions();
   }
 
   public fit() {
     APICallPOST(`${this.backendUrl}/api/fit_model/${this.tabIndex}`, null, (obj) => {
       this.isFitting = false;
+      this.params = formatParams(obj as Param[]);
     });
     this.isFitting = true;
   }
 
   public simulateModel() {
     APICallPOST(`${this.backendUrl}/api/simulate_model/${this.tabIndex}`, null, (obj) => {
+      
     });
   }
-  
+
   public updateModelOptions(optionIndex?: number) {
     var data = {};
-    if (optionIndex) {
-      data = {[this.options[optionIndex].backendName]: this.options[optionIndex].value}
-    } else {
-      for (const op of this.options) {
-        data = {...data, [op.backendName]: op.value};
-      }
+    // if (optionIndex) {
+    //   data = {[this.options[optionIndex].backendName]: this.options[optionIndex].value}
+    // } else {
+    // }
+    for (const op of this.options) {
+      data = {...data, [op.backendName]: op.value};
     }
-    console.log(data);
-    APICallPOST(`${this.backendUrl}/api/update_model_options/${this.tabIndex}`, JSON.stringify(data), (obj) => {
-      this.params = [...this.params, ...obj as Param[]];
+    // console.log(data);
+    APICallPOST(`${this.backendUrl}/api/update_model_options/${this.tabIndex}`, data, (obj) => {
+      this.params = formatParams(obj as Param[]);
     });
   }
 
   public updateModelParams(paramIndex: number) {
-    const data = JSON.stringify(this.params[paramIndex]);
+    const data = this.params[paramIndex];
     APICallPOST(`${this.backendUrl}/api/update_model_param/${this.tabIndex}`, data);
   }
 
@@ -97,6 +117,9 @@ export class FitModel {
 }
 
 export class FirstOrderModel extends FitModel {
+
+  public static modelName: string = "First order";
+  public static backendName: string = "first_order";
 
 
 public setOptions(): void {
@@ -203,3 +226,23 @@ public setOptions(): void {
 
 }
 
+
+export class FirstOrderModelLPL extends FirstOrderModel {
+
+  public static modelName: string = "First order with LPL";
+  public static backendName: string = "first_order_lpl";
+
+  public setOptions(): void {
+    super.setOptions();
+    this.options = [ ...this.options,
+      {
+        name: "Include LPL profile",
+        backendName: "include_LPL",
+        type: "checkbox",
+        value: true,
+      },
+      
+    ]
+  }
+  
+  }

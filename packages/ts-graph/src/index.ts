@@ -14,6 +14,9 @@ export { Axis } from "./figure/axis";
 export { Grid } from "./grid";
 export { DraggableLines } from "./draggableLines";
 
+export { formatNumber } from "./utils";
+
+
 
 
 

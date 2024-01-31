@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, inject, ref, defineEmits, computed } from "vue";
+import { defineProps, inject, ref, defineEmits, computed, PropType } from "vue";
 import CanvasComponent from "./CanvasComponent.vue";
 // import { Dataset, Matrix } from "@pytsa/ts-graph";
 import { APICallPOST, json2arr, parseDatasets } from "@/utils";
@@ -9,11 +9,14 @@ import ModalCrop from './ModalCrop.vue'
 import ModalBaselineCorrect from "./ModalBaselineCorrect.vue";
 import ModalDimensionMultiply from "./ModalDimensionMultiply.vue";
 import FitWidget from "./FitWidget.vue";
+import { FitModel } from "@/fitmodel";
+import DataViewComponent from "./DataViewComponent.vue";
+import { Data } from "@/App.vue";
 
 
 const props = defineProps({
   data: {
-    type: Object,
+    type: Object, // as PropType<Data>,
     required: true,
   },
 });
@@ -23,15 +26,8 @@ const backendUrl = inject("backendUrl");
 const emit = defineEmits<{
   (e: "addNewTab"): void;
   (e: "tabIndexChanged", value: number): void;
-  (e: "canvasInterfaces", iface: any): void;
+  (e: "modelChanged", model: typeof FitModel): void;
 }>();
-
-var canvasInterfaces: any[] = [];
-
-const getInterface = (iface: any) => {
-  canvasInterfaces.push(iface);
-  emit("canvasInterfaces", canvasInterfaces);
-};
 
 const iconWidth: string = "30";
 
@@ -40,15 +36,17 @@ const crop = () => {
     component: ModalCrop,
     attrs: {
       onSubmit(data: any) {
+        if (props.data.tabs[props.data.activeTab].selectedDatasets.length == 0) {close(); return;}
         APICallPOST(`${backendUrl}api/perform/crop/${props.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
-          canvasInterfaces[props.data.activeTab].updateData(datasets);
+          props.data.tabs[props.data.activeTab].dataview.updateData(datasets);
         })
         close();
       },
       onCancel() {
         close();
-      }
+      },
+      selection: ["1", "2", "3","4"]
     },
   });
 
@@ -60,9 +58,10 @@ const bcorrect = () => {
     component: ModalBaselineCorrect,
     attrs: {
       onSubmit(data: any) {
+        if (props.data.tabs[props.data.activeTab].selectedDatasets.length == 0) {close(); return;}
         APICallPOST(`${backendUrl}api/perform/baseline_correct/${props.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
-          canvasInterfaces[props.data.activeTab].updateData(datasets);
+          props.data.tabs[props.data.activeTab].dataview.updateData(datasets);
         })
         close();
       },
@@ -80,9 +79,10 @@ const dimensionMultiply = () => {
     component: ModalDimensionMultiply,
     attrs: {
       onSubmit(data: any) {
+        if (props.data.tabs[props.data.activeTab].selectedDatasets.length == 0) {close(); return;}
         APICallPOST(`${backendUrl}api/perform/dimension_multiply/${props.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
-          canvasInterfaces[props.data.activeTab].updateData(datasets);
+          props.data.tabs[props.data.activeTab].dataview.updateData(datasets);
         })
         close();
       },
@@ -138,28 +138,27 @@ const dimensionMultiply = () => {
             </button> -->
             
             <ModalsContainer />
-            
+
             <div v-for="(tab, index) in data.tabs" :key="index">
-              <CanvasComponent
+              <DataViewComponent
+                v-show="index === data.activeTab"
+                :dataview="data.tabs[index].dataview"
+                />
+            </div>
+            
+              <!-- <CanvasComponent
               v-show="index === data.activeTab"
               :datasets="props.data.datasets"
-              @interface="getInterface"
-              />
-            </div>
+              /> -->
 
         </div>
 
         <div class="col-4">
-            <FitWidget :fitmodel="data.tabs[data.activeTab].fitmodel"></FitWidget>
-
+            <FitWidget :fitmodel="data.tabs[data.activeTab].fitmodel"
+             @model-changed="(model) => emit('modelChanged', model)">
+            </FitWidget>
         </div>
       </div>
-           
-
-          
-
-
-
     </div>
   </div>
 </template>

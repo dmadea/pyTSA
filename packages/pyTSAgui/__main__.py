@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request, Response
 import json
 from flask_cors import CORS
-from backend import BackendSession
+from .backend import BackendSession
 
 app  = Flask(__name__)
 CORS(app, resources={r'/*': {'origins': '*'}})
@@ -58,7 +58,6 @@ def r_perform_operation(operation: str, tab_index: str):
 def r_update_model_options(tab_index: str):
     if request.method == "POST":
         received_data = request.get_json()
-        print(received_data)
         return_data = session.update_model_options(int(tab_index), **received_data)
         return Response(response=json.dumps(return_data), status=201)
     
@@ -78,9 +77,14 @@ def r_transpose(index: str):
 @app.route("/api/fit_model/<tab_index>", methods=["POST"])
 def r_fit_model(tab_index: str):
     if request.method == "POST":
-        session.fit_model(int(tab_index))
-        return Response(status=201)
+        return_data = session.fit_model(int(tab_index))
+        return Response(response=json.dumps(return_data), status=201)
     
+@app.route("/api/set_model/<tab_index>/<model_name>", methods=["POST"])
+def r_set_model(tab_index: str, model_name: str):
+    if request.method == "POST":
+        session.set_model(int(tab_index), model_name)
+        return Response(status=201)
     
     
 @app.route("/api/clear", methods=["POST"])
