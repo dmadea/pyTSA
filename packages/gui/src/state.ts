@@ -55,11 +55,6 @@ export class GlobalState  {
 
   public addNewTab () {
     const index = this.data.tabs.length;
-    this.views.push({
-      dataview: new DataView(this, this.backendUrl, index),
-      fitview: new FitView(this, this.backendUrl, index),
-      fitmodel: new FirstOrderModel(this, this.backendUrl, index),
-    });
     this.data = {activeTab: index,
        tabs: [...this.data.tabs, {
           selectedDatasets: [],
@@ -67,6 +62,11 @@ export class GlobalState  {
           fitOptions: []
         }
       ]};
+    this.views.push({
+      dataview: new DataView(this, this.backendUrl, index),
+      fitview: new FitView(this, this.backendUrl, index),
+      fitmodel: new FirstOrderModel(this, this.backendUrl, index),
+    });
   };
 
   public tabIndexChanged(index: number) {
