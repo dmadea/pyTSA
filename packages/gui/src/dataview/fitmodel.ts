@@ -1,7 +1,6 @@
-import { Matrix, NumberArray, formatNumber } from "@pytsa/ts-graph";
-import { APICallPOST } from "./utils";
-import { reactive } from "vue";
-import { GlobalState } from "./state";
+import { Dataset, Matrix, NumberArray, formatNumber } from "@pytsa/ts-graph";
+import { APICallPOST, IMatrixData, json2arr, parseMatrixData } from "../utils";
+import { GlobalState, ITabData } from "../state";
 
 export interface IParam {
   name: string,
@@ -23,14 +22,14 @@ export interface IOption {
   step?: number
 }
 
-export interface OptionAPI {
-  name: string,
-  value: string | number | boolean
+export interface IFitData {
+  matrices: {
+    Cfit: IMatrixData,
+    STfit: IMatrixData,
+    Dfit: IMatrixData,
+  },
+  params: IParam[]
 }
-
-// export interface FitResults {
-//   Cfit:  
-// }
 
 function formatParams(params: IParam[]): IParam[] {
   for (const param of params) {
@@ -40,73 +39,113 @@ function formatParams(params: IParam[]): IParam[] {
   return params;
 }
 
+
 export class FitModel {
 
   public static modelName: string = "...";
   public static backendName: string = "...";
 
-  public Cfit: Matrix | null = null;
-  public STfit: Matrix | null = null;
-  public Dfit: Matrix | null = null;
+  // public Cfit: Matrix | null = null;
+  // public STfit: Matrix | null = null;
+  // public Dfit: Matrix | null = null;
 
-  public CfitNorm: Matrix | null = null;
-  public STfitNorm: Matrix | null = null;
+  // public CfitNorm: Matrix | null = null;
+  // public STfitNorm: Matrix | null = null;
 
-  public backendUrl: string;
   public tabIndex: number;
   public isFitting: boolean = false;
-  public params: IParam[] = [];  // = reactive<Param[]>([]);
-  public options: IOption[] = []; // = reactive<Option[]>([]);
   public state: GlobalState;
 
-  constructor(state: GlobalState, backendUrl: string, tabIndex: number) {
+  constructor(state: GlobalState, tabIndex: number) {
     this.state = state;
-    this.backendUrl = backendUrl;
     this.tabIndex = tabIndex;
-    this.setOptions();
-
-    // try to create a model
-
+    
+    this.tabData.fitOptions = this.setOptions();
     this.updateModelOptions();
   }
 
+  get tabData(): ITabData {
+    return this.state.data.tabs[this.tabIndex];
+  }
+
+  private plotFitMatrices(obj: IFitData) {
+    const n_species = this.tabData.fitOptions.filter(op => op.backendName === 'n_species')[0].value as number;
+    // fitted dataset
+    const ds = this.state.datasets.value[this.tabData.selectedDatasets[0]];
+
+    const Cfit = parseMatrixData(obj.matrices.Cfit, ds.data.nrows, n_species);
+    const STfit = parseMatrixData(obj.matrices.STfit, n_species, ds.data.ncols);
+    const Dfit = parseMatrixData(obj.matrices.Dfit, ds.data.nrows, ds.data.ncols);
+    const fitDataset = new Dataset(Dfit, ds.x.copy(), ds.y.copy());
+    this.state.activeDataView.setFitDataset(fitDataset);
+    this.state.activeFitView.updateData(ds.x, ds.y, Cfit, STfit, Dfit);
+  }
+  
+
   public fit() {
-    APICallPOST(`${this.backendUrl}/api/fit_model/${this.tabIndex}`, null, (obj) => {
+    if (this.tabData.selectedDatasets.length === 0) return;
+    APICallPOST(`fit_model/${this.tabIndex}`, null, (obj: IFitData) => {
       this.isFitting = false;
-      this.params = formatParams(obj as IParam[]);
+      this.tabData.fitParams = formatParams(obj.params);
+      this.plotFitMatrices(obj);
     });
     this.isFitting = true;
   }
 
   public simulateModel() {
-    APICallPOST(`${this.backendUrl}/api/simulate_model/${this.tabIndex}`, null, (obj) => {
-      
+    if (this.tabData.selectedDatasets.length === 0) return;
+    APICallPOST(`simulate_model/${this.tabIndex}`, null, (obj: IFitData) => {
+      console.log(obj);
+      this.plotFitMatrices(obj);
     });
+  }
+
+  public optionChanged(value: string | boolean | number, index: number) {
+    this.tabData.fitOptions[index].value = value;
+    this.updateModelOptions(index);
+  }
+
+  public paramMinChanged(value: string, index: number) {
+    this.tabData.fitParams[index].min = value;
+    this.updateModelParams(index);
+  }
+
+  public paramMaxChanged(value: string, index: number) {
+    this.tabData.fitParams[index].max = value;
+    this.updateModelParams(index);
+  }
+
+  public paramValueChanged(value: number, index: number) {
+    this.tabData.fitParams[index].value = value;
+    this.updateModelParams(index);
+  }
+
+  public paramFixedChanged(value: boolean, index: number) {
+    this.tabData.fitParams[index].fixed = value;
+    this.updateModelParams(index);
   }
 
   public updateModelOptions(optionIndex?: number) {
     var data = {};
-    // if (optionIndex) {
-    //   data = {[this.options[optionIndex].backendName]: this.options[optionIndex].value}
-    // } else {
-    // }
-    for (const op of this.options) {
+    if (optionIndex) {
+      data = {[this.tabData.fitOptions[optionIndex].backendName]: this.tabData.fitOptions[optionIndex].value}
+    } else {
+    }
+    for (const op of this.tabData.fitOptions) {
       data = {...data, [op.backendName]: op.value};
     }
-    // console.log(data);
-    APICallPOST(`${this.backendUrl}/api/update_model_options/${this.tabIndex}`, data, (obj) => {
-      this.params = formatParams(obj as IParam[]);
-      console.log('params updated', this.params);
+    APICallPOST(`update_model_options/${this.tabIndex}`, data, (obj: IFitData) => {
+      this.tabData.fitParams = formatParams(obj.params);
     });
   }
 
   public updateModelParams(paramIndex: number) {
-    const data = this.params[paramIndex];
-    APICallPOST(`${this.backendUrl}/api/update_model_param/${this.tabIndex}`, data);
+    const data = this.tabData.fitParams[paramIndex];
+    APICallPOST(`update_model_param/${this.tabIndex}`, data);
   }
 
-  public setOptions() {
-    this.options = [...this.options,
+  public setOptions(): IOption[] {
+    return [
       {
         name: "Fitting algorithm",
         backendName: "fit_algorithm",
@@ -126,9 +165,8 @@ export class FirstOrderModel extends FitModel {
   public static backendName: string = "first_order";
 
 
-public setOptions(): void {
-  super.setOptions();
-  this.options = [ ...this.options,
+public setOptions(): IOption[] {
+  return [ ...super.setOptions(),
     {
       name: "Number of species",
       backendName: "n_species",
@@ -236,9 +274,8 @@ export class FirstOrderModelLPL extends FirstOrderModel {
   public static modelName: string = "First order with LPL";
   public static backendName: string = "first_order_lpl";
 
-  public setOptions(): void {
-    super.setOptions();
-    this.options = [ ...this.options,
+  public setOptions(): IOption[] {
+    return [ ...super.setOptions(),
       {
         name: "Include LPL profile",
         backendName: "include_LPL",

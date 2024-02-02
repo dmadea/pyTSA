@@ -1,27 +1,27 @@
 <script setup lang="ts">
 import { defineProps, onMounted, onUnmounted, PropType} from "vue";
-import { DataView } from "../dataviews";
+import { CanvasView } from "./canvasview";
 
 const props = defineProps({
-  dataview: {
-    type: Object as PropType<DataView>,
+  canvasview: {
+    type: Object as PropType<CanvasView>,
     required: true,
   },
 });
 
 onMounted(() => {
-  props.dataview.mount();
-  console.log(`Graph ${props.dataview.id} mounted.`);
+  props.canvasview.mount();
+  console.log(`Graph ${props.canvasview.id} mounted.`);
 });
 
 onUnmounted(() => {
-  console.log(`Graph ${props.dataview.id} unmounted.`);
+  console.log(`Graph ${props.canvasview.id} unmounted.`);
 });
 </script>
 
 <template>
   <div>
-    <div :id="dataview.id"></div>
+    <div :id="canvasview.id"></div>
     <!-- <p>Canvas component here, index {{ tabindex }}</p> -->
   </div>
 </template>

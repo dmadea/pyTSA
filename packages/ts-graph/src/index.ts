@@ -16,6 +16,13 @@ export { DraggableLines } from "./draggableLines";
 
 export { formatNumber } from "./utils";
 
+export { CanvasView } from "./vue/canvasview";
+
+export { ILinePlot } from "./figure/figure";
+
+export { getDefaultColor } from "./color";
+// export { CanvasComponent } from "./vue/CanvasComponent";
+
 
 
 

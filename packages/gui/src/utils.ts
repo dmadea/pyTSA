@@ -181,15 +181,35 @@ export async function loadFiles(
   }
 }
 
-export function parseDatasets(obj: any): Dataset[] {
+export interface IMatrixData {
+  data: string,
+  c_contiguous: boolean
+}
+
+export interface IDatasetData {
+  data: {
+    datasets: {
+      times: string,
+      wavelengths: string,
+      matrix: IMatrixData,
+      name: string
+    }[]
+  }
+}
+
+export function parseMatrixData(obj: IMatrixData, nrows: number, ncols: number): Matrix {
+  const mat = new Matrix(nrows, ncols, json2arr(obj.data));
+  mat.isCContiguous = obj.c_contiguous;
+  return mat;
+}
+
+export function parseDatasets(obj: IDatasetData): Dataset[] {
   const datasets: Dataset[] = [];
 
   for (const d of obj.data.datasets) {
     var t = json2arr(d.times);
     var w = json2arr(d.wavelengths);
-    var m = json2arr(d.matrix.data);
-    var mat = new Matrix(t.length, w.length, m);
-    mat.isCContiguous = d.matrix.c_contiguous;
+    var mat = parseMatrixData(d.matrix, t.length, w.length);
 
     datasets.push(new Dataset(mat, w, t, d.name));
   }
@@ -197,8 +217,9 @@ export function parseDatasets(obj: any): Dataset[] {
   return datasets
 }
 
-export function APICall(url: string, method: string, data2send?: any | null, callback?: (obj: any) => void) {
+export function APICall(apicall: string, method: string, data2send?: any | null, callback?: (obj: any) => void) {
   const xhr = new XMLHttpRequest();
+  const backendUrl: string = "http://localhost:6969/";
 
   xhr.onreadystatechange = () => {
     if (xhr.readyState == 4 && xhr.status == 201) {
@@ -210,7 +231,7 @@ export function APICall(url: string, method: string, data2send?: any | null, cal
     }
   };
   // asynchronous requests
-  xhr.open(method, url, true);
+  xhr.open(method, `${backendUrl}/api/${apicall}`, true);
   if (data2send) {
     xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
     xhr.send(JSON.stringify(data2send));
@@ -220,11 +241,11 @@ export function APICall(url: string, method: string, data2send?: any | null, cal
   }
 }
 
-export function APICallPOST(url: string, data2send?: any | null, callback?: (obj: any) => void) {
-  APICall(url, 'POST', data2send, callback);
+export function APICallPOST(apicall: string, data2send?: any | null, callback?: (obj: any) => void) {
+  APICall(apicall, 'POST', data2send, callback);
 }
 
-export function APICallGET(url: string, data2send?: any | null, callback?: (obj: any) => void) {
-  APICall(url, 'GET', data2send, callback);
+export function APICallGET(apicall: string, data2send?: any | null, callback?: (obj: any) => void) {
+  APICall(apicall, 'GET', data2send, callback);
 }
 

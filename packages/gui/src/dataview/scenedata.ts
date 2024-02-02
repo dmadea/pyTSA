@@ -9,26 +9,10 @@ import {
   Colormaps,
 } from "@pytsa/ts-graph";
 
-export class SceneUser extends LayoutScene {
+export class SceneData extends LayoutScene {
 
   public datasets: Dataset[] = [];
-
-  // constructor(parentElement: HTMLDivElement) {
-  //   super(parentElement);
-
-  //   this.grid = new Grid(this);
-  //   this.addItem(this.grid);
-  // }
-
-  // public addFigure() {
-  //   const figure = new Figure(this, { ...this.canvasRect });
-  //   this.items.push(figure);
-  //   this.repaint();
-  //   return figure;
-  // }
-
-  
-
+  public fitDataset: Dataset | null = null;
 
   public updateData(datasets: Dataset[]) {
     if (datasets.length !== this.datasets.length) {
@@ -84,6 +68,11 @@ export class SceneUser extends LayoutScene {
       const tracePlot = this.groupPlots[i].tracePlot;
       const spectrumPlot = this.groupPlots[i].spectrumPlot;
 
+      const traceFitPlot = this.groupPlots[i].traceFitPlot;
+      const spectrumFitPlot = this.groupPlots[i].spectrumFitPlot;
+      traceFitPlot.color = 'red';
+      spectrumFitPlot.color = 'red';
+
       // hfig.yAxis.inverted = true;
       // trace.xAxis.inverted = true;
 
@@ -94,8 +83,8 @@ export class SceneUser extends LayoutScene {
 
       hfig.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
       hfig.yAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
-      console.log("x", hfig.xAxis.scale, "y", hfig.yAxis.scale);
-      console.log("x", hfig.xAxis.viewBounds, "y", hfig.yAxis.viewBounds);
+      // console.log("x", hfig.xAxis.scale, "y", hfig.yAxis.scale);
+      // console.log("x", hfig.xAxis.viewBounds, "y", hfig.yAxis.viewBounds);
 
       hfig.title = ds.name;
 
@@ -113,6 +102,12 @@ export class SceneUser extends LayoutScene {
           const idxy = hmap.dataset.y.nearestIndex(e.realPosition.y);
           const row = hmap.dataset.data.getRow(idxy);
           spectrumPlot.y = row;
+          
+          if (this.fitDataset) {
+            spectrumFitPlot.x = this.fitDataset.x;
+            spectrumFitPlot.y = this.fitDataset.data.getRow(idxy);
+          }
+
           spectrum.replot();
         }
 
@@ -120,6 +115,12 @@ export class SceneUser extends LayoutScene {
           const idxx = hmap.dataset.x.nearestIndex(e.realPosition.x);
           const col = hmap.dataset.data.getCol(idxx);
           tracePlot.y = col;
+
+          if (this.fitDataset) {
+            traceFitPlot.x = this.fitDataset.y;
+            traceFitPlot.y = this.fitDataset.data.getCol(idxx);
+          }
+
           trace.replot();
         }
       });
@@ -128,6 +129,12 @@ export class SceneUser extends LayoutScene {
         const idxx = hmap.dataset.x.nearestIndex(e.realPosition.x);
         const col = hmap.dataset.data.getCol(idxx);
         tracePlot.y = col;
+
+        if (this.fitDataset) {
+          traceFitPlot.x = this.fitDataset.y;
+          traceFitPlot.y = this.fitDataset.data.getCol(idxx);
+        }
+
         trace.replot();
       });
 
@@ -135,6 +142,12 @@ export class SceneUser extends LayoutScene {
         const idxy = hmap.dataset.y.nearestIndex(e.realPosition.x);
         const row = hmap.dataset.data.getRow(idxy);
         spectrumPlot.y = row;
+
+        if (this.fitDataset) {
+          spectrumFitPlot.x = this.fitDataset.x;
+          spectrumFitPlot.y = this.fitDataset.data.getRow(idxy);
+        }
+
         spectrum.replot();
       });
     }

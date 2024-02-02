@@ -1,35 +1,36 @@
 <script setup lang="ts">
-import { defineProps, inject, ref, defineEmits, computed, reactive, PropType } from "vue";
-import { FirstOrderModel, FirstOrderModelLPL, FitModel } from "@/fitmodel";
+import { defineProps, inject, ref, defineEmits, computed, reactive, PropType, Prop } from "vue";
+import { FirstOrderModel, FirstOrderModelLPL, FitModel, IOption, IParam } from "@/dataview/fitmodel";
+import { v4 } from "uuid";
+import { ITabData } from "@/state";
 
 
 const props = defineProps({
-  fitmodel: {
-    type: Object as PropType<FitModel>,
+  tabData: {
+    type: Object as PropType<ITabData>,
     required: true,
   },
+  kineticModels: {
+    type: Array as PropType<Array<typeof FitModel>>,
+    required: true,
+  }
 });
 
-// const backendUrl = inject("backendUrl");
-
 const emit = defineEmits<{
-  (e: "modelChanged", model: typeof FitModel): void;
+  (e: "modelChanged", index: number): void;
+  (e: "simulateModelClicked"): void;
+  (e: "fitModelClicked"): void;
+  (e: "paramMinChanged", value: string, index: number): void;
+  (e: "paramMaxChanged", value: string, index: number): void;
+  (e: "paramValueChanged", value: number, index: number): void;
+  (e: "paramFixedChanged", value: boolean, index: number): void;
+  (e: "optionChanged", value: number | string | boolean, index: number): void;
 }>();
 
-const kineticModels = [FirstOrderModel, FirstOrderModelLPL];
 
-const onChangeModel = (obj: Event) => {
-  var s = obj.target as HTMLSelectElement;
-  // console.log(s.selectedIndex);
-  emit('modelChanged', kineticModels[s.selectedIndex - 1]);
-};
-
-const optionChanged = (index: number) => {
-  props.fitmodel.updateModelOptions(index);
-};
-
+// TODO validate input
 const paramChanged = (index: number) => {
-  props.fitmodel.updateModelParams(index);
+  // props.fitmodel.updateModelParams(index);
 };
 
 const collapsed = ref<boolean>(true);
@@ -41,10 +42,11 @@ const collapsed = ref<boolean>(true);
   <h3 class=""> Fitting</h3>
   
   <div class="input-group input-group-sm mb-3">
-    <label class="input-group-text" for="inputGroupSelect01">Kinetic model</label>
-    <select class="form-select" id="inputGroupSelect01" :onchange="onChangeModel">
+    <label class="input-group-text" :for="v4()">Kinetic model</label>
+    <select class="form-select" :id="v4()" :value="kineticModels[tabData.selectedFitModel].modelName"
+    @input="event => emit('modelChanged', (event.target as HTMLSelectElement).selectedIndex - 1)">
       <option disabled value="">Please select one</option>
-      <option v-for="(opt, index) in kineticModels" :key="index" :value="index">{{ opt.modelName }}</option>
+      <option v-for="(model, index) in kineticModels" :key="index" :value="index">{{ model.modelName }}</option>
     </select>
   </div>
 
@@ -58,23 +60,25 @@ const collapsed = ref<boolean>(true);
     </h3>
     <div class="accordion-collapse" :class="{'collapse': collapsed}">
       <div class="accordion-body">
-        <div v-for="(option, index) in fitmodel.options" :key="index">
+        <div v-for="(option, index) in tabData.fitOptions" :key="index">
         <div v-if="option.type === 'checkbox'" class="form-check">
-          <input class="form-check-input" type="checkbox" :id="`cb${index}`" v-model="option.value" :onchange="() => optionChanged(index)">
-          <label class="form-check-label small" :for="`cb${index}`">
+          <input class="form-check-input" type="checkbox" :id="v4()" :value="option.value" 
+          @input="ev => emit('optionChanged', (ev.target as HTMLInputElement).checked, index)">
+          <label class="form-check-label small" :for="v4()">
             {{ option.name }}
           </label>
         </div>
 
         <div v-else-if="option.type === 'text' || option.type === 'number'" class="input-group input-group-sm mb-3">
             <span class="input-group-text">{{ option.name }}</span>
-            <input :type="option.type" class="form-control" v-model="option.value" :onchange="() => optionChanged(index)"
+            <input :type="option.type" class="form-control" :value="option.value" 
+            @input="ev => emit('optionChanged', (option.type === 'text') ? (ev.target as HTMLInputElement).value : parseFloat((ev.target as HTMLInputElement).value), index)"
             placeholder="" :min="option.min" :max="option.max" :step="option.step" >
         </div>
 
         <div v-else-if="option.type === 'select'" class="input-group input-group-sm mb-3">
           <label class="input-group-text" :for="`select${index}`">{{ option.name }}</label>
-          <select class="form-select" :id="`select${index}`" v-model="option.value" :onchange="() => optionChanged(index)">
+          <select class="form-select" :id="`select${index}`" :value="option.value" @input="ev => emit('optionChanged', (ev.target as HTMLSelectElement).value, index)">
             <option disabled value="">Please select one</option>
             <option v-for="(opt, i2) in option.options" :key="i2">{{ opt }}</option>  
           </select>
@@ -85,8 +89,8 @@ const collapsed = ref<boolean>(true);
   </div>
 </div>
 
-  <button class="btn btn-outline-success" @click="fitmodel.simulateModel()">Simulate model</button>
-  <button class="btn btn-outline-secondary" @click="fitmodel.fit()">Fit</button>
+  <button class="btn btn-outline-success" @click="emit('simulateModelClicked')">Simulate model</button>
+  <button class="btn btn-outline-secondary" @click="emit('fitModelClicked')">Fit</button>
   
   <h4 class=""> Params</h4>
 
@@ -102,13 +106,17 @@ const collapsed = ref<boolean>(true);
     </tr>
   </thead>
   <tbody>
-    <tr v-for="(entry, index) in fitmodel.params" :key="index">
+    <tr v-for="(entry, index) in tabData.fitParams" :key="index">
       <th scope="row">{{ entry.name }}</th>
-      <td><input class="input-group-text text-field" type="text" v-model="entry.min" :disabled="entry.fixed" :onchange="() => paramChanged(index)"/></td>
-      <td><input class="input-group-text text-field" type="number" v-model="entry.value" :onchange="() => paramChanged(index)"/></td>
-      <td><input class="input-group-text text-field" type="text" v-model="entry.max" :disabled="entry.fixed" :onchange="() => paramChanged(index)"/></td>
+      <td><input class="input-group-text text-field" type="text" :value="entry.min" :disabled="entry.fixed"
+        @input="ev => emit('paramMinChanged', (ev.target as HTMLInputElement).value, index)"/></td>
+      <td><input class="input-group-text text-field" type="number" :value="entry.value"
+        @input="ev => emit('paramValueChanged', parseFloat((ev.target as HTMLInputElement).value), index)"/></td>
+      <td><input class="input-group-text text-field" type="text" :value="entry.max" :disabled="entry.fixed"
+        @input="ev => emit('paramMaxChanged', (ev.target as HTMLInputElement).value, index)" /></td>
       <td>{{ entry.error }}</td>
-      <td><input class="form-check-input" type="checkbox" v-model="entry.fixed" :onchange="() => paramChanged(index)" /></td>
+      <td><input class="form-check-input" type="checkbox" :value="entry.fixed" 
+        @input="ev => emit('paramFixedChanged', (ev.target as HTMLInputElement).checked, index)" /></td>
     </tr>
   </tbody>
 </table>

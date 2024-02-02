@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { APICallGET, APICallPOST, arr2json, json2arr, loadFiles, parseDatasets } from "@/utils";
 import { Dataset, Matrix } from "@pytsa/ts-graph";
-import { defineProps, inject, ref, defineEmits, PropType, computed } from "vue";
+import { defineProps, defineEmits, PropType, computed } from "vue";
 import { Icon } from '@iconify/vue';
 import { GlobalState } from "@/state";
 
@@ -17,7 +17,7 @@ const iconWidth: string = "30";
 const pingClicked = () => {
   const time = Date.now();
 
-  APICallGET(`${props.state.backendUrl}api/ping`, null, (obj) => {
+  APICallGET("ping", null, (obj) => {
     console.log("ping: ", Date.now() - time, "ms");
   });
 };
@@ -43,11 +43,11 @@ const postDatasets = (datasets: Dataset[]) => {
     },
   };
 
-  APICallPOST(`${props.state.backendUrl}api/post_datasets`, data);
+  APICallPOST("post_datasets", data);
 };
 
 const checkedDatasets = computed<boolean[]>(() => {
-  const selTab = props.state.activeTab;
+  const selTab = props.state.activeTabData;
   const isChecked: boolean[] = [];
   for (let i = 0; i < props.state.datasets.value.length; i++) {
     isChecked.push(selTab.selectedDatasets.includes(i));
@@ -66,15 +66,15 @@ const loadDatasets = (payload: Event) => {
 };
 
 const syncData = () => {
-  APICallGET(`${props.state.backendUrl}api/get_datasets`, null, (obj) => {
+  APICallGET(`get_datasets`, null, (obj) => {
     const datasets = parseDatasets(obj);
     props.state.updateDatasets(datasets);
   })
 };
 
 const transpose = (index: number) => {
-  // (props.datasets[index] as Dataset).transpose();
-  // APICallPOST(`${backendUrl}api/transpose_dataset/${index}`);
+  props.state.datasets.value[index].transpose();
+  APICallPOST(`transpose_dataset/${index}`);
 };
 
 </script>

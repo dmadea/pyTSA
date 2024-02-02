@@ -1,38 +1,34 @@
 import { Dataset, Matrix, NumberArray, Scene, formatNumber } from "@pytsa/ts-graph";
-import { APICallPOST } from "./utils";
+import { APICallPOST } from "../utils";
 import { reactive } from "vue";
-import { SceneUser } from "./sceneuser";
-import { v4 } from "uuid";
-import { GlobalState } from "./state";
+import { SceneData } from "./scenedata";
+import { GlobalState } from "../state";
+import { CanvasView as CV } from "@pytsa/ts-graph";
+import { SceneFit } from "./scenefit";
 
 interface AssignedDataset {
   dataset: Dataset,
   key: string | number
 }
 
-export class CanvasView {
+export class CanvasView<T extends Scene> extends CV<T> {
 
   public state: GlobalState;
-  public backendUrl: string;
   public tabIndex: number;
-  public id: string;
-  public scene: Scene | null = null;
 
-  constructor(state: GlobalState, backendUrl: string, tabIndex: number) {
+  constructor(state: GlobalState, tabIndex: number) {
+    super();
     this.state = state;
-    this.backendUrl = backendUrl;
     this.tabIndex = tabIndex;
-    this.id = v4();
   }
 }
 
-export class DataView extends CanvasView {
+export class DataView extends CanvasView<SceneData> {
 
   public assignedDatasets: AssignedDataset[] = [];
-  public scene: SceneUser | null = null;
 
   public mount() {
-    this.scene = new SceneUser(document.getElementById(this.id) as HTMLDivElement);
+    this.scene = new SceneData(document.getElementById(this.id) as HTMLDivElement);
   }
 
   public addDataset(index: number) {
@@ -45,7 +41,7 @@ export class DataView extends CanvasView {
     
     this.scene.datasets = this.assignedDatasets.map((d) => d.dataset);
     this.scene.processDatasets();
-    APICallPOST(`${this.backendUrl}api/add_dataset/${index}/${this.tabIndex}`);
+    APICallPOST(`add_dataset/${index}/${this.tabIndex}`);
     console.log(`addDataset called ${index}, id: ${this.id}`);
   }
   
@@ -55,7 +51,7 @@ export class DataView extends CanvasView {
     this.assignedDatasets = this.assignedDatasets.filter((d) => d.key !== index);
     this.scene.datasets = this.assignedDatasets.map((d) => d.dataset);
     this.scene.processDatasets();
-    APICallPOST(`${this.backendUrl}api/remove_dataset/${index}/${this.tabIndex}`);
+    APICallPOST(`remove_dataset/${index}/${this.tabIndex}`);
     console.log(`removeDataset called ${index}, id: ${this.id}`);
   }
 
@@ -75,16 +71,26 @@ export class DataView extends CanvasView {
     this.scene.replot();
     console.log(`cleared: ${this.id}`)
   }
+
+  public setFitDataset(dataset: Dataset) {
+    if (!this.scene) return;
+
+    this.scene.fitDataset = dataset;
+    this.scene.replot();
+  }
+
 }
 
 
-export class FitView extends CanvasView {
-
-  public scene: SceneUser | null = null;
-  public assignedDatasets: AssignedDataset[] = [];
+export class FitView extends CanvasView<SceneFit> {
 
   public mount() {
-    this.scene = new SceneUser(document.getElementById(this.id) as HTMLDivElement);
+    this.scene = new SceneFit(document.getElementById(this.id) as HTMLDivElement);
   }
+
+  public updateData(x: NumberArray, y: NumberArray, C: Matrix, ST: Matrix, res: Matrix) {
+    this.scene?.updateData(x, y, C, ST, res);
+  }
+
 
 }

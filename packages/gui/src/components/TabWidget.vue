@@ -1,18 +1,14 @@
 <script setup lang="ts">
-import { defineProps, inject, ref, defineEmits, computed, PropType } from "vue";
-import CanvasComponent from "./CanvasComponent.vue";
-// import { Dataset, Matrix } from "@pytsa/ts-graph";
-import { APICallPOST, json2arr, parseDatasets } from "@/utils";
+import { defineProps, defineEmits, computed, PropType } from "vue";
+import { APICallPOST, parseDatasets } from "@/utils";
 import { Icon } from '@iconify/vue';
 import { ModalsContainer, useModal } from 'vue-final-modal'
 import ModalCrop from './ModalCrop.vue'
 import ModalBaselineCorrect from "./ModalBaselineCorrect.vue";
 import ModalDimensionMultiply from "./ModalDimensionMultiply.vue";
 import FitWidget from "./FitWidget.vue";
-import { FitModel } from "@/fitmodel";
-import DataViewComponent from "./DataViewComponent.vue";
 import { GlobalState } from "@/state";
-// import { Data } from "@/App.vue";
+import CanvasComponent from "./CanvasComponent.vue";
 
 
 const props = defineProps({
@@ -29,8 +25,8 @@ const crop = () => {
     component: ModalCrop,
     attrs: {
       onSubmit(data: any) {
-        if (props.state.data.tabs[props.state.data.activeTab].selectedDatasets.length == 0) {close(); return;}
-        APICallPOST(`${props.state.backendUrl}api/perform/crop/${props.state.data.activeTab}`, data, obj => {
+        if (props.state.activeTabData.selectedDatasets.length == 0) {close(); return;}
+        APICallPOST(`perform/crop/${props.state.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
           props.state.activeDataView.updateData(datasets);
         })
@@ -51,8 +47,8 @@ const bcorrect = () => {
     component: ModalBaselineCorrect,
     attrs: {
       onSubmit(data: any) {
-        if (props.state.data.tabs[props.state.data.activeTab].selectedDatasets.length == 0) {close(); return;}
-        APICallPOST(`${props.state.backendUrl}api/perform/baseline_correct/${props.state.data.activeTab}`, data, obj => {
+        if (props.state.activeTabData.selectedDatasets.length == 0) {close(); return;}
+        APICallPOST(`perform/baseline_correct/${props.state.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
           props.state.activeDataView.updateData(datasets);
         })
@@ -72,8 +68,8 @@ const dimensionMultiply = () => {
     component: ModalDimensionMultiply,
     attrs: {
       onSubmit(data: any) {
-        if (props.state.data.tabs[props.state.data.activeTab].selectedDatasets.length == 0) {close(); return;}
-        APICallPOST(`${props.state.backendUrl}api/perform/dimension_multiply/${props.state.data.activeTab}`, data, obj => {
+        if (props.state.activeTabData.selectedDatasets.length == 0) {close(); return;}
+        APICallPOST(`perform/dimension_multiply/${props.state.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
           props.state.activeDataView.updateData(datasets);
         })
@@ -115,6 +111,17 @@ const dimensionMultiply = () => {
     <div class="card-body">
       <div class="row">
         <div class="col-8">
+
+          <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="btnradio" id="btnradio1" @input="state.panelChanged(0)"
+                autocomplete="off" :checked="state.activeTabData.activePanel === 0">
+            <label class="btn btn-outline-success" for="btnradio1">Data view</label>
+
+            <input type="radio" class="btn-check" name="btnradio" id="btnradio3" @input="state.panelChanged(1)" 
+            autocomplete="off" :checked="state.activeTabData.activePanel === 1">
+            <label class="btn btn-outline-dark" for="btnradio3">Fit view</label>
+          </div>
+
               
           <button class="btn btn-outline-primary btn-icon" @click="crop" data-bs-toggle="tooltip" data-bs-placement="top" title="Tooltip on top">
               <Icon icon="solar:crop-bold" :width="iconWidth"></Icon>
@@ -132,16 +139,30 @@ const dimensionMultiply = () => {
             
             <ModalsContainer />
 
-            <DataViewComponent v-for="(tab, index) in state.data.tabs" :key="index"
-              v-show="index === state.data.activeTab"
-              :dataview="state.views[index].dataview"
-              />
-            
+            <CanvasComponent v-for="(tab, index) in state.data.tabs" :key="index"
+                v-show="index === state.data.activeTab && state.activeTabData.activePanel === 0"
+                :canvasview="state.views[index].dataview"
+            />
+
+            <CanvasComponent v-for="(tab, index) in state.data.tabs" :key="index"
+                v-show="index === state.data.activeTab && state.activeTabData.activePanel === 1"
+                :canvasview="state.views[index].fitview"
+            />
         </div>
 
         <div class="col-4">
-             <FitWidget :fitmodel="state.fitmodels.value[state.data.activeTab]"
-             @model-changed="(model) => state.kineticModelChanged(model)"></FitWidget> 
+             <FitWidget 
+              :tab-data="state.activeTabData"
+              :kinetic-models="state.kineticModels"
+              @model-changed="(index) => state.kineticModelChanged(index)"
+              @fit-model-clicked="() => state.activeFitModel.fit()"
+              @simulate-model-clicked="() => state.activeFitModel.simulateModel()"
+              @option-changed="(value, index) => state.activeFitModel.optionChanged(value, index)"
+              @param-min-changed="(value, index) => state.activeFitModel.paramMinChanged(value, index)"
+              @param-max-changed="(value, index) => state.activeFitModel.paramMaxChanged(value, index)"
+              @param-fixed-changed="(value, index) => state.activeFitModel.paramFixedChanged(value, index)"
+              @param-value-changed="(value, index) => state.activeFitModel.paramValueChanged(value, index)"
+              />
         </div>
       </div>
     </div>
@@ -155,7 +176,4 @@ const dimensionMultiply = () => {
   border: none;
   border-radius: 100%;
 }
-
-
-
 </style>

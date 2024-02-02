@@ -42,7 +42,10 @@ export class Axis {
 
     set viewBounds(bounds: [number, number]) {
         this._viewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
-        // this._viewBounds = bounds;
+
+        if (this.internalRange[0] < this._viewBounds[0] || this.internalRange[1] > this._viewBounds[1]) {
+            this.internalRange = this._viewBounds;
+        }
     }
 
     get viewBounds() {

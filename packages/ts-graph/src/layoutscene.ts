@@ -149,7 +149,9 @@ export interface IGroupPlot {
     spectrumDLines: DraggableLines,
     traceDLines: DraggableLines,
     spectrumPlot: ILinePlot,
-    tracePlot: ILinePlot
+    tracePlot: ILinePlot,
+    spectrumFitPlot: ILinePlot,
+    traceFitPlot: ILinePlot
 }
 
 
@@ -248,6 +250,8 @@ export class LayoutScene extends Scene {
                 traceDLines: t.addDraggableLines(Orientation.Vertical),
                 spectrumPlot: s.plotLine([], []),
                 tracePlot: t.plotLine([], []),
+                spectrumFitPlot: s.plotLine([], []),
+                traceFitPlot: t.plotLine([], []),
             })
         }
     }

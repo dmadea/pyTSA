@@ -80,6 +80,12 @@ def r_fit_model(tab_index: str):
         return_data = session.fit_model(int(tab_index))
         return Response(response=json.dumps(return_data), status=201)
     
+@app.route("/api/simulate_model/<tab_index>", methods=["POST"])
+def r_simulate_model(tab_index: str):
+    if request.method == "POST":
+        return_data = session.simulate_model(int(tab_index))
+        return Response(response=json.dumps(return_data), status=201)
+    
 @app.route("/api/set_model/<tab_index>/<model_name>", methods=["POST"])
 def r_set_model(tab_index: str, model_name: str):
     if request.method == "POST":

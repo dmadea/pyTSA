@@ -1,19 +1,9 @@
 <script setup lang="ts">
-import { provide, reactive, ref, computed } from "vue";
-// import TestComponent from "./components/TestComponent.vue";
 import LeftPanel from "./components/LeftPanel.vue";
-// import CanvasComponent from "./components/CanvasComponent.vue";
 import TabWidget from "./components/TabWidget.vue";
-import { Dataset } from "@pytsa/ts-graph";
 import { Splitpanes, Pane } from "splitpanes"; // from https://antoniandre.github.io/splitpanes/?ref=madewithvuejs.com
 import "splitpanes/dist/splitpanes.css";
-import { APICallPOST } from "./utils";
-import { FirstOrderModel, FitModel } from "./fitmodel";
-import { DataView } from "./dataviews";
 import { GlobalState } from "./state";
-
-const backendUrl = "http://localhost:6969/";
-provide("backendUrl", backendUrl);
 
 const state = new GlobalState();
 </script>

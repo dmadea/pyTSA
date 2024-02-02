@@ -27,7 +27,6 @@ def arr2json(arr: np.ndarray) -> str:
     b64 = base64.b64encode(arr)
     return b64.decode('utf-8')
 
-
 def load_matrix(dataset: dict):
     t = json2arr(dataset['times'])
     w = json2arr(dataset['wavelengths'])
@@ -37,6 +36,17 @@ def load_matrix(dataset: dict):
     mat = mat if c_contiguous else mat.T
     return mat, t, w
 
+def _put_matrix(arr: np.ndarray):
+    return dict(data=arr2json(np.ascontiguousarray(arr)), c_contiguous=True)
+
+# interface IFitData {
+#   matrices: {
+#     Cfit: IMatrixData,
+#     STfit: IMatrixData,
+#     Dfit: IMatrixData,
+#   },
+#   params: IParam[]
+# }
 
 class BackendSession(object):
 
@@ -88,10 +98,7 @@ class BackendSession(object):
             obj = {
                 'times': arr2json(d.times),
                 'wavelengths': arr2json(d.wavelengths),
-                'matrix': {
-                    'data': arr2json(np.ascontiguousarray(d.matrix)),
-                    'c_contiguous': True  #d.matrix.data.c_contiguous
-                },
+                'matrix': _put_matrix(d.matrix),
                 'name': d.name
             }
 
@@ -115,7 +122,7 @@ class BackendSession(object):
 
         self.tabs[tab_index].set_model(model_map[model_name]())
     
-    def _get_params_obj(self, params: Parameters) -> list:
+    def _get_fit_params(self, params: Parameters) -> dict:
         def _put_param(p: Parameter):
             obj = {
                 'name': p.name,
@@ -128,7 +135,7 @@ class BackendSession(object):
 
             return obj
 
-        return [_put_param(par) for key, par in params.items()]
+        return dict(params=[_put_param(par) for key, par in params.items()])
 
     
     def update_model_options(self, tab_index: int, **options):
@@ -136,7 +143,7 @@ class BackendSession(object):
         model = self.tabs[tab_index].model
 
         model.update_options(**options)
-        return self._get_params_obj(model.params)
+        return self._get_fit_params(model.params)
     
     def update_model_param(self, tab_index: int, param_data: dict):
         self._append_tabs(tab_index)
@@ -148,12 +155,36 @@ class BackendSession(object):
         model.params[name].value = float(param_data['value'])
         model.params[name].vary = not param_data['fixed']
 
+    def _put_fit_matrices(self, model: FirstOrderModel):
+        return dict(matrices=dict(  Cfit=_put_matrix(model.C_opt if model.C_opt.ndim == 2 else model.C_opt[0]), 
+                                    STfit=_put_matrix(model.ST_opt),
+                                    Dfit=_put_matrix(model.matrix_opt)))
+
     def fit_model(self, tab_index: int):
         if self.tabs[tab_index].model.dataset is None:
-            return
+            return self._get_fit_params(self.tabs[tab_index].model.params)
         
-        self.tabs[tab_index].model.fit()
-        return self._get_params_obj(self.tabs[tab_index].model.params)
+        m = self.tabs[tab_index].model
+        m.fit()
+
+        data: dict = self._put_fit_matrices(m)
+        data.update(self._get_fit_params(m.params))
+
+        return data
+    
+    def simulate_model(self, tab_index: int):
+        if self.tabs[tab_index].model.dataset is None:
+            return self._get_fit_params(self.tabs[tab_index].model.params)
+        
+        m = self.tabs[tab_index].model
+        m.simulate()
+
+        return self._put_fit_matrices(m)
+
+
+
+
+
 
 
 def get_data():
