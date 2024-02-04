@@ -1,7 +1,7 @@
 import { ContextMenu } from "./contextmenu";
-import { DraggableLines, Orientation } from "./draggableLines";
+import { DraggableLines, Orientation } from "./objects/draggableLines";
 import { Figure, ILinePlot } from "./figure/figure";
-import { Grid } from "./grid";
+import { Grid } from "./objects/grid";
 import { Scene, SceneNavBar, SceneNavBarContextMenu } from "./scene";
 import { NumberArray } from "./array";
 import { combinations } from "./utils";

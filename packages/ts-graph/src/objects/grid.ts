@@ -1,6 +1,6 @@
 import { GraphicObject } from "./object";
-import { Margin, Rect} from "./types";
-import { NumberArray } from "./array";
+import { Margin, Rect} from "../types";
+import { NumberArray } from "../array";
 
 interface IPosition {
     row: number, 

@@ -2,7 +2,7 @@ import { Colormap, Colormaps, ILut } from "../color";
 import { Colorbar, Figure } from "./figure";
 import { NumberArray } from "../array";
 import { DataType, Dataset, isclose, putOptions } from "../utils";
-import { IPaintEvent } from "../object";
+import { IPaintEvent } from "../objects/object";
 
 interface LutPtr {
     posPtr: number,

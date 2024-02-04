@@ -1,5 +1,5 @@
-import { ContextMenu } from "./contextmenu";
-import { Rect, Margin } from "./types";
+import { ContextMenu } from "../contextmenu";
+import { Rect, Margin } from "../types";
 
 export interface IPaintEvent {
     bottomCanvas: HTMLCanvasElement,

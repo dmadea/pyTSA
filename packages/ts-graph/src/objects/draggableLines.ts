@@ -1,7 +1,7 @@
-import { Figure } from "./figure/figure";
+import { Figure } from "../figure/figure";
 import { GraphicObject, IMouseEvent, IPaintEvent } from "./object";
-import { Point, Rect } from "./types";
-import { drawTextWithGlow, formatNumber } from "./utils";
+import { Point, Rect } from "../types";
+import { drawTextWithGlow, formatNumber } from "../utils";
 
 
 export enum Orientation {
@@ -335,7 +335,7 @@ export class DraggableLines extends GraphicObject {
         this.fireEvent(xChanged, yChanged);
     }
 
-    public fireEvent(xChanged: boolean, yChanged: boolean) {
+    private fireEvent(xChanged: boolean, yChanged: boolean) {
         const f = this.parent as Figure;
         const xT = f.xAxis.transform;
         const yT = f.yAxis.transform;

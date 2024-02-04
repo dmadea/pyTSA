@@ -93,10 +93,6 @@ export class SceneFit extends Scene {
       this.STplots[i].y = ST.getRow(i);
       this.STnormplots[i].y = NumberArray.mul(this.STplots[i].y, 1 / this.STplots[i].y.max());
 
-      console.log(x.length, this.STplots[i].y.length);
-      console.log(this.STplots[i].y);
-
-      
       // TODO residuals
     }
     
@@ -141,8 +137,6 @@ export class SceneFit extends Scene {
     //   hfig.heatmap?.recalculateImage();
     // }
 
-    // this.repaint();
-    // setTimeout(() => this.resize(), 100);
   }
 
 }

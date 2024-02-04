@@ -1,7 +1,7 @@
 import { ContextMenu } from "./contextmenu";
 import { Figure } from "./figure/figure";
-import { Grid } from "./grid";
-import {  GraphicObject, IMouseEvent, IPaintEvent } from "./object";
+import { Grid } from "./objects/grid";
+import {  GraphicObject, IMouseEvent, IPaintEvent } from "./objects/object";
 // import { Rect } from "./types";
 
 // import wasmData from "./wasm/hello.wasm";

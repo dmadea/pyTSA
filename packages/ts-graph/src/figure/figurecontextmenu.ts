@@ -1,6 +1,6 @@
 import { Colormap, Colormaps, ILut } from "../color";
 import { ContextMenu } from "../contextmenu";
-import { Orientation } from "../draggableLines";
+import { Orientation } from "../objects/draggableLines";
 import { NumberArray } from "../array";
 import { Axis, AxisType } from "./axis";
 import { Colorbar, Figure } from "./figure";

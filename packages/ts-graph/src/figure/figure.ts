@@ -1,15 +1,16 @@
 
-import { GraphicObject, IMouseEvent, IPaintEvent} from "../object";
+import { GraphicObject, IMouseEvent, IPaintEvent} from "../objects/object";
 import { Rect, Point, Margin } from "../types";
 import { NumberArray } from "../array";
 import { backgroundColor,  frameColor, textColor } from "../settings";
 import { Dataset, determineSigFigures, drawTextWithGlow, formatNumber } from "../utils";
 import { Colormap, Colormaps, ILut } from "../color";
 import { HeatMap } from "./heatmap";
-import { DraggableLines, Orientation } from "../draggableLines";
+import { DraggableLines, Orientation } from "../objects/draggableLines";
 import { Axis, AxisType } from "./axis";
 import { ContextMenu } from "../contextmenu";
 import { ColorbarContextMenu, FigureContextMenu } from "./figurecontextmenu";
+import { Legend } from "../objects/legend";
 // import { Colorbar } from "./colorbar";
 
 
@@ -19,7 +20,8 @@ export interface ILinePlot {
     color: string,
     ld: number[],  // line dash, exmaple [4, 2], no dash: []
     lw: number,  // line width
-    zValue: number
+    zValue: number,
+    label: string
 }
 
 export enum Shape {
@@ -49,6 +51,7 @@ export class Figure extends GraphicObject {
     public showTicks: string[] =  ['left', 'right', 'bottom', 'top'];        // ['top', 'bottom', 'left', 'right']
     public showTickNumbers: string[] =  ['left', 'right', 'bottom', 'top'];  // ['top', 'bottom', 'left', 'right']
     public axisAlignment: Orientation = Orientation.Horizontal;   // could be vertical
+    public showLegend: boolean = true;
 
     public xAxis: Axis;
     public yAxis: Axis;
@@ -63,6 +66,7 @@ export class Figure extends GraphicObject {
     private _ticksValuesFont: string = '10 ps sans-serif';
 
     public requiredMargin: Margin; // last margin required by paining the figure
+    public legend: Legend;
     
     // private fields
     
@@ -96,8 +100,8 @@ export class Figure extends GraphicObject {
         top: 10,
         bottom: 10
     };
-    private _painting: boolean = false;
-    private _cancelPaining: boolean = false;
+    // private _painting: boolean = false;
+    // private _cancelPaining: boolean = false;
     
     get tickValuesFont(): string {
         return this._ticksValuesFont;
@@ -130,6 +134,7 @@ export class Figure extends GraphicObject {
         // }
         this.xAxis = new Axis(this, AxisType.xAxis);
         this.yAxis = new Axis(this, AxisType.yAxis);
+        this.legend = new Legend(this);
         this.setContextMenu();
     }
 
@@ -684,8 +689,11 @@ export class Figure extends GraphicObject {
         return line;
     }
 
-    public plotLine(x: NumberArray | number[], y: NumberArray | number[], color = "black", ld: number[] = [], lw = 1, zValue = 10) {
-        var plot: ILinePlot = {x: NumberArray.fromArray(x).copy(), y: NumberArray.fromArray(y).copy(), color, ld, lw, zValue}; 
+    public plotLine(x: NumberArray | number[],
+         y: NumberArray | number[],
+         color = "black", ld: number[] = [], lw = 1, zValue = 10,
+         label: string = '') {
+        var plot: ILinePlot = {x: NumberArray.fromArray(x).copy(), y: NumberArray.fromArray(y).copy(), color, ld, lw, zValue, label}; 
         this.linePlots.push(plot);
         this.repaint();
         return plot;
@@ -916,6 +924,8 @@ export class Figure extends GraphicObject {
         }
 
         e.bottomCtx.restore();
+
+        this.legend.paint(e);
 
         // console.timeEnd('paintPlots');
     }

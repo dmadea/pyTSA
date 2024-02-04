@@ -1,4 +1,4 @@
-import { IMouseEvent } from "./object";
+import { IMouseEvent } from "./objects/object";
 import { Point, Rect } from "./types";
 import { generateRandomPassword } from "./utils";
 

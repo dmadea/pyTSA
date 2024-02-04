@@ -11,8 +11,8 @@ export { Dataset } from "./utils";
 
 export { Figure, Colorbar } from "./figure/figure";
 export { Axis } from "./figure/axis";
-export { Grid } from "./grid";
-export { DraggableLines } from "./draggableLines";
+export { Grid } from "./objects/grid";
+export { DraggableLines } from "./objects/draggableLines";
 
 export { formatNumber } from "./utils";
 

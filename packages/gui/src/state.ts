@@ -9,7 +9,8 @@ export interface ITabData {
   fitParams: IParam[],
   fitOptions: IOption[]
   selectedFitModel: number,
-  activePanel: number
+  activePanel: number,
+  isFitting: boolean
 }
 
 export interface IData {
@@ -32,7 +33,7 @@ export class GlobalState  {
 
   public datasets = shallowRef<Dataset[]>([]);
   public views: IView[] = [];
-  public kineticModels: Array<typeof FitModel> = [FirstOrderModel, FirstOrderModelLPL];
+  public kineticModels: (typeof FitModel)[] = [FirstOrderModel, FirstOrderModelLPL];
 
   constructor() {
     this.addNewTab();
@@ -56,20 +57,13 @@ export class GlobalState  {
 
   public addNewTab () {
     const index = this.data.tabs.length;
-    // this.data = {activeTab: index,
-    //    tabs: [...this.data.tabs, {
-    //       selectedDatasets: [],
-    //       fitParams: [],
-    //       fitOptions: [],
-    //       selectedFitModel: 0
-    //     }
-    //   ]};
     this.data.tabs = [...this.data.tabs, {
       selectedDatasets: [],
       fitParams: [],
       fitOptions: [],
       selectedFitModel: 0,
-      activePanel: 0
+      activePanel: 0,
+      isFitting: false
     }];
     const fitmodel: typeof FitModel = this.kineticModels[this.data.tabs[index].selectedFitModel];
     this.views.push({
@@ -122,7 +116,7 @@ export class GlobalState  {
   public kineticModelChanged(index: number) {
     const m = new this.kineticModels[index](this, this.data.activeTab);
     this.views[this.data.activeTab].fitmodel = m;
-    this.data.tabs[this.data.activeTab].selectedFitModel = index;
+    this.activeTabData.selectedFitModel = index;
     APICallPOST(`set_model/${this.data.activeTab}/${this.kineticModels[index].backendName}`);
     // console.log(this.activeTab);
   };
