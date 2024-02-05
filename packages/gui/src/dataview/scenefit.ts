@@ -1,20 +1,18 @@
-import {  Figure,  Colorbar,  Grid,  Scene,  Matrix,  NumberArray, ILinePlot, getDefaultColor} from "@pytsa/ts-graph";
+import {  Figure,  Colorbar,  Grid,  Scene,  Matrix,  NumberArray, ILinePlot, getDefaultColor, Dataset, Colormap, Colormaps} from "@pytsa/ts-graph";
 
 export class SceneFit extends Scene {
 
   private grid: Grid;
-  private CfitFigure: Figure;
-  private STfitFigure: Figure;
-  private CfitNormFigure: Figure;
-  private STfitNormFigure: Figure;
+  private CfitDASFigure: Figure;
+  private STfitDASFigure: Figure;
+  private CfitEASFigure: Figure;
+  private STfitEASFigure: Figure;
 
-  private CresidualsFigure: Figure;
-  private CresCBar: Colorbar;
+  private residualsFigure: Figure;
+  private resCBar: Colorbar;
 
-  private Cplots: ILinePlot[] = [];
-  private Cnormplots: ILinePlot[] = [];
-  private STplots: ILinePlot[] = [];
-  private STnormplots: ILinePlot[] = [];
+  private LDMFigure: Figure;
+  private LDMCBar: Colorbar;
 
   constructor(parentElement: HTMLDivElement) {
     super(parentElement);
@@ -22,120 +20,128 @@ export class SceneFit extends Scene {
     this.grid = new Grid(this);
     this.addItem(this.grid);
 
-    this.CfitFigure = new Figure();
-    this.STfitFigure = new Figure();
-    this.CfitNormFigure = new Figure();
-    this.STfitNormFigure = new Figure();
-    this.CresidualsFigure = new Figure();
+    this.CfitDASFigure = new Figure();
+    this.STfitDASFigure = new Figure();
+    this.CfitEASFigure = new Figure();
+    this.STfitEASFigure = new Figure();
+    this.residualsFigure = new Figure();
+    this.LDMFigure = new Figure();
 
-    this.CfitFigure.title = "Concentration profiles";
-    this.CfitNormFigure.title = "Concentration profiles (normalized)";
+    this.CfitDASFigure.title = "Concentration profiles (DAS | SAS)";
+    this.CfitEASFigure.title = "Concentration profiles (EAS)";
 
-    this.STfitFigure.title = "Spectra";
-    this.STfitNormFigure.title = "Spectra (normalized)";
-    this.CresidualsFigure.title = "Residuals";
+    this.STfitDASFigure.title = "Spectra (DAS | SAS)";
+    this.STfitEASFigure.title = "Spectra (EAS)";
+    this.residualsFigure.title = "Residuals";
+    this.LDMFigure.title = "Lifetime density map (LDM)";
 
-    this.CfitFigure.xAxis.autoscale = false;
-    this.CfitFigure.yAxis.autoscale = true;
-    this.STfitFigure.xAxis.autoscale = false;
-    this.STfitFigure.yAxis.autoscale = true;
-    this.CfitNormFigure.xAxis.autoscale = false;
-    this.CfitNormFigure.yAxis.autoscale = true;
-    this.STfitNormFigure.xAxis.autoscale = false;
-    this.STfitNormFigure.yAxis.autoscale = true;
+    this.CfitDASFigure.xAxis.autoscale = false;
+    this.CfitDASFigure.yAxis.autoscale = true;
+    this.STfitDASFigure.xAxis.autoscale = false;
+    this.STfitDASFigure.yAxis.autoscale = true;
+    this.CfitEASFigure.xAxis.autoscale = false;
+    this.CfitEASFigure.yAxis.autoscale = true;
+    this.STfitEASFigure.xAxis.autoscale = false;
+    this.STfitEASFigure.yAxis.autoscale = true;
 
-    this.CresCBar = this.CresidualsFigure.addColorbar();
+    this.CfitDASFigure.showLegend = true;
+    this.STfitDASFigure.showLegend = true;
+    this.CfitEASFigure.showLegend = true;
+    this.STfitEASFigure.showLegend = true;
 
-    this.grid.addItem(this.STfitFigure, 0, 0);
-    this.grid.addItem(this.CfitFigure, 0, 1);
-    this.grid.addItem(this.CresidualsFigure, 0, 2);
+    // this.CfitDASFigure.xAxis.label = "Times / ps";
+    this.CfitEASFigure.xAxis.label = "Times / ps";
+    // this.STfitDASFigure.xAxis.label = "Wavelength / nm";
+    this.STfitEASFigure.xAxis.label = "Wavelength / nm";
+    this.residualsFigure.xAxis.label = "Wavelength / nm";
+    this.residualsFigure.yAxis.label = "Times / ps";
+    this.residualsFigure.yAxis.inverted = true;
 
-    this.grid.addItem(this.STfitNormFigure, 1, 0);
-    this.grid.addItem(this.CfitNormFigure, 1, 1);
+    this.LDMFigure.xAxis.label = "Wavelength / nm";
+    this.LDMFigure.yAxis.label = "Lifetime / ps";
+
+    this.CfitDASFigure.linkXRange(this.CfitEASFigure);
+    this.STfitDASFigure.linkXRange(this.STfitEASFigure);
+
+    this.resCBar = this.residualsFigure.addColorbar();
+    this.LDMCBar = this.LDMFigure.addColorbar();
+
+    this.grid.addItem(this.STfitDASFigure, 0, 0);
+    this.grid.addItem(this.CfitDASFigure, 0, 1);
+    this.grid.addItem(this.residualsFigure, 2, 0);
+    this.grid.addItem(this.STfitEASFigure, 1, 0);
+    this.grid.addItem(this.CfitEASFigure, 1, 1);
+    this.grid.addItem(this.LDMFigure, 2, 1);
   }
 
-  public updateData(x: NumberArray, y: NumberArray, C: Matrix, ST: Matrix, res: Matrix) {
+  public updateData(x: NumberArray, y: NumberArray, CDAS: Matrix, STDAS: Matrix, res: Dataset, CEAS?: Matrix, STEAS?: Matrix) {
 
-    if (C.ncols !== ST.nrows) {
+    if (CDAS.ncols !== STDAS.nrows) {
       throw Error("asdapsodas");
     }
     
-    const n = C.ncols;
+    const n = CDAS.ncols;
 
-    const diff = n - this.Cplots.length;
+    const currLength = this.CfitDASFigure.linePlots.length;
+    const diff = n - currLength;
     if (diff > 0) {   // add line plots
       for (let i = 0; i < diff; i++) {
-        const color = getDefaultColor(i + this.Cplots.length);
-        this.Cplots.push(this.CfitFigure.plotLine([], [], color));
-        this.Cnormplots.push(this.CfitNormFigure.plotLine([], [], color));
-        this.STplots.push(this.STfitFigure.plotLine([], [], color));
-        this.STnormplots.push(this.STfitNormFigure.plotLine([], [], color));
+        const color = getDefaultColor(i + currLength);
+        const ld: number[] = [];
+        const lw = 1;
+        const labelDAS = `DAS ${i + currLength + 1}`;
+        const labelEAS = `EAS ${i + currLength + 1}`;
+        this.CfitDASFigure.plotLine([], [], color, ld, lw, labelDAS);
+        this.CfitEASFigure.plotLine([], [], color, ld, lw, labelEAS);
+        this.STfitDASFigure.plotLine([], [], color, ld, lw, labelDAS);
+        this.STfitEASFigure.plotLine([], [], color, ld, lw, labelEAS);
       }
     } else if (diff < 0) {   // remove line plots
       for (let i = 0; i < -diff; i++) {
-        this.CfitFigure.removePlot(this.Cplots.pop() as ILinePlot);
-        this.CfitNormFigure.removePlot(this.Cnormplots.pop() as ILinePlot);
-        this.STfitFigure.removePlot(this.STplots.pop() as ILinePlot);
-        this.STfitNormFigure.removePlot(this.STnormplots.pop() as ILinePlot);
+        this.CfitDASFigure.linePlots.pop();
+        this.CfitEASFigure.linePlots.pop();
+        this.STfitDASFigure.linePlots.pop();
+        this.STfitEASFigure.linePlots.pop();
       }
     }
 
     for (let i = 0; i < n; i++) { 
 
-      this.Cplots[i].x = y;
-      this.Cnormplots[i].x = y;
-      this.STplots[i].x = x;
-      this.STnormplots[i].x = x;
+      this.CfitDASFigure.linePlots[i].x = y;
+      this.CfitEASFigure.linePlots[i].x = y;
+      this.STfitDASFigure.linePlots[i].x = x;
+      this.STfitEASFigure.linePlots[i].x = x;
       
-      this.Cplots[i].y = C.getCol(i);
-      this.Cnormplots[i].y = NumberArray.mul(this.Cplots[i].y, 1 / this.Cplots[i].y.max());
+      this.CfitDASFigure.linePlots[i].y = CDAS.getCol(i);
+      if (CEAS) {
+        this.CfitEASFigure.linePlots[i].y = CEAS.getCol(i);
+      }
       
-      this.STplots[i].y = ST.getRow(i);
-      this.STnormplots[i].y = NumberArray.mul(this.STplots[i].y, 1 / this.STplots[i].y.max());
-
-      // TODO residuals
+      this.STfitDASFigure.linePlots[i].y = STDAS.getRow(i);
+      if (STEAS) {
+        this.STfitEASFigure.linePlots[i].y = STEAS.getRow(i);
+      }
+      
+      // this.STEASPlots[i].y = NumberArray.mul(this.STDASPlot[i].y, 1 / this.STDASPlot[i].y.max());
     }
+
+    const hmap = this.residualsFigure.plotHeatmap(res, new Colormap(Colormaps.symgrad));
+    this.resCBar.linkHeatMap(hmap);
     
     // set view bounds
-    this.CfitFigure.xAxis.viewBounds = [y[0], y[y.length - 1]];
-    this.CfitNormFigure.xAxis.viewBounds = [y[0], y[y.length - 1]];
-
-    this.STfitFigure.xAxis.viewBounds = [x[0], x[x.length - 1]];
-    this.STfitNormFigure.xAxis.viewBounds = [x[0], x[x.length - 1]];
+    this.CfitDASFigure.xAxis.viewBounds = [y[0], y[y.length - 1]];
+    this.CfitEASFigure.xAxis.viewBounds = [y[0], y[y.length - 1]];
+    
+    this.STfitDASFigure.xAxis.viewBounds = [x[0], x[x.length - 1]];
+    this.STfitEASFigure.xAxis.viewBounds = [x[0], x[x.length - 1]];
+    
+    this.residualsFigure.xAxis.viewBounds = [x[0], x[x.length - 1]];
+    this.residualsFigure.yAxis.viewBounds = [y[0], y[y.length - 1]];
+    
+    this.resCBar.viewAll();
 
     this.replot();
     setTimeout(() => this.resize(), 100);
-
-
-
-    // if (datasets.length !== this.datasets.length) {
-    //   throw Error("Length of updated datasets must me the same as those plotted.");
-    // }
-
-    // const n = this.datasets.length;
-
-    // for (let i = 0; i < n; i++) {
-    //   this.datasets[i] = datasets[i];
-
-    //   const ds = this.datasets[i];
-    //   const hfig = this.groupPlots[i].heatmapFig;
-    //   const spectrum = this.groupPlots[i].spectrum;
-    //   const trace = this.groupPlots[i].trace;
-    //   const tracePlot = this.groupPlots[i].tracePlot;
-    //   const spectrumPlot = this.groupPlots[i].spectrumPlot;
-
-    //   hfig.plotHeatmap(ds, new Colormap(Colormaps.symgrad));
-    //   hfig.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
-    //   hfig.yAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
-    //   hfig.title = ds.name;
-
-    //   spectrumPlot.x = ds.x;
-    //   tracePlot.x = ds.y;
-    //   trace.xAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
-    //   spectrum.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
-      
-    //   hfig.heatmap?.recalculateImage();
-    // }
 
   }
 

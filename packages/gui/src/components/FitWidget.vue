@@ -3,6 +3,7 @@ import { defineProps, inject, ref, defineEmits, computed, reactive, PropType, Pr
 import { FirstOrderModel, FirstOrderModelLPL, FitModel, IOption, IParam } from "@/dataview/fitmodel";
 import { v4 } from "uuid";
 import { ITabData } from "@/state";
+import Loader from "./Loader.vue";
 
 
 const props = defineProps({
@@ -27,10 +28,24 @@ const emit = defineEmits<{
   (e: "optionChanged", value: number | string | boolean, index: number): void;
 }>();
 
+const invalidInputs: any = ref({});
 
-// TODO validate input
-const paramChanged = (index: number) => {
-  // props.fitmodel.updateModelParams(index);
+
+const paramMinChanged = (value: string, index: number) => {
+  const pval = parseFloat(value);
+  if (Number.isNaN(pval) && value.toLowerCase() !== "-inf") {
+    // invalid input
+    invalidInputs.value = {...invalidInputs, [index]: {
+      min: true
+    }};
+    console.log(invalidInputs.value);
+    return;
+  } else {
+    invalidInputs.value = {...invalidInputs, [index]: {
+      min: false
+    }};
+  }
+  emit('paramMinChanged', value, index);
 };
 
 const collapsed = ref<boolean>(true);
@@ -62,7 +77,7 @@ const collapsed = ref<boolean>(true);
       <div class="accordion-body">
         <div v-for="(option, index) in tabData.fitOptions" :key="index">
         <div v-if="option.type === 'checkbox'" class="form-check">
-          <input class="form-check-input" type="checkbox" :id="v4()" :value="option.value" 
+          <input class="form-check-input" type="checkbox" :id="v4()" :value="option.value" :disabled="tabData.isFitting"
           @input="ev => emit('optionChanged', (ev.target as HTMLInputElement).checked, index)">
           <label class="form-check-label small" :for="v4()">
             {{ option.name }}
@@ -71,14 +86,14 @@ const collapsed = ref<boolean>(true);
 
         <div v-else-if="option.type === 'text' || option.type === 'number'" class="input-group input-group-sm mb-3">
             <span class="input-group-text">{{ option.name }}</span>
-            <input :type="option.type" class="form-control" :value="option.value" 
+            <input :type="option.type" class="form-control" :value="option.value" :disabled="tabData.isFitting"
             @input="ev => emit('optionChanged', (option.type === 'text') ? (ev.target as HTMLInputElement).value : parseFloat((ev.target as HTMLInputElement).value), index)"
             placeholder="" :min="option.min" :max="option.max" :step="option.step" >
         </div>
 
         <div v-else-if="option.type === 'select'" class="input-group input-group-sm mb-3">
           <label class="input-group-text" :for="`select${index}`">{{ option.name }}</label>
-          <select class="form-select" :id="`select${index}`" :value="option.value" @input="ev => emit('optionChanged', (ev.target as HTMLSelectElement).value, index)">
+          <select class="form-select" :id="`select${index}`" :disabled="tabData.isFitting" :value="option.value" @input="ev => emit('optionChanged', (ev.target as HTMLSelectElement).value, index)">
             <option disabled value="">Please select one</option>
             <option v-for="(opt, i2) in option.options" :key="i2">{{ opt }}</option>  
           </select>
@@ -89,8 +104,9 @@ const collapsed = ref<boolean>(true);
   </div>
 </div>
 
-  <button class="btn btn-outline-success" @click="emit('simulateModelClicked')">Simulate model</button>
-  <button class="btn btn-outline-secondary" @click="emit('fitModelClicked')">Fit</button>
+  <button class="btn btn-outline-success" @click="emit('simulateModelClicked')" :disabled="tabData.isFitting">Simulate model</button>
+  <button class="btn btn-outline-secondary" @click="emit('fitModelClicked')" :disabled="tabData.isFitting">Fit</button>
+  <Loader v-show="tabData.isFitting"/>
   
   <h4 class=""> Params</h4>
 
@@ -108,14 +124,14 @@ const collapsed = ref<boolean>(true);
   <tbody>
     <tr v-for="(entry, index) in tabData.fitParams" :key="index">
       <th scope="row">{{ entry.name }}</th>
-      <td><input class="input-group-text text-field" type="text" :value="entry.min" :disabled="entry.fixed"
-        @input="ev => emit('paramMinChanged', (ev.target as HTMLInputElement).value, index)"/></td>
-      <td><input class="input-group-text text-field" type="number" :value="entry.value"
+      <td><input class="input-group-text text-field" :class="{'text-field-error': invalidInputs[index] ? invalidInputs[index].min : false}" type="text" :value="entry.min" :disabled="entry.fixed || tabData.isFitting"
+        @input="ev => paramMinChanged((ev.target as HTMLInputElement).value, index)"/></td>
+      <td><input class="input-group-text text-field" type="number" :value="entry.value" :disabled="tabData.isFitting"
         @input="ev => emit('paramValueChanged', parseFloat((ev.target as HTMLInputElement).value), index)"/></td>
-      <td><input class="input-group-text text-field" type="text" :value="entry.max" :disabled="entry.fixed"
+      <td><input class="input-group-text text-field" type="text" :value="entry.max" :disabled="entry.fixed || tabData.isFitting"
         @input="ev => emit('paramMaxChanged', (ev.target as HTMLInputElement).value, index)" /></td>
       <td>{{ entry.error }}</td>
-      <td><input class="form-check-input" type="checkbox" :value="entry.fixed" 
+      <td><input class="form-check-input" type="checkbox" :value="entry.fixed" :disabled="tabData.isFitting"
         @input="ev => emit('paramFixedChanged', (ev.target as HTMLInputElement).checked, index)" /></td>
     </tr>
   </tbody>
@@ -135,6 +151,12 @@ const collapsed = ref<boolean>(true);
 
 .text-field:disabled {
   background-color: rgb(234, 234, 234);
+}
+
+.text-field-error {
+  outline: none;
+  border-color: #ff2f2f;
+  box-shadow: 0 0 5px #ff0e0e;
 }
 
 </style>

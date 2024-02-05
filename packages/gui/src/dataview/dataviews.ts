@@ -31,6 +31,10 @@ export class DataView extends CanvasView<SceneData> {
     this.scene = new SceneData(document.getElementById(this.id) as HTMLDivElement);
   }
 
+  public getDataset(index: number) {
+    return this.assignedDatasets.filter(a => a.key === index)[0].dataset;
+  }
+
   public addDataset(index: number) {
     if (!this.scene) return;
 
@@ -58,7 +62,11 @@ export class DataView extends CanvasView<SceneData> {
   public updateData(datasets: Dataset[]) {
     if (!this.scene) return;
 
-    this.scene.updateData(datasets);
+    for (let i = 0; i < this.assignedDatasets.length; i++) {
+      this.assignedDatasets[i].dataset = datasets[i];
+    }
+
+    this.scene.updateData(this.assignedDatasets.map((d) => d.dataset));
     console.log(`updateData called, id: ${this.id}`);
   }
 
@@ -72,11 +80,8 @@ export class DataView extends CanvasView<SceneData> {
     console.log(`cleared: ${this.id}`)
   }
 
-  public setFitDataset(dataset: Dataset) {
-    if (!this.scene) return;
-
-    this.scene.fitDataset = dataset;
-    this.scene.replot();
+  public updateFitData(dataset: Dataset, chirpData?: NumberArray) {
+    this.scene?.updateFitData(dataset, chirpData);
   }
 
 }
@@ -88,8 +93,8 @@ export class FitView extends CanvasView<SceneFit> {
     this.scene = new SceneFit(document.getElementById(this.id) as HTMLDivElement);
   }
 
-  public updateData(x: NumberArray, y: NumberArray, C: Matrix, ST: Matrix, res: Matrix) {
-    this.scene?.updateData(x, y, C, ST, res);
+  public updateData(x: NumberArray, y: NumberArray, CDAS: Matrix, STDAS: Matrix, res: Dataset, CEAS?: Matrix, STEAS?: Matrix) {
+    this.scene?.updateData(x, y, CDAS, STDAS, res, CEAS, STEAS);
   }
 
 

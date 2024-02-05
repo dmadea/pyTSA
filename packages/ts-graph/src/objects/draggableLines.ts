@@ -350,6 +350,13 @@ export class DraggableLines extends GraphicObject {
         }
     }
 
+    get realPosition(): Point {
+        const f = this.parent as Figure;
+        const xT = f.xAxis.transform;
+        const yT = f.yAxis.transform;
+        return {x: xT(this.position.x), y: yT(this.position.y)};
+    }
+
     public addPositionChangedListener(callback: (pos: IPositionChangedEvent) => void) {
         this.positionChangedListeners.push(callback);
     }

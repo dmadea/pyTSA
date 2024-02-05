@@ -350,6 +350,15 @@ class FirstOrderModel(KineticModel):
 
         return mu
     
+    def get_actual_chirp_data(self) -> np.ndarray:
+        """Returns the actual curve that describes the chirp, 
+        if chirp is not included, it will return array filled with parameter t0"""
+
+        mu = self.get_mu()
+        if isinstance(mu, (float, int)):
+            mu = np.ones(self.dataset.wavelengths.shape[0], dtype=np.float64) * mu
+        return mu
+    
     def estimate_chirp(self, wls_vals: np.ndarray | list[float], time_vals: np.ndarray | list[float]):
         """Estimates the chirp parameters, based on input values as ndarrays"""
 

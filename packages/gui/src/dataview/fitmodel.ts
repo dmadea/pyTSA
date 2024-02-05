@@ -24,11 +24,15 @@ export interface IOption {
 
 export interface IFitData {
   matrices: {
-    Cfit: IMatrixData,
-    STfit: IMatrixData,
+    CfitDAS: IMatrixData,
+    STfitDAS: IMatrixData,
+    CfitEAS?: IMatrixData,
+    STfitEAS?: IMatrixData,
     Dfit: IMatrixData,
+    LDM?: IMatrixData
   },
-  params: IParam[]
+  params: IParam[],
+  chirpData?: string
 }
 
 function formatParams(params: IParam[]): IParam[] {
@@ -45,15 +49,7 @@ export class FitModel {
   public static modelName: string = "...";
   public static backendName: string = "...";
 
-  // public Cfit: Matrix | null = null;
-  // public STfit: Matrix | null = null;
-  // public Dfit: Matrix | null = null;
-
-  // public CfitNorm: Matrix | null = null;
-  // public STfitNorm: Matrix | null = null;
-
   public tabIndex: number;
-  public isFitting: boolean = false;
   public state: GlobalState;
 
   constructor(state: GlobalState, tabIndex: number) {
@@ -69,27 +65,32 @@ export class FitModel {
   }
 
   private plotFitMatrices(obj: IFitData) {
-    const n_species = this.tabData.fitOptions.filter(op => op.backendName === 'n_species')[0].value as number;
     // fitted dataset
-    const ds = this.state.datasets.value[this.tabData.selectedDatasets[0]];
+    const ds = this.state.views[this.tabIndex].dataview.getDataset(this.tabData.selectedDatasets[0]);
 
-    const Cfit = parseMatrixData(obj.matrices.Cfit, ds.data.nrows, n_species);
-    const STfit = parseMatrixData(obj.matrices.STfit, n_species, ds.data.ncols);
-    const Dfit = parseMatrixData(obj.matrices.Dfit, ds.data.nrows, ds.data.ncols);
+    const Cfit = parseMatrixData(obj.matrices.CfitDAS);
+    const STfit = parseMatrixData(obj.matrices.STfitDAS);
+    const Dfit = parseMatrixData(obj.matrices.Dfit);
+
+    const CfitEAS: Matrix | undefined = obj.matrices.CfitEAS ? parseMatrixData(obj.matrices.CfitEAS) : undefined;
+    const STfitEAS: Matrix | undefined = obj.matrices.STfitEAS ? parseMatrixData(obj.matrices.STfitEAS) : undefined;
+
+    const chirp = obj.chirpData ? json2arr(obj.chirpData) : undefined;
+
+    const resDataset = new Dataset(Matrix.mSubtract(ds.data, Dfit), ds.x.copy(), ds.y.copy());
     const fitDataset = new Dataset(Dfit, ds.x.copy(), ds.y.copy());
-    this.state.activeDataView.setFitDataset(fitDataset);
-    this.state.activeFitView.updateData(ds.x, ds.y, Cfit, STfit, Dfit);
+    this.state.activeDataView.updateFitData(fitDataset, chirp);
+    this.state.activeFitView.updateData(ds.x, ds.y, Cfit, STfit, resDataset, CfitEAS, STfitEAS);
   }
-  
 
   public fit() {
     if (this.tabData.selectedDatasets.length === 0) return;
     APICallPOST(`fit_model/${this.tabIndex}`, null, (obj: IFitData) => {
-      this.isFitting = false;
+      this.state.activeTabData.isFitting = false;
       this.tabData.fitParams = formatParams(obj.params);
       this.plotFitMatrices(obj);
     });
-    this.isFitting = true;
+    this.state.activeTabData.isFitting = true;
   }
 
   public simulateModel() {

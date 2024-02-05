@@ -134,10 +134,17 @@ export class NumberArray extends Array<number> {
         return this;
     }
 
-    static add(array: NumberArray | number[], value: number): NumberArray {
+    static add(array: NumberArray | number[], value: number | NumberArray | number[]): NumberArray {
         let arr = new NumberArray(array.length);
-        for (let i = 0; i < arr.length; i++) {
-            arr[i] = array[i] + value;
+        if (typeof value === 'number') {
+            for (let i = 0; i < arr.length; i++) {
+                arr[i] = array[i] + value;
+            }
+        } else {
+            if (array.length !== value.length) throw TypeError("Length of arrays does not match!");
+            for (let i = 0; i < arr.length; i++) {
+                arr[i] = array[i] + value[i];
+            }
         }
         return arr;
     }
@@ -293,6 +300,14 @@ export class Matrix extends NumberArray {
         return (this._isCContiguous) ? this[row * this._ncols + column] : this[column * this._nrows + row];
     }
 
+    public set(value: number, row: number, column: number) {
+        if (this._isCContiguous) {
+            this[row * this._ncols + column] = value;
+        } else {
+            this[column * this._nrows + row] = value;
+        }
+    }
+
     public getRow(index: number): NumberArray {
         if (index >= this._nrows) {
             throw TypeError("Index is out of range.");
@@ -331,6 +346,23 @@ export class Matrix extends NumberArray {
         this._isCContiguous = !this._isCContiguous;
         [this._nrows, this._ncols] = [this._ncols, this._nrows];
         return this;
+    }
+
+    static add(array: Matrix, value: number | NumberArray | Matrix | number[]): Matrix {
+        const arr = super.add(array, value);
+        return new Matrix(array.nrows, array.ncols, arr);
+    }
+
+    static mSubtract(mat: Matrix, mat2: Matrix): Matrix {
+        if (mat.length !== mat2.length) throw TypeError("Length of arrays does not match!");
+
+        let arr = new Matrix(mat.nrows, mat.ncols);
+        for (let i = 0; i < mat.nrows; i++) {
+            for (let j = 0; j < mat.ncols; j++) {
+                arr.set(mat.get(i, j) - mat2.get(i, j), i, j);
+            }
+        }
+        return arr;
     }
 
     public log() {

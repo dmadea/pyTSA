@@ -183,7 +183,9 @@ export async function loadFiles(
 
 export interface IMatrixData {
   data: string,
-  c_contiguous: boolean
+  c_contiguous: boolean,
+  nrows: number,
+  ncols: number
 }
 
 export interface IDatasetData {
@@ -197,8 +199,8 @@ export interface IDatasetData {
   }
 }
 
-export function parseMatrixData(obj: IMatrixData, nrows: number, ncols: number): Matrix {
-  const mat = new Matrix(nrows, ncols, json2arr(obj.data));
+export function parseMatrixData(obj: IMatrixData): Matrix {
+  const mat = new Matrix(obj.nrows, obj.ncols, json2arr(obj.data));
   mat.isCContiguous = obj.c_contiguous;
   return mat;
 }
@@ -209,7 +211,7 @@ export function parseDatasets(obj: IDatasetData): Dataset[] {
   for (const d of obj.data.datasets) {
     var t = json2arr(d.times);
     var w = json2arr(d.wavelengths);
-    var mat = parseMatrixData(d.matrix, t.length, w.length);
+    var mat = parseMatrixData(d.matrix);
 
     datasets.push(new Dataset(mat, w, t, d.name));
   }

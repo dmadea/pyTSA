@@ -1,18 +1,32 @@
-import {
-  Figure,
-  Colorbar,
-  DraggableLines,
-  Dataset,
-  LayoutScene,
-  Grid,
-  Colormap,
-  Colormaps,
-} from "@pytsa/ts-graph";
+import { Dataset, LayoutScene, Colormap, Colormaps, NumberArray } from "@pytsa/ts-graph";
+
+interface IUpdateFunctions {
+  updateTrace: (value: number) => void,
+  updateSpectrum: (value: number) => void,
+}
 
 export class SceneData extends LayoutScene {
 
   public datasets: Dataset[] = [];
   public fitDataset: Dataset | null = null;
+  public updateFuncions: IUpdateFunctions[] = [];
+  public chirpData: NumberArray | null = null;
+
+  public updateFitData(fitDataset: Dataset, chirpData?: NumberArray) {
+    this.fitDataset = fitDataset;
+    this.chirpData = chirpData ?? null;
+
+    const hfig = this.groupPlots[0].heatmapFig;
+
+    if (this.chirpData && hfig.linePlots.length === 0) {
+      hfig.plotLine(this.datasets[0].x, this.chirpData, "black", [], 3);
+    } else if (this.chirpData && hfig.linePlots.length !== 0) {
+      hfig.linePlots[0].x = this.datasets[0].x;
+      hfig.linePlots[0].y = this.chirpData;
+    }
+
+    this.replot();
+  }
 
   public updateData(datasets: Dataset[]) {
     if (datasets.length !== this.datasets.length) {
@@ -44,7 +58,7 @@ export class SceneData extends LayoutScene {
       hfig.heatmap?.recalculateImage();
     }
 
-    this.repaint();
+    this.replot();
     setTimeout(() => this.resize(), 100);
   }
 
@@ -58,9 +72,9 @@ export class SceneData extends LayoutScene {
     const n = this.datasets.length;
 
     this.populateFigures(n);
+    this.updateFuncions = [];
 
     for (let i = 0; i < n; i++) {
-      const idx = i;
       const ds = this.datasets[i];
       const hfig = this.groupPlots[i].heatmapFig;
       const spectrum = this.groupPlots[i].spectrum;
@@ -97,36 +111,21 @@ export class SceneData extends LayoutScene {
       spectrumPlot.x = ds.x;
       tracePlot.x = ds.y;
 
-      this.groupPlots[i].heatmapDLines.addPositionChangedListener((e) => {
-        if (e.yChanged) {
-          const idxy = hmap.dataset.y.nearestIndex(e.realPosition.y);
-          const row = hmap.dataset.data.getRow(idxy);
-          spectrumPlot.y = row;
-          
-          if (this.fitDataset) {
-            spectrumFitPlot.x = this.fitDataset.x;
-            spectrumFitPlot.y = this.fitDataset.data.getRow(idxy);
-          }
-
-          spectrum.replot();
+      const updateSpectrumData = (y: number) => {
+        const idxy = hmap.dataset.y.nearestIndex(y);
+        const row = hmap.dataset.data.getRow(idxy);
+        spectrumPlot.y = row;
+        
+        if (this.fitDataset) {
+          spectrumFitPlot.x = this.fitDataset.x;
+          spectrumFitPlot.y = this.fitDataset.data.getRow(idxy);
         }
 
-        if (e.xChanged) {
-          const idxx = hmap.dataset.x.nearestIndex(e.realPosition.x);
-          const col = hmap.dataset.data.getCol(idxx);
-          tracePlot.y = col;
+        spectrum.replot();
+      }
 
-          if (this.fitDataset) {
-            traceFitPlot.x = this.fitDataset.y;
-            traceFitPlot.y = this.fitDataset.data.getCol(idxx);
-          }
-
-          trace.replot();
-        }
-      });
-
-      this.groupPlots[i].spectrumDLines.addPositionChangedListener((e) => {
-        const idxx = hmap.dataset.x.nearestIndex(e.realPosition.x);
+      const updateTraceData = (x: number) => {
+        const idxx = hmap.dataset.x.nearestIndex(x);
         const col = hmap.dataset.data.getCol(idxx);
         tracePlot.y = col;
 
@@ -136,19 +135,29 @@ export class SceneData extends LayoutScene {
         }
 
         trace.replot();
+      }
+
+      this.updateFuncions.push({
+        updateTrace: updateTraceData,
+        updateSpectrum: updateSpectrumData
+      });
+
+      this.groupPlots[i].heatmapDLines.addPositionChangedListener((e) => {
+        if (e.yChanged) {
+          updateSpectrumData(e.realPosition.y);
+        }
+
+        if (e.xChanged) {
+          updateTraceData(e.realPosition.x);
+        }
+      });
+
+      this.groupPlots[i].spectrumDLines.addPositionChangedListener((e) => {
+        updateTraceData(e.realPosition.x);
       });
 
       this.groupPlots[i].traceDLines.addPositionChangedListener((e) => {
-        const idxy = hmap.dataset.y.nearestIndex(e.realPosition.x);
-        const row = hmap.dataset.data.getRow(idxy);
-        spectrumPlot.y = row;
-
-        if (this.fitDataset) {
-          spectrumFitPlot.x = this.fitDataset.x;
-          spectrumFitPlot.y = this.fitDataset.data.getRow(idxy);
-        }
-
-        spectrum.replot();
+        updateSpectrumData(e.realPosition.x);
       });
     }
 
@@ -158,4 +167,14 @@ export class SceneData extends LayoutScene {
     setTimeout(() => this.resize(), 100);
 
    }
+
+   public replot(): void {
+    for (let i = 0; i < this.datasets.length; i++) {
+      let {x, y} = this.groupPlots[i].heatmapDLines.realPosition;
+      this.updateFuncions[i].updateSpectrum(y);
+      this.updateFuncions[i].updateTrace(x);
+    }
+    super.replot();
+   }
+
 }

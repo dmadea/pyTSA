@@ -20,8 +20,8 @@ export interface ILinePlot {
     color: string,
     ld: number[],  // line dash, exmaple [4, 2], no dash: []
     lw: number,  // line width
-    zValue: number,
-    label: string
+    label: string | null,
+    zValue: number
 }
 
 export enum Shape {
@@ -51,7 +51,7 @@ export class Figure extends GraphicObject {
     public showTicks: string[] =  ['left', 'right', 'bottom', 'top'];        // ['top', 'bottom', 'left', 'right']
     public showTickNumbers: string[] =  ['left', 'right', 'bottom', 'top'];  // ['top', 'bottom', 'left', 'right']
     public axisAlignment: Orientation = Orientation.Horizontal;   // could be vertical
-    public showLegend: boolean = true;
+    public showLegend: boolean = false;
 
     public xAxis: Axis;
     public yAxis: Axis;
@@ -63,7 +63,7 @@ export class Figure extends GraphicObject {
     
     // public xAxisSigFigures: number = 2;
     // public yAxisSigFigures: number = 2;
-    private _ticksValuesFont: string = '10 ps sans-serif';
+    protected _ticksValuesFont: string = '10 ps sans-serif';
 
     public requiredMargin: Margin; // last margin required by paining the figure
     public legend: Legend;
@@ -118,23 +118,16 @@ export class Figure extends GraphicObject {
         };
         this.requiredMargin = {left: 0, right: 0, top: 0, bottom: 0};
         this.internalRange = {x: -1, y: -1, w: 2, h: 2};
-        // this.steps = NumberArray.fromArray([1, 2, 2.5, 5]);
         this.steps = NumberArray.fromArray([1, 2, 5]);
         this.lastMouseDownPos = {x: 0, y: 0};
         this.mousePos = {x: 0, y: 0};
         this.lastRange = {...this.internalRange};
 
-        // this.figureSettings.xAxis.viewBounds = [-1e5, 1e5];
-        // this.figureSettings.yAxis.viewBounds = [-1e5, 1e5];
         this.lastCenterPoint = {x: 0, y: 0};
-        // this.offScreenCanvas = new OffscreenCanvas(this.canvasRect.w, this.canvasRect.h);
-        // this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
-        // if (this.offScreenCanvasCtx === null) {
-        //     throw new Error('this.offScreenCanvasCtx === null');
-        // }
         this.xAxis = new Axis(this, AxisType.xAxis);
         this.yAxis = new Axis(this, AxisType.yAxis);
         this.legend = new Legend(this);
+        this.addItem(this.legend);
         this.setContextMenu();
     }
 
@@ -691,8 +684,8 @@ export class Figure extends GraphicObject {
 
     public plotLine(x: NumberArray | number[],
          y: NumberArray | number[],
-         color = "black", ld: number[] = [], lw = 1, zValue = 10,
-         label: string = '') {
+         color = "black", ld: number[] = [], lw = 1, 
+         label: string | null = null, zValue = 10) {
         var plot: ILinePlot = {x: NumberArray.fromArray(x).copy(), y: NumberArray.fromArray(y).copy(), color, ld, lw, zValue, label}; 
         this.linePlots.push(plot);
         this.repaint();
@@ -924,9 +917,6 @@ export class Figure extends GraphicObject {
         }
 
         e.bottomCtx.restore();
-
-        this.legend.paint(e);
-
         // console.timeEnd('paintPlots');
     }
 

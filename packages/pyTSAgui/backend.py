@@ -27,25 +27,40 @@ def arr2json(arr: np.ndarray) -> str:
     b64 = base64.b64encode(arr)
     return b64.decode('utf-8')
 
-def load_matrix(dataset: dict):
+def parse_dataset_data(dataset: dict):
     t = json2arr(dataset['times'])
     w = json2arr(dataset['wavelengths'])
-    mat = json2arr(dataset['matrix']['data'])
-    c_contiguous = dataset['matrix']['c_contiguous']
-    mat = mat.reshape((t.shape[0], w.shape[0]) if c_contiguous else (w.shape[0], t.shape[0])) 
-    mat = mat if c_contiguous else mat.T
+    mat = parse_matrix_data(dataset['matrix'])
     return mat, t, w
 
-def _put_matrix(arr: np.ndarray):
-    return dict(data=arr2json(np.ascontiguousarray(arr)), c_contiguous=True)
+def parse_matrix_data(obj: dict) -> np.ndarray:
+    mat = json2arr(obj['data'])
+    c_contiguous = obj['c_contiguous']
+    mat = mat.reshape((obj['nrows'], obj['ncols']) if c_contiguous else (obj['ncols'], obj['nrows'])) 
+    mat = mat if c_contiguous else mat.T
+    return mat
 
-# interface IFitData {
+def put_matrix_data(arr: np.ndarray):
+    return dict(data=arr2json(np.ascontiguousarray(arr)), c_contiguous=True, nrows=arr.shape[0], ncols=arr.shape[1])
+
+# export interface IFitData {
 #   matrices: {
-#     Cfit: IMatrixData,
-#     STfit: IMatrixData,
+#     CfitDAS: IMatrixData,
+#     STfitDAS: IMatrixData,
+#     CfitEAS?: IMatrixData,
+#     STfitEAS?: IMatrixData,
 #     Dfit: IMatrixData,
+#     LDM?: IMatrixData
 #   },
-#   params: IParam[]
+#   params: IParam[],
+#   chirpData: NumberArray
+# }
+
+# interface IMatrixData {
+#   data: string,
+#   c_contiguous: boolean,
+#   nrows: number,
+#   ncols: number
 # }
 
 class BackendSession(object):
@@ -87,7 +102,7 @@ class BackendSession(object):
         ds: list = data['data']['datasets']
 
         for d in ds:
-            mat, t, w = load_matrix(d)
+            mat, t, w = parse_dataset_data(d)
             dataset = Dataset(mat, t, w, name=d['name'])
             self.datasets.append(dataset)
 
@@ -98,7 +113,7 @@ class BackendSession(object):
             obj = {
                 'times': arr2json(d.times),
                 'wavelengths': arr2json(d.wavelengths),
-                'matrix': _put_matrix(d.matrix),
+                'matrix': put_matrix_data(d.matrix),
                 'name': d.name
             }
 
@@ -156,9 +171,29 @@ class BackendSession(object):
         model.params[name].vary = not param_data['fixed']
 
     def _put_fit_matrices(self, model: FirstOrderModel):
-        return dict(matrices=dict(  Cfit=_put_matrix(model.C_opt if model.C_opt.ndim == 2 else model.C_opt[0]), 
-                                    STfit=_put_matrix(model.ST_opt),
-                                    Dfit=_put_matrix(model.matrix_opt)))
+        # export interface IFitData {
+        #   matrices: {
+        #     CfitDAS: IMatrixData,
+        #     STfitDAS: IMatrixData,
+        #     CfitEAS?: IMatrixData,
+        #     STfitEAS?: IMatrixData,
+        #     Dfit: IMatrixData,
+        #     LDM?: IMatrixData
+        #   },
+        #   params: IParam[],
+        #   chirpData: NumberArray
+        # }
+        data = dict(CfitDAS=put_matrix_data(model.C_opt if model.C_opt.ndim == 2 else model.C_opt[0]), 
+                    STfitDAS=put_matrix_data(model.ST_opt),
+                    Dfit=put_matrix_data(model.matrix_opt))
+        
+        if model.C_EAS is not None:
+            data.update(dict(CfitEAS=put_matrix_data(model.C_EAS if model.C_EAS.ndim == 2 else model.C_EAS[0])))
+
+        if model.ST_EAS is not None:
+            data.update(dict(STfitEAS=put_matrix_data(model.ST_EAS)))
+
+        return dict(matrices=data, chirpData=arr2json(model.get_actual_chirp_data()))
 
     def fit_model(self, tab_index: int):
         if self.tabs[tab_index].model.dataset is None:

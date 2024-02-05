@@ -32,6 +32,8 @@ const postDatasets = (datasets: Dataset[]) => {
       matrix: {
         data: arr2json(d.data),
         c_contiguous: d.data.isCContiguous,
+        nrows: d.data.nrows,
+        ncols: d.data.ncols
       },
       name: d.name,
     });
