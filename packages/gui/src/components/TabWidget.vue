@@ -158,10 +158,10 @@ const dimensionMultiply = () => {
               @fit-model-clicked="() => state.activeFitModel.fit()"
               @simulate-model-clicked="() => state.activeFitModel.simulateModel()"
               @option-changed="(value, index) => state.activeFitModel.optionChanged(value, index)"
-              @param-min-changed="(value, index) => state.activeFitModel.paramMinChanged(value, index)"
-              @param-max-changed="(value, index) => state.activeFitModel.paramMaxChanged(value, index)"
+              @param-min-changed="(value, index, invalid) => state.activeFitModel.paramMinChanged(value, index, invalid)"
+              @param-max-changed="(value, index, invalid) => state.activeFitModel.paramMaxChanged(value, index, invalid)"
               @param-fixed-changed="(value, index) => state.activeFitModel.paramFixedChanged(value, index)"
-              @param-value-changed="(value, index) => state.activeFitModel.paramValueChanged(value, index)"
+              @param-value-changed="(value, index, invalid) => state.activeFitModel.paramValueChanged(value, index, invalid)"
               />
         </div>
       </div>

@@ -21,31 +21,57 @@ const emit = defineEmits<{
   (e: "modelChanged", index: number): void;
   (e: "simulateModelClicked"): void;
   (e: "fitModelClicked"): void;
-  (e: "paramMinChanged", value: string, index: number): void;
-  (e: "paramMaxChanged", value: string, index: number): void;
-  (e: "paramValueChanged", value: number, index: number): void;
+  (e: "paramMinChanged", value: string, index: number, invalid: boolean): void;
+  (e: "paramMaxChanged", value: string, index: number, invalid: boolean): void;
+  (e: "paramValueChanged", value: string, index: number, invalid: boolean): void;
   (e: "paramFixedChanged", value: boolean, index: number): void;
   (e: "optionChanged", value: number | string | boolean, index: number): void;
 }>();
 
-const invalidInputs: any = ref({});
+const invalidInputs: any = ref({
+  min: {},
+  value: {},
+  max: {},
+});
 
 
 const paramMinChanged = (value: string, index: number) => {
   const pval = parseFloat(value);
   if (Number.isNaN(pval) && value.toLowerCase() !== "-inf") {
     // invalid input
-    invalidInputs.value = {...invalidInputs, [index]: {
-      min: true
-    }};
-    console.log(invalidInputs.value);
+    invalidInputs.value.min = {...invalidInputs.value.min, [index]: true};
+    emit('paramMinChanged', value, index, true);
     return;
   } else {
-    invalidInputs.value = {...invalidInputs, [index]: {
-      min: false
-    }};
+    invalidInputs.value.min = {...invalidInputs.value.min, [index]: false};
   }
-  emit('paramMinChanged', value, index);
+  emit('paramMinChanged', value, index, false);
+};
+
+const paramMaxChanged = (value: string, index: number) => {
+  const pval = parseFloat(value);
+  if (Number.isNaN(pval) && value.toLowerCase() !== "inf" && value.toLowerCase() !== "+inf") {
+    // invalid input
+    invalidInputs.value.max = {...invalidInputs.value.max, [index]: true};
+    emit('paramMaxChanged', value, index, true);
+    return;
+  } else {
+    invalidInputs.value.max = {...invalidInputs.value.max, [index]: false};
+  }
+  emit('paramMaxChanged', value, index, false);
+};
+
+const paramValueChanged = (value: string, index: number) => {
+  const pval = parseFloat(value);
+  if (Number.isNaN(pval)) {
+    // invalid input
+    invalidInputs.value.value = {...invalidInputs.value.value, [index]: true};
+    emit('paramValueChanged', value, index, true);
+    return;
+  } else {
+    invalidInputs.value.value = {...invalidInputs.value.value, [index]: false};
+  }
+  emit('paramValueChanged', value, index, false);
 };
 
 const collapsed = ref<boolean>(true);
@@ -61,7 +87,7 @@ const collapsed = ref<boolean>(true);
     <select class="form-select" :id="v4()" :value="kineticModels[tabData.selectedFitModel].modelName"
     @input="event => emit('modelChanged', (event.target as HTMLSelectElement).selectedIndex - 1)">
       <option disabled value="">Please select one</option>
-      <option v-for="(model, index) in kineticModels" :key="index" :value="index">{{ model.modelName }}</option>
+      <option v-for="(model, index) in kineticModels" :key="index">{{ model.modelName }}</option>
     </select>
   </div>
 
@@ -105,7 +131,7 @@ const collapsed = ref<boolean>(true);
 </div>
 
   <button class="btn btn-outline-success" @click="emit('simulateModelClicked')" :disabled="tabData.isFitting">Simulate model</button>
-  <button class="btn btn-outline-secondary" @click="emit('fitModelClicked')" :disabled="tabData.isFitting">Fit</button>
+  <button class="btn btn-outline-secondary" @click="emit('fitModelClicked')">{{ tabData.isFitting ? "Cancel" : "Fit" }}</button>
   <Loader v-show="tabData.isFitting"/>
   
   <h4 class=""> Params</h4>
@@ -124,12 +150,15 @@ const collapsed = ref<boolean>(true);
   <tbody>
     <tr v-for="(entry, index) in tabData.fitParams" :key="index">
       <th scope="row">{{ entry.name }}</th>
-      <td><input class="input-group-text text-field" :class="{'text-field-error': invalidInputs[index] ? invalidInputs[index].min : false}" type="text" :value="entry.min" :disabled="entry.fixed || tabData.isFitting"
+      <td><input class="input-group-text text-field" :class="{'text-field-error': invalidInputs.min[index] ?? false}"
+         type="text" :value="entry.min" :disabled="entry.fixed || tabData.isFitting"
         @input="ev => paramMinChanged((ev.target as HTMLInputElement).value, index)"/></td>
-      <td><input class="input-group-text text-field" type="number" :value="entry.value" :disabled="tabData.isFitting"
-        @input="ev => emit('paramValueChanged', parseFloat((ev.target as HTMLInputElement).value), index)"/></td>
-      <td><input class="input-group-text text-field" type="text" :value="entry.max" :disabled="entry.fixed || tabData.isFitting"
-        @input="ev => emit('paramMaxChanged', (ev.target as HTMLInputElement).value, index)" /></td>
+      <td><input class="input-group-text text-field" :class="{'text-field-error': invalidInputs.value[index] ?? false}"
+        type="number" :value="entry.value" :disabled="tabData.isFitting"
+        @input="ev => paramValueChanged((ev.target as HTMLInputElement).value, index)"/></td>
+      <td><input class="input-group-text text-field" :class="{'text-field-error': invalidInputs.max[index] ?? false}"
+         type="text" :value="entry.max" :disabled="entry.fixed || tabData.isFitting"
+        @input="ev => paramMaxChanged((ev.target as HTMLInputElement).value, index)" /></td>
       <td>{{ entry.error }}</td>
       <td><input class="form-check-input" type="checkbox" :value="entry.fixed" :disabled="tabData.isFitting"
         @input="ev => emit('paramFixedChanged', (ev.target as HTMLInputElement).checked, index)" /></td>

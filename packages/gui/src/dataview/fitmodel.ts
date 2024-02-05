@@ -5,7 +5,7 @@ import { GlobalState, ITabData } from "../state";
 export interface IParam {
   name: string,
   min: string,
-  value: number,
+  value: string | number,
   max: string,
   error: number | null,
   fixed: boolean
@@ -37,8 +37,8 @@ export interface IFitData {
 
 function formatParams(params: IParam[]): IParam[] {
   for (const param of params) {
-    param.value = Number.parseFloat(formatNumber(param.value, 4));
-    param.error = Number.parseFloat(formatNumber(param.error ?? 0, 4));
+    param.value = parseFloat(formatNumber(param.value as number, 4));
+    param.error = parseFloat(formatNumber(param.error ?? 0, 4));
   }
   return params;
 }
@@ -106,19 +106,22 @@ export class FitModel {
     this.updateModelOptions(index);
   }
 
-  public paramMinChanged(value: string, index: number) {
+  public paramMinChanged(value: string, index: number, invalid: boolean) {
     this.tabData.fitParams[index].min = value;
-    this.updateModelParams(index);
+    if (!invalid)
+      this.updateModelParams(index);
   }
 
-  public paramMaxChanged(value: string, index: number) {
+  public paramMaxChanged(value: string, index: number, invalid: boolean) {
     this.tabData.fitParams[index].max = value;
-    this.updateModelParams(index);
+    if (!invalid)
+      this.updateModelParams(index);
   }
 
-  public paramValueChanged(value: number, index: number) {
+  public paramValueChanged(value: string, index: number, invalid: boolean) {
     this.tabData.fitParams[index].value = value;
-    this.updateModelParams(index);
+    if (!invalid)
+      this.updateModelParams(index);
   }
 
   public paramFixedChanged(value: boolean, index: number) {

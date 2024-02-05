@@ -49,6 +49,13 @@ export class SceneFit extends Scene {
     this.CfitEASFigure.showLegend = true;
     this.STfitEASFigure.showLegend = true;
 
+    this.CfitDASFigure.showTickNumbers = ['bottom', 'left'];
+    this.STfitDASFigure.showTickNumbers = ['bottom', 'left'];
+    this.CfitEASFigure.showTickNumbers = ['bottom', 'left'];
+    this.STfitEASFigure.showTickNumbers = ['bottom', 'left'];
+    this.residualsFigure.showTickNumbers = ['bottom', 'left'];
+    this.LDMFigure.showTickNumbers = ['bottom', 'left'];
+
     // this.CfitDASFigure.xAxis.label = "Times / ps";
     this.CfitEASFigure.xAxis.label = "Times / ps";
     // this.STfitDASFigure.xAxis.label = "Wavelength / nm";
