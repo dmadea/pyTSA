@@ -196,7 +196,9 @@ export class DraggableLines extends GraphicObject {
         if (this.horizontalDragging || this.verticalDragging) {
             const f = this.parent as Figure;
             const va = f.axisAlignment === Orientation.Vertical;
-            f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
+            this.preventEventsFunc = () => {
+                f.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
+            }
             const lastPos = {x: e.e.clientX, y: e.e.clientY};
 
             const mousemove = (e: MouseEvent) => {
@@ -283,7 +285,9 @@ export class DraggableLines extends GraphicObject {
     public mouseUp(e: IMouseEvent): void {
         this.verticalDragging = false;
         this.horizontalDragging = false;
-        (this.parent as Figure).preventMouseEvents(false, false);
+        this.preventEventsFunc = () => {
+            (this.parent as Figure).preventMouseEvents(false, false);
+        }
     }
 
     public positionChanged(xChanged: boolean, yChanged: boolean) {
@@ -392,17 +396,21 @@ export class DraggableLines extends GraphicObject {
             this.horizontalHovering = hh;
             f.repaintItems();
         }
+        
+        this.active = this.verticalHovering || this.horizontalHovering;
 
-        f.preventMouseEvents(undefined, this.verticalHovering || this.horizontalHovering);
+        this.preventEventsFunc = () => {
+            f.preventMouseEvents(undefined, this.verticalHovering || this.horizontalHovering);
+        }
 
         if (this.verticalHovering && !this.horizontalHovering) {
-            e.topCanvas.style.cursor = (va) ? this.cursors.horizontalResize : this.cursors.verticalResize;
+            this.activeCursor = (va) ? this.cursors.horizontalResize : this.cursors.verticalResize;
         } else if (!this.verticalHovering && this.horizontalHovering) {
-            e.topCanvas.style.cursor = (va) ? this.cursors.verticalResize : this.cursors.horizontalResize;
+            this.activeCursor = (va) ? this.cursors.verticalResize : this.cursors.horizontalResize;
         } else if (this.verticalHovering && this.horizontalHovering) {
-            e.topCanvas.style.cursor = this.cursors.move;
+            this.activeCursor = this.cursors.move;
         }  else {
-            e.topCanvas.style.cursor = this.cursors.crosshair;
+            this.activeCursor = this.cursors.crosshair;
         }
 
         // console.log("vh", this.verticalHovering, "hh", this.horizontalHovering);

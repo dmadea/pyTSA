@@ -160,7 +160,7 @@ export class LayoutScene extends Scene {
     public grid: Grid;
     public groupPlots: IGroupPlot[] = [];
     public _layout: string = "Packed";
-    public _alignment: string = "Matrix";
+    public _alignment: string = "Column-wise";
 
     constructor(parentElement: HTMLDivElement) {
         super(parentElement);

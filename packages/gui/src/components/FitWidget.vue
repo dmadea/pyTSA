@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { defineProps, inject, ref, defineEmits, computed, reactive, PropType, Prop } from "vue";
-import { FirstOrderModel, FirstOrderModelLPL, FitModel, IOption, IParam } from "@/dataview/fitmodel";
+import { defineProps, ref, defineEmits, PropType } from "vue";
+import { FitModel } from "@/dataview/fitmodel";
 import { v4 } from "uuid";
 import { ITabData } from "@/state";
 import Loader from "./Loader.vue";
@@ -74,6 +74,7 @@ const paramValueChanged = (value: string, index: number) => {
   emit('paramValueChanged', value, index, false);
 };
 
+
 const collapsed = ref<boolean>(true);
 
 </script>
@@ -103,7 +104,7 @@ const collapsed = ref<boolean>(true);
       <div class="accordion-body">
         <div v-for="(option, index) in tabData.fitOptions" :key="index">
         <div v-if="option.type === 'checkbox'" class="form-check">
-          <input class="form-check-input" type="checkbox" :id="v4()" :value="option.value" :disabled="tabData.isFitting"
+          <input class="form-check-input" type="checkbox" :id="v4()" :checked="(option.value as boolean)" :disabled="tabData.isFitting"
           @input="ev => emit('optionChanged', (ev.target as HTMLInputElement).checked, index)">
           <label class="form-check-label small" :for="v4()">
             {{ option.name }}

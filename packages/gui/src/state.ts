@@ -117,9 +117,8 @@ export class GlobalState  {
     const m = new this.kineticModels[index](this, this.data.activeTab);
     this.views[this.data.activeTab].fitmodel = m;
     this.activeTabData.selectedFitModel = index;
-    console.log(this.activeTabData);
     APICallPOST(`set_model/${this.data.activeTab}/${this.kineticModels[index].backendName}`);
-    // console.log(this.activeTab);
+    this.activeFitModel.updateModelOptions();
   };
 
 }

@@ -29,8 +29,13 @@ export interface Wasm {
     exports: WebAssembly.Exports
 }
 
+export enum ObjectType {
+    root = 0,
+    child = 1
+}
+
 export abstract class GraphicObject{
-    protected items: GraphicObject[];
+    public items: GraphicObject[];
     public parent: GraphicObject | null; // = null;
 
     public bottomCanvas: HTMLCanvasElement | null = null;  // main canvas for plotting figure etc.
@@ -46,6 +51,13 @@ export abstract class GraphicObject{
     public contextMenu?: ContextMenu;
     public wasm?: Wasm;
 
+    public active: boolean = false;
+    public activeCursor: string;
+    public preventEventsFunc: null | (() => void) = null;
+
+    private visibleItems: GraphicObject[] = [];
+    public objectType: ObjectType = ObjectType.child; 
+
     // https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
     public cursors = {
         default: 'default',
@@ -60,9 +72,7 @@ export abstract class GraphicObject{
         horizontalResize: 'ns-resize'
     }
 
-    constructor(parent?: GraphicObject,
-        canvasRect: Rect = {x: 0, y: 0, w: 0, h: 0},
-        margin: Margin = {left: 0, right: 0, top: 0, bottom: 0}) {
+    constructor(parent?: GraphicObject, canvasRect?: Rect, margin?: Margin) {
         if (parent) {
             this.parent = parent;
             this.setParent(parent);
@@ -70,9 +80,9 @@ export abstract class GraphicObject{
             this.parent = null;
         }
         this.items = [];
-        this.canvasRect = canvasRect;
+        this.canvasRect = canvasRect ?? {x: 0, y: 0, w: 0, h: 0};
         // this.setCanvasRect(canvasRect);
-        this.margin = margin;
+        this.margin = margin ?? {left: 0, right: 0, top: 0, bottom: 0};
         this.bottomCanvas = null;
         this.bottomCtx  = null;
         this.topCanvas = null;
@@ -80,8 +90,16 @@ export abstract class GraphicObject{
         // this.effRect = {...this.canvasRect};
         // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
-        
+        this.activeCursor = this.cursors.default;
     }
+
+    // public setPreventEventsFunction(f: () => void) {
+    //     this.preventEventsFunc = f;
+    // }
+
+    // public setActiveCursor(cursor: string) {
+    //     this.activeCursor = cursor;
+    // }
 
     public setWasm(wasm: Wasm) {
         this.wasm = wasm;
@@ -206,6 +224,18 @@ export abstract class GraphicObject{
         }
     }
 
+    get rootItem(): GraphicObject | null {
+        var item: GraphicObject | null = this;
+        while (true) {
+            if (item) {
+                if (item.objectType === ObjectType.root) return item;
+                item = item.parent;
+            } else {
+                return null;
+            }
+        }
+    }
+
     doubleClick(e: IMouseEvent) {
         e.e.preventDefault();
         for (const item of this.items) {
@@ -216,10 +246,20 @@ export abstract class GraphicObject{
     }
 
     mouseDown(e: IMouseEvent) {
+        const root = this.rootItem;
         for (const item of this.items) {
             if (item.isInsideCanvasRect(e.x, e.y)) {
                 item.mouseDown(e);
+                // if (root) root.visibleItems.push(item);
+                // this.visibleItems.push(...item.visibleItems, item);
+                // item.visibleItems = [];
             }
+        }
+        if (root) root.visibleItems.push(this);
+        if (this.objectType === ObjectType.root) {
+            console.log(this, this.visibleItems);
+            this.handleMultipleItemEvents(this.visibleItems);
+            this.visibleItems = [];
         }
     }
 
@@ -227,14 +267,33 @@ export abstract class GraphicObject{
         for (const item of this.items) {
             item.mouseUp(e);
         }
+        this.handleMultipleItemEvents(this.items);
     }
 
     mouseMove(e: IMouseEvent) {
+        const items = [];
         for (const item of this.items) {
             if (item.isInsideCanvasRect(e.x, e.y)) {
                 item.mouseMove(e);
+                items.push(item);
             }
         }
+        this.handleMultipleItemEvents(items);
+    }
+    
+    public handleMultipleItemEvents(items: GraphicObject[]) {
+        const activeItems = items.filter(item => item.active);
+        // console.log(items, activeItems);
+        if (activeItems.length > 0) {
+            const last = activeItems[activeItems.length - 1];
+            if (this.topCanvas) this.topCanvas.style.cursor = last.activeCursor;
+            if (last.preventEventsFunc !== null) last.preventEventsFunc();
+        } else {
+            for (const item of items) {
+                if (item.preventEventsFunc !== null) item.preventEventsFunc();
+            }
+        }
+
     }
 
     showContextMenu(e: IMouseEvent) {
@@ -272,11 +331,26 @@ export abstract class GraphicObject{
         }
     }
 
-
-
-
-
-
-
 }
+
+// export abstract class ActiveGraphicObject extends GraphicObject {
+
+//     public active: boolean = false;
+//     public activeCursor: string;
+//     public preventEventsFunc: () => void;
+
+//     constructor(parent?: GraphicObject, canvasRect?: Rect, margin?: Margin) {
+//         super(parent, canvasRect, margin);
+//         this.activeCursor = this.cursors.default;
+//         this.preventEventsFunc = () => {return;};
+//     }
+
+//     public setPreventEventsFunction(f: () => void) {
+//         this.preventEventsFunc = f;
+//     }
+
+//     public setCursor(cursor: string) {
+//         this.activeCursor = cursor;
+//     }
+// }
 

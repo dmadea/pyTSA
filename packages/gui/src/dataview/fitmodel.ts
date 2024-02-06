@@ -206,21 +206,23 @@ public setOptions(): IOption[] {
       type: "number",
       value: 5,
       min: 1,
+      max: 20,
       step: 1
     },
     {
       name: "Number of exponentials (for exp chirp type)",
       backendName: "num_of_exp_chirp_params",
       type: "number",
-      value: 2,
+      value: 1,
       min: 1,
+      max: 10,
       step: 1
     },
     {
       name: "Include IRF",
       backendName: "include_irf",
       type: "checkbox",
-      value: false,
+      value: true,
     },
     {
       name: "IRF type",

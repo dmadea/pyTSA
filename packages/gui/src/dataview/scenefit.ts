@@ -1,4 +1,4 @@
-import {  Figure,  Colorbar,  Grid,  Scene,  Matrix,  NumberArray, ILinePlot, getDefaultColor, Dataset, Colormap, Colormaps} from "@pytsa/ts-graph";
+import {  Figure,  Colorbar,  Grid,  Scene,  Matrix,  NumberArray, ILinePlot, getDefaultColor, Dataset, Colormap, Colormaps, LinearROI} from "@pytsa/ts-graph";
 
 export class SceneFit extends Scene {
 
@@ -79,6 +79,10 @@ export class SceneFit extends Scene {
     this.grid.addItem(this.STfitEASFigure, 1, 0);
     this.grid.addItem(this.CfitEASFigure, 1, 1);
     this.grid.addItem(this.LDMFigure, 2, 1);
+
+    const roi = new LinearROI(this.STfitDASFigure);
+    this.STfitDASFigure.addItem(roi);
+    console.log(this.STfitDASFigure.items);
   }
 
   public updateData(x: NumberArray, y: NumberArray, CDAS: Matrix, STDAS: Matrix, res: Dataset, CEAS?: Matrix, STEAS?: Matrix) {

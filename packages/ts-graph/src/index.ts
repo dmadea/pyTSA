@@ -21,6 +21,7 @@ export { CanvasView } from "./vue/canvasview";
 export { ILinePlot } from "./figure/figure";
 
 export { getDefaultColor } from "./color";
+export { LinearROI } from "./objects/roi";
 // export { CanvasComponent } from "./vue/CanvasComponent";
 
 

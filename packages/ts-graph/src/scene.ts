@@ -1,7 +1,7 @@
 import { ContextMenu } from "./contextmenu";
 import { Figure } from "./figure/figure";
 import { Grid } from "./objects/grid";
-import {  GraphicObject, IMouseEvent, IPaintEvent } from "./objects/object";
+import {  GraphicObject, IMouseEvent, IPaintEvent, ObjectType } from "./objects/object";
 // import { Rect } from "./types";
 
 // import wasmData from "./wasm/hello.wasm";
@@ -23,6 +23,8 @@ export class Scene extends GraphicObject {
 
     constructor(parentElement: HTMLDivElement) {
         super();
+
+        this.objectType = ObjectType.root;
         
         var wrapper = document.createElement("div");
         wrapper.style.cssText = `position: relative; width: 100%; height: ${0.8 * document.body.clientHeight}px`;

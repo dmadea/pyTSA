@@ -19,7 +19,12 @@ export class DraggableRegion extends GraphicObject {
         this.paintOnTopCanvas = paintOnTopCanvas;
     }
 
+    public regionRectPositionChanged() {
+
+    }
+
     mouseDown(e: IMouseEvent): void {
+        super.mouseDown(e);
         if (e.e.button !== 0) {
             return;
         }
@@ -27,7 +32,10 @@ export class DraggableRegion extends GraphicObject {
         this.dragging = this.hovering;
 
         if (this.dragging) {
-            this.figure.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
+            // this.figure.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
+            this.preventEventsFunc = () => {
+                this.figure.preventMouseEvents(true, true);
+            };
             const lastMousePos = {x: e.e.clientX, y: e.e.clientY};
             const lastRegionPos = {x: this.regionRect.x, y: this.regionRect.y};
 
@@ -39,7 +47,8 @@ export class DraggableRegion extends GraphicObject {
 
                 this.regionRect.x = lastRegionPos.x + dist.x;
                 this.regionRect.y = lastRegionPos.y + dist.y;
-    
+
+                this.regionRectPositionChanged();
                 this.replot();
             }
 
@@ -56,11 +65,20 @@ export class DraggableRegion extends GraphicObject {
 
     public mouseUp(e: IMouseEvent): void {
         this.dragging = false;
-        this.figure.preventMouseEvents(false, false);
+        this.preventEventsFunc = () => {
+            this.figure.preventMouseEvents(false, false);
+        };
+        // this.figure.preventMouseEvents(false, false);
     }
 
     public mouseMove(e: IMouseEvent): void {
-        if (this.dragging || !this.isInsideEffRect(e.x, e.y)) return;
+        if (this.dragging) {
+            this.activeCursor = this.cursors.grabbing;
+            // this.setActiveCursor(this.cursors.grabbing);
+            return;
+        }
+        
+        if (!this.figure.isInsideEffRect(e.x, e.y)) return;
 
         var hovering = true;
         if (e.x < this.regionRect.x || e.x > this.regionRect.x + this.regionRect.w || 
@@ -71,16 +89,28 @@ export class DraggableRegion extends GraphicObject {
         // on change, repaint
         if (this.hovering !== hovering) {
             this.hovering = hovering;
-            // this.replot();
-        } 
-        
-        this.figure.preventMouseEvents(undefined, this.hovering);
+            this.active = hovering;
 
+            this.preventEventsFunc = () => {
+                this.figure.preventMouseEvents(undefined, this.hovering);
+            };
+
+            // this.setPreventEventsFunction(() => {
+            //     this.figure.preventMouseEvents(undefined, this.hovering);
+            //     // const a = 5;
+            // });
+        } 
+
+        // this.figure.preventMouseEvents(undefined, this.hovering);
+        
         if (this.hovering) {
-            e.topCanvas.style.cursor = this.cursors.move;
-        }  else {
-            e.topCanvas.style.cursor = this.cursors.crosshair;
-        }
+            this.activeCursor = this.cursors.move;
+            // e.topCanvas.style.cursor = this.cursors.move;
+        }  
+
+        // else {
+        //     e.topCanvas.style.cursor = this.cursors.crosshair;
+        // }
     }
 
     public replot() {
