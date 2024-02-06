@@ -246,16 +246,12 @@ export abstract class GraphicObject{
     }
 
     mouseDown(e: IMouseEvent) {
-        const root = this.rootItem;
+        this.rootItem?.visibleItems.push(this);
         for (const item of this.items) {
             if (item.isInsideCanvasRect(e.x, e.y)) {
                 item.mouseDown(e);
-                // if (root) root.visibleItems.push(item);
-                // this.visibleItems.push(...item.visibleItems, item);
-                // item.visibleItems = [];
             }
         }
-        if (root) root.visibleItems.push(this);
         if (this.objectType === ObjectType.root) {
             console.log(this, this.visibleItems);
             this.handleMultipleItemEvents(this.visibleItems);
