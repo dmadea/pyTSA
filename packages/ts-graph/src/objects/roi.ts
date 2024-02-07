@@ -44,6 +44,10 @@ export class ROIPoint extends DraggableRegion {
         this.recalculateRegionPosition(this._internalPosition);
     }
 
+    public resize(): void {
+        this.recalculateRegionPosition(this._internalPosition);
+    }
+
     set internalPosition(p: Point) {
         this._internalPosition = p;
         this.recalculateRegionPosition(p);
@@ -71,20 +75,17 @@ export class ROIPoint extends DraggableRegion {
         
         e.topCtx.save();
 
-        const r = this.figure.getEffectiveRect();
-        e.topCtx.rect(r.x, r.y, r.w, r.h);
-        e.topCtx.clip();
+        e.topCtx.lineWidth = this.hovering ? 4 : 2;
+        e.topCtx.fillStyle = 'white';
+        e.topCtx.fillRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
 
-        if (this.hovering){
-            // e.topCtx.setLineDash([4, 2]);
-            e.topCtx.lineWidth = 3;
-        } else {
-            e.topCtx.lineWidth = 1;
-        }
+        e.topCtx.strokeStyle = 'black';
+        e.topCtx.lineWidth = this.hovering ? 3 : 1;
         e.topCtx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
 
         e.topCtx.restore();
     }
+
 }
 
 
@@ -97,19 +98,68 @@ export class LinearROI extends GraphicObject {
         super(parent);
         this.figure = parent;
 
-        this.addPoint({x: 0, y: 0});
-        this.addPoint({x: 1, y: 1});
-        this.addPoint({x: -1, y: 1});
-        this.addPoint({x: -1, y: -1});
+        // this.addPoint({x: 400, y: 0});
+        // this.addPoint({x: 450, y: 1});
+        // this.addPoint({x: 480, y: 1});
+        // this.addPoint({x: 500, y: -1});
+        // this.addPoint({x: 550, y: -1});
+        // this.addPoint({x: 560, y: -0.5});
+        // this.addPoint({x: 800, y: -0.5});
+
     }
 
     public addPoint(internalPosition: Point) {
         this.addItem(new ROIPoint(this, this.figure, internalPosition));
     }
 
+    public getPositions(sorted: boolean = true): Point[] {
+        const positions = this.items.map(item => (item as ROIPoint).position);
+        if (sorted) {
+            positions.sort((a, b) => a.x - b.x);
+        }
+        return positions;
+    }
+
+    private _getSortedCanvasCoordinates(): Point[] {
+        const positions = this.items.map(item => {
+            const i = item as ROIPoint;
+            const p: Point = {
+                x: i.regionRect.x + i.regionRect.w / 2,
+                y: i.regionRect.y + i.regionRect.h / 2
+            }
+            return p;
+        });
+        positions.sort((a, b) => a.x - b.x);
+        return positions;
+    }
+
     public paint(e: IPaintEvent): void {
+        const positions = this._getSortedCanvasCoordinates();
+        if (positions.length === 0) return;
+
+        e.topCtx.save();
+
+        const r = this.figure.getEffectiveRect();
+        e.topCtx.beginPath();
+        e.topCtx.rect(r.x, r.y, r.w, r.h);
+        e.topCtx.clip();
+        
+        // paint connecting line
+        // first calculate the nearest line, how to connect points
+
+        e.topCtx.strokeStyle = 'black';
+        e.topCtx.lineWidth = 3;
+        e.topCtx.setLineDash([]);
+        e.topCtx.beginPath();
+        e.topCtx.moveTo(positions[0].x, positions[0].y);
+        
+        for (let i = 1; i < positions.length; i++) {
+            e.topCtx.lineTo(positions[i].x, positions[i].y);
+        }
+        e.topCtx.stroke();
 
         super.paint(e);
 
+        e.topCtx.restore();
     }
 }

@@ -70,8 +70,22 @@ export function isclose (a: number, b: number, rtol: number = 1e-3){
     return Math.abs(a - b) <= rtol * Math.abs(b);
 }
 
+export function formatNumber(num: number, sigFigures: number): number {
+    // Calculate the order of magnitude
+    const order = (num === 0) ? 0 : Math.floor(Math.log10(Math.abs(num)));
 
-export function formatNumber(num: number, sigFigures?: number): string {
+    // Calculate the multiplier to get the desired number of significant figures
+    const multiplier = 10 ** (sigFigures - 1 - order);
+
+    // Round the number to the desired significant figures
+    const rNum = (num === 0) ? 0 : Math.round(Math.abs(num) * multiplier) / multiplier;
+    const negative = num < 0;
+
+    return negative ? -rNum : rNum;
+}
+
+
+export function formatNumber2String(num: number, sigFigures?: number): string {
 
     if (num === undefined || Number.isNaN(num)) {
         return "";
@@ -86,19 +100,11 @@ export function formatNumber(num: number, sigFigures?: number): string {
     // // Round the number to the desired significant figures
     // const roundedNumber: number = Number(num.toFixed(sigFigures));
 
-    // // Convert the rounded number to a string and return
+    const rNum = Math.abs(formatNumber(num, sigFigures));
 
-    // Calculate the order of magnitude
-    let order = (num === 0) ? 0 : Math.floor(Math.log10(Math.abs(num)));
-
-    // Calculate the multiplier to get the desired number of significant figures
-    const multiplier = 10 ** (sigFigures - 1 - order);
-
-    // Round the number to the desired significant figures
     const negative = num < 0;
-    const rNum = (num === 0) ? 0 : Math.round(Math.abs(num) * multiplier) / multiplier;
 
-    order = (rNum === 0) ? 0 : Math.floor(Math.log10(Math.abs(rNum)));
+    const order = (rNum === 0) ? 0 : Math.floor(Math.log10(Math.abs(rNum)));
     let str;
 
     if ((order < -3 || order > 4) && order !== 0){

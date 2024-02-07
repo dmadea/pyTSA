@@ -50,7 +50,6 @@ def r_remove_dataset(index: str, tab_index: str):
 def r_perform_operation(operation: str, tab_index: str):
     if request.method == "POST":
         received_data = request.get_json()
-        print(received_data)
         return_data = session.perform_operation(operation, int(tab_index), **received_data)
         return Response(response=json.dumps(return_data), status=201)
     
@@ -60,6 +59,14 @@ def r_update_model_options(tab_index: str):
         received_data = request.get_json()
         return_data = session.update_model_options(int(tab_index), **received_data)
         return Response(response=json.dumps(return_data), status=201)
+    
+@app.route("/api/estimate_chirp_params/<tab_index>", methods=["POST"])
+def r_estimate_chirp_params(tab_index: str):
+    if request.method == "POST":
+        received_data = request.get_json()
+        return_data = session.estimate_chirp_params(int(tab_index), **received_data)
+        json_data = json.dumps(return_data)
+        return Response(response=json_data, status=201)
     
 @app.route("/api/update_model_param/<tab_index>", methods=["POST"])
 def r_update_model_param(tab_index: str):

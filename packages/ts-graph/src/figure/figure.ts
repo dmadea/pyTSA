@@ -3,7 +3,7 @@ import { GraphicObject, IMouseEvent, IPaintEvent} from "../objects/object";
 import { Rect, Point, Margin } from "../types";
 import { NumberArray } from "../array";
 import { backgroundColor,  frameColor, textColor } from "../settings";
-import { Dataset, determineSigFigures, drawTextWithGlow, formatNumber } from "../utils";
+import { Dataset, determineSigFigures, drawTextWithGlow, formatNumber2String } from "../utils";
 import { Colormap, Colormaps, ILut } from "../color";
 import { HeatMap } from "./heatmap";
 import { DraggableLines, Orientation } from "../objects/draggableLines";
@@ -421,8 +421,12 @@ export class Figure extends GraphicObject {
             return;
         } else {
             if (this.isInsideEffRect(e.x, e.y)) {
+                this.rootItem?.visibleItems.push(this);
                 this.scaling = e.e.button == 2;
                 this.panning = e.e.button == 0 || e.e.button == 1;
+            } else {
+                super.mouseDown(e);
+                return;
             }
         }
 
@@ -435,9 +439,7 @@ export class Figure extends GraphicObject {
             e.topCanvas.style.cursor = this.cursors.grabbing;
         } else if (this.scaling) {
             e.topCanvas.style.cursor = this.cursors.move;
-        } else {
-            super.mouseDown(e);
-        }
+        } 
 
         if  (this.scaling || this.panning) {
             const lastPos = {x: e.e.clientX, y: e.e.clientY};
@@ -534,7 +536,7 @@ export class Figure extends GraphicObject {
             var mouseup = (e: MouseEvent) => {
                 window.removeEventListener('mousemove', mousemove);
                 window.removeEventListener('mouseup', mouseup);
-                if  (this.topCanvas) this.topCanvas.style.cursor = this.cursors.crosshair;
+                if (this.topCanvas) this.topCanvas.style.cursor = this.cursors.crosshair;
             }
 
             window.addEventListener('mousemove', mousemove);
@@ -631,8 +633,6 @@ export class Figure extends GraphicObject {
     }
 
     public mouseMove(e: IMouseEvent): void {
-        // console.log('Mouse move from figure');
-
         if (this.panning || this.scaling) {
             return;
         }
@@ -644,12 +644,12 @@ export class Figure extends GraphicObject {
         
         if (this.isInsideEffRect(e.x, e.y)) {
             e.topCanvas.style.cursor = this.cursors.crosshair;
+            // this.active = false;
             this.mousePos = {x: e.x, y: e.y};
         } else {
             e.topCanvas.style.cursor = this.cursors.default;
             this.mousePos = null;
-
-            // console.log('setting up cursor');
+            // this.active = false;
         }
 
         // for handling mousemove event of items
@@ -920,18 +920,6 @@ export class Figure extends GraphicObject {
         // console.timeEnd('paintPlots');
     }
 
-    // protected storeImage() {
-        // https://stackoverflow.com/questions/4532166/how-to-capture-a-section-of-a-canvas-to-a-bitmap
-    //     if (!this.offScreenCanvasCtx || !this.mainCanvas) return;
-
-    //     const w = this.canvasRect.w;
-    //     const h = this.canvasRect.h;
-
-    //     this.offScreenCanvasCtx.drawImage(this.mainCanvas, 
-    //         this.canvasRect.x, this.canvasRect.y, w, h,
-    //         0, 0, w, h);
-    // }
-
     public repaintItems() {
         // console.time('repaintItems');
         if (!this.bottomCtx || !this.topCanvas || !this.bottomCanvas || !this.topCtx) return;
@@ -958,12 +946,12 @@ export class Figure extends GraphicObject {
         const figs = 4;
         if (this.mousePos) {
             const p = this.mapCanvas2Range(this.mousePos);
-            var text = `x: ${formatNumber(xIT(p.x), figs)}, y: ${formatNumber(yIT(p.y), figs)}`;
+            var text = `x: ${formatNumber2String(xIT(p.x), figs)}, y: ${formatNumber2String(yIT(p.y), figs)}`;
 
             if (this.heatmap) {
                 // add z value
                 var val = this.heatmap.dataset.getNearestValue(xIT(p.x), yIT(p.y));
-                text += `, z: ${formatNumber(val, figs)}`
+                text += `, z: ${formatNumber2String(val, figs)}`
             }
         } else {
             var text = "";
@@ -1027,6 +1015,8 @@ export class Figure extends GraphicObject {
 
         //plot content
         const r = this.getEffectiveRect();
+        // https://stackoverflow.com/questions/30094773/html5-canvas-cliprect-is-not-working-properly
+        e.bottomCtx.beginPath();
         e.bottomCtx.rect(r.x, r.y, r.w, r.h);
         e.bottomCtx.clip();
 
@@ -1042,8 +1032,9 @@ export class Figure extends GraphicObject {
 
         e.bottomCtx.save();
 
-        // e.bottomCtx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        // e.bottomCtx.clip();
+        e.bottomCtx.beginPath();
+        e.bottomCtx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.bottomCtx.clip();
 
         const dpr = window.devicePixelRatio;
         
@@ -1183,7 +1174,7 @@ export class Figure extends GraphicObject {
                 e.bottomCtx.lineTo(p.x, r.y + tickSize);
             }
 
-            let text = `${formatNumber(xticksVals[i], xFigs)}`;
+            let text = `${formatNumber2String(xticksVals[i], xFigs)}`;
             let metrics = e.bottomCtx.measureText(text);
             let textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
             if (textMaxHeight < textHeight) {
@@ -1263,7 +1254,7 @@ export class Figure extends GraphicObject {
                 e.bottomCtx.lineTo(r.x + r.w - tickSize, p.y);
             }
 
-            let text = `${formatNumber(yticksVals[i], yFigs)}`;
+            let text = `${formatNumber2String(yticksVals[i], yFigs)}`;
             let metrics = e.bottomCtx.measureText(text);
             let textWidth = metrics.width;
             // console.log(textWidth);

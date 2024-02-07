@@ -160,6 +160,13 @@ class BackendSession(object):
         model.update_options(**options)
         return self._get_fit_params(model.params)
     
+    def estimate_chirp_params(self, tab_index: int, **data):
+        model = self.tabs[tab_index].model
+        # print(data)
+        model.estimate_chirp(data['x'], data['y'])
+        # print(model.params)
+        return self._get_fit_params(model.params)
+
     def update_model_param(self, tab_index: int, param_data: dict):
         self._append_tabs(tab_index)
         

@@ -18,14 +18,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits<{
-  (e: "modelChanged", index: number): void;
-  (e: "simulateModelClicked"): void;
-  (e: "fitModelClicked"): void;
-  (e: "paramMinChanged", value: string, index: number, invalid: boolean): void;
-  (e: "paramMaxChanged", value: string, index: number, invalid: boolean): void;
-  (e: "paramValueChanged", value: string, index: number, invalid: boolean): void;
-  (e: "paramFixedChanged", value: boolean, index: number): void;
-  (e: "optionChanged", value: number | string | boolean, index: number): void;
+  (e: "modelChanged", index: number): void,
+  (e: "simulateModelClicked"): void,
+  (e: "fitModelClicked"): void,
+  (e: "estimateChirpParams"): void,
+  (e: "paramMinChanged", value: string, index: number, invalid: boolean): void,
+  (e: "paramMaxChanged", value: string, index: number, invalid: boolean): void,
+  (e: "paramValueChanged", value: string, index: number, invalid: boolean): void,
+  (e: "paramFixedChanged", value: boolean, index: number): void,
+  (e: "optionChanged", value: number | string | boolean, index: number): void
 }>();
 
 const invalidInputs: any = ref({
@@ -133,6 +134,7 @@ const collapsed = ref<boolean>(true);
 
   <button class="btn btn-outline-success" @click="emit('simulateModelClicked')" :disabled="tabData.isFitting">Simulate model</button>
   <button class="btn btn-outline-secondary" @click="emit('fitModelClicked')">{{ tabData.isFitting ? "Cancel" : "Fit" }}</button>
+  <button class="btn btn-outline-secondary" @click="emit('estimateChirpParams')">Estimate chirp params</button>
   <Loader v-show="tabData.isFitting"/>
   
   <h4 class=""> Params</h4>

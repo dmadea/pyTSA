@@ -53,10 +53,13 @@ export abstract class GraphicObject{
 
     public active: boolean = false;
     public activeCursor: string;
+    public passiveCursor: string | null;
     public preventEventsFunc: null | (() => void) = null;
 
-    private visibleItems: GraphicObject[] = [];
+    public visibleItems: GraphicObject[] = [];
     public objectType: ObjectType = ObjectType.child; 
+
+    public visible = true;
 
     // https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
     public cursors = {
@@ -91,6 +94,7 @@ export abstract class GraphicObject{
         // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
         this.activeCursor = this.cursors.default;
+        this.passiveCursor = null;
     }
 
     // public setPreventEventsFunction(f: () => void) {
@@ -166,7 +170,7 @@ export abstract class GraphicObject{
     public paint(e: IPaintEvent): void {
         for (const item of this.items) {
             // item.calcEffectiveRect();
-            item.paint(e);
+            if (item.visible) item.paint(e);
         }
     }
 
@@ -248,48 +252,49 @@ export abstract class GraphicObject{
     mouseDown(e: IMouseEvent) {
         this.rootItem?.visibleItems.push(this);
         for (const item of this.items) {
-            if (item.isInsideCanvasRect(e.x, e.y)) {
+            if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
                 item.mouseDown(e);
             }
         }
-        if (this.objectType === ObjectType.root) {
-            console.log(this, this.visibleItems);
-            this.handleMultipleItemEvents(this.visibleItems);
-            this.visibleItems = [];
-        }
+        this.handleMultipleItemEvents();
     }
 
     mouseUp(e: IMouseEvent) {
+        this.rootItem?.visibleItems.push(this);
         for (const item of this.items) {
-            item.mouseUp(e);
+            if (item.visible) item.mouseUp(e);
         }
-        this.handleMultipleItemEvents(this.items);
+        this.handleMultipleItemEvents();
     }
 
     mouseMove(e: IMouseEvent) {
-        const items = [];
+        this.rootItem?.visibleItems.push(this);
         for (const item of this.items) {
-            if (item.isInsideCanvasRect(e.x, e.y)) {
+            if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
                 item.mouseMove(e);
-                items.push(item);
             }
         }
-        this.handleMultipleItemEvents(items);
+        this.handleMultipleItemEvents();
     }
     
-    public handleMultipleItemEvents(items: GraphicObject[]) {
-        const activeItems = items.filter(item => item.active);
-        // console.log(items, activeItems);
+    public handleMultipleItemEvents() {
+        if (this.objectType !== ObjectType.root) return;
+        
+        const activeItems = this.visibleItems.filter(item => item.active);
+        // console.log(this.visibleItems, activeItems);
         if (activeItems.length > 0) {
             const last = activeItems[activeItems.length - 1];
             if (this.topCanvas) this.topCanvas.style.cursor = last.activeCursor;
             if (last.preventEventsFunc !== null) last.preventEventsFunc();
         } else {
-            for (const item of items) {
+            for (const item of this.visibleItems) {
                 if (item.preventEventsFunc !== null) item.preventEventsFunc();
+                if (item.passiveCursor && this.topCanvas) {
+                    this.topCanvas.style.cursor = item.passiveCursor;
+                }
             }
         }
-
+        this.visibleItems = [];
     }
 
     showContextMenu(e: IMouseEvent) {
@@ -328,25 +333,3 @@ export abstract class GraphicObject{
     }
 
 }
-
-// export abstract class ActiveGraphicObject extends GraphicObject {
-
-//     public active: boolean = false;
-//     public activeCursor: string;
-//     public preventEventsFunc: () => void;
-
-//     constructor(parent?: GraphicObject, canvasRect?: Rect, margin?: Margin) {
-//         super(parent, canvasRect, margin);
-//         this.activeCursor = this.cursors.default;
-//         this.preventEventsFunc = () => {return;};
-//     }
-
-//     public setPreventEventsFunction(f: () => void) {
-//         this.preventEventsFunc = f;
-//     }
-
-//     public setCursor(cursor: string) {
-//         this.activeCursor = cursor;
-//     }
-// }
-

@@ -1,4 +1,4 @@
-import { Dataset, Matrix, NumberArray, Scene, formatNumber } from "@pytsa/ts-graph";
+import { Dataset, Matrix, NumberArray, Point, Scene, formatNumber } from "@pytsa/ts-graph";
 import { APICallPOST } from "../utils";
 import { reactive } from "vue";
 import { SceneData } from "./scenedata";
@@ -57,6 +57,16 @@ export class DataView extends CanvasView<SceneData> {
     this.scene.processDatasets();
     APICallPOST(`remove_dataset/${index}/${this.tabIndex}`);
     console.log(`removeDataset called ${index}, id: ${this.id}`);
+  }
+
+  public activateChirpSelection() {
+    this.scene?.activateChirpSelection();
+  }
+
+  public getChirpSelectionData(): Point[] | null {
+    if (!this.scene || !this.scene.roi) return null;
+
+    return this.scene.roi.getPositions(true);
   }
 
   public updateData(datasets: Dataset[]) {

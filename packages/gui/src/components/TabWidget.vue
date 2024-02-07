@@ -132,6 +132,9 @@ const dimensionMultiply = () => {
             <button class="btn btn-outline-primary btn-icon" @click="dimensionMultiply">
               <Icon icon="iconoir:axes" :width="iconWidth"></Icon>
             </button>
+            <button class="btn btn-outline-primary btn-icon" @click="state.activeDataView.activateChirpSelection">
+              <Icon icon="iconoir:curve-array" :width="iconWidth"></Icon>
+            </button>
             
             <!-- <button class="btn btn-outline-primary btn-icon" @click="">
               <Icon icon="solar:test-tube-bold" :width="iconWidth"></Icon>
@@ -155,6 +158,7 @@ const dimensionMultiply = () => {
               :tab-data="state.activeTabData"
               :kinetic-models="state.kineticModels"
               @model-changed="(index) => state.kineticModelChanged(index)"
+              @estimate-chirp-params="() => state.activeFitModel.estimateChirpParams()"
               @fit-model-clicked="() => state.activeFitModel.fit()"
               @simulate-model-clicked="() => state.activeFitModel.simulateModel()"
               @option-changed="(value, index) => state.activeFitModel.optionChanged(value, index)"

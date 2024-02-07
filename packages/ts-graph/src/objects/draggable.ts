@@ -72,6 +72,7 @@ export class DraggableRegion extends GraphicObject {
     }
 
     public mouseMove(e: IMouseEvent): void {
+        super.mouseMove(e);
         if (this.dragging) {
             this.activeCursor = this.cursors.grabbing;
             // this.setActiveCursor(this.cursors.grabbing);

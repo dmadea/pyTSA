@@ -22,6 +22,7 @@ export { ILinePlot } from "./figure/figure";
 
 export { getDefaultColor } from "./color";
 export { LinearROI } from "./objects/roi";
+export { Point } from "./types";
 // export { CanvasComponent } from "./vue/CanvasComponent";
 
 

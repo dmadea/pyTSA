@@ -1,7 +1,7 @@
 import { Figure } from "../figure/figure";
 import { GraphicObject, IMouseEvent, IPaintEvent } from "./object";
 import { Point, Rect } from "../types";
-import { drawTextWithGlow, formatNumber } from "../utils";
+import { drawTextWithGlow, formatNumber2String } from "../utils";
 
 
 export enum Orientation {
@@ -184,6 +184,7 @@ export class DraggableLines extends GraphicObject {
     }
 
     mouseDown(e: IMouseEvent): void {
+        super.mouseDown(e);
         if (e.e.button !== 0) {
             return;
         }
@@ -283,6 +284,7 @@ export class DraggableLines extends GraphicObject {
     }
 
     public mouseUp(e: IMouseEvent): void {
+        super.mouseUp(e);
         this.verticalDragging = false;
         this.horizontalDragging = false;
         this.preventEventsFunc = () => {
@@ -366,6 +368,7 @@ export class DraggableLines extends GraphicObject {
     }
 
     public mouseMove(e: IMouseEvent): void {
+        super.mouseMove(e);
         if (this.horizontalDragging || this.verticalDragging) {
             return;
         }
@@ -456,7 +459,7 @@ export class DraggableLines extends GraphicObject {
             e.topCtx.textAlign = 'right';  // vertical alignment
             e.topCtx.textBaseline = 'middle'; // horizontal alignment
             e.topCtx.font = f.tickValuesFont;
-            const text = formatNumber(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
+            const text = formatNumber2String(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
     
             const _metrics = e.topCtx.measureText(text);
             let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
@@ -524,7 +527,7 @@ export class DraggableLines extends GraphicObject {
             e.topCtx.textAlign = 'center';  // vertical alignment
             e.topCtx.textBaseline = 'middle'; // horizontal alignment
             e.topCtx.font = f.tickValuesFont;
-            const text = formatNumber(num, 1 + ((va) ? f.yAxis.displayedSignificantFigures : f.xAxis.displayedSignificantFigures));
+            const text = formatNumber2String(num, 1 + ((va) ? f.yAxis.displayedSignificantFigures : f.xAxis.displayedSignificantFigures));
 
             const _metrics = e.topCtx.measureText(text);
             let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;

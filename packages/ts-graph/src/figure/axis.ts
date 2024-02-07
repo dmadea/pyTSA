@@ -117,7 +117,7 @@ export class Axis {
             const prevRange = this.range;
             const prevBounds = this.viewBounds;
             this._scale = scale;
-            this.viewBounds = prevBounds;
+            this.viewBounds = prevBounds; // TODO fix change of scale !!
             this.range = prevRange;
             // console.log(this.viewBounds);
         }

@@ -36,9 +36,10 @@ export interface IFitData {
 }
 
 function formatParams(params: IParam[]): IParam[] {
+  // console.log(params);
   for (const param of params) {
-    param.value = parseFloat(formatNumber(param.value as number, 4));
-    param.error = parseFloat(formatNumber(param.error ?? 0, 4));
+    param.value = formatNumber(param.value as number, 4);
+    param.error = formatNumber(param.error ?? 0, 4);
   }
   return params;
 }
@@ -98,6 +99,20 @@ export class FitModel {
     APICallPOST(`simulate_model/${this.tabIndex}`, null, (obj: IFitData) => {
       console.log(obj);
       this.plotFitMatrices(obj);
+    });
+  }
+
+  public estimateChirpParams() {
+    const points = this.state.activeDataView.getChirpSelectionData();
+    if (!points) return;
+
+    const data = {
+      x: points.map(p => p.x),
+      y: points.map(p => p.y)
+    }
+
+    APICallPOST(`estimate_chirp_params/${this.tabIndex}`, data, (obj: IFitData) => {
+      this.tabData.fitParams = formatParams(obj.params);
     });
   }
 

@@ -1,4 +1,4 @@
-import { Dataset, LayoutScene, Colormap, Colormaps, NumberArray } from "@pytsa/ts-graph";
+import { Dataset, LayoutScene, Colormap, Colormaps, NumberArray, LinearROI } from "@pytsa/ts-graph";
 
 interface IUpdateFunctions {
   updateTrace: (value: number) => void,
@@ -11,6 +11,11 @@ export class SceneData extends LayoutScene {
   public fitDataset: Dataset | null = null;
   public updateFuncions: IUpdateFunctions[] = [];
   public chirpData: NumberArray | null = null;
+  public roi: LinearROI | null = null;
+
+  constructor(parentElement: HTMLDivElement) {
+    super(parentElement);
+  }
 
   public updateFitData(fitDataset: Dataset, chirpData?: NumberArray) {
     this.fitDataset = fitDataset;
@@ -26,6 +31,31 @@ export class SceneData extends LayoutScene {
     }
 
     this.replot();
+  }
+
+  public activateChirpSelection() {
+    if (this.groupPlots.length === 0) return;
+
+    // this.groupPlots[0].heatmapDLines.visible = !this.groupPlots[0].heatmapDLines.visible;
+    const hfig = this.groupPlots[0].heatmapFig;
+
+    if (!this.roi) {
+      this.roi = new LinearROI(this.groupPlots[0].heatmapFig);
+      hfig.addItem(this.roi);
+      const y = hfig.internalRange.y + hfig.internalRange.h / 2;
+      const w = hfig.internalRange.w;
+      this.roi.addPoint({x: hfig.internalRange.x + 1 * w / 6 , y});
+      this.roi.addPoint({x: hfig.internalRange.x + 2 * w / 6 , y});
+      this.roi.addPoint({x: hfig.internalRange.x + 3 * w / 6 , y});
+      this.roi.addPoint({x: hfig.internalRange.x + 4 * w / 6 , y});
+      this.roi.addPoint({x: hfig.internalRange.x + 5 * w / 6 , y});
+      this.roi.visible = false;
+      hfig.resize();
+    }
+    
+    this.roi.visible = !this.roi.visible
+    hfig.repaintItems();
+    // console.log("activateChirpSelection", this.groupPlots[0].heatmapDLines.visible);
   }
 
   public updateData(datasets: Dataset[]) {
@@ -66,6 +96,7 @@ export class SceneData extends LayoutScene {
     // this.clear();
 
     this.groupPlots = [];
+    this.roi = null;
     // this.traceFigures = [];
     // this.spectraFigures = [];
 
