@@ -937,7 +937,13 @@ export class Figure extends GraphicObject {
 
         // clear the secondary canvas
 
+        e.topCtx.save();
+
         e.topCtx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+
+        e.topCtx.beginPath();
+        e.topCtx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.topCtx.clip();
 
         // plot postion
 
@@ -973,6 +979,9 @@ export class Figure extends GraphicObject {
         }
 
         super.paint(e);
+
+        e.topCtx.restore();
+
 
         // paint colorbar
         // if (this.colorbar) this.colorbar.paint(e);
