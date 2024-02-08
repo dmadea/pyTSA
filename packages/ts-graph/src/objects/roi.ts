@@ -12,8 +12,8 @@ export class ROIPoint extends DraggableRegion {
     constructor(parent: GraphicObject, parentFigure: Figure, internalPos?: Point) {
         super(parent, parentFigure, true);
         this._internalPosition = internalPos ?? {x: 0, y: 0};
-        this.regionRect.w = 30;
-        this.regionRect.h = 30;
+        this.regionRect.w = 20;
+        this.regionRect.h = 20;
     }
 
     public regionRectPositionChanged(): void {
@@ -75,9 +75,9 @@ export class ROIPoint extends DraggableRegion {
         
         e.topCtx.save();
 
-        e.topCtx.lineWidth = this.hovering ? 4 : 2;
-        e.topCtx.fillStyle = 'white';
-        e.topCtx.fillRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
+        e.topCtx.lineWidth = this.hovering ? 7 : 5;
+        e.topCtx.strokeStyle = 'white';
+        e.topCtx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
 
         e.topCtx.strokeStyle = 'black';
         e.topCtx.lineWidth = this.hovering ? 3 : 1;
@@ -92,7 +92,6 @@ export class ROIPoint extends DraggableRegion {
 export class LinearROI extends GraphicObject {
 
     private figure: Figure;
-    // public ROIList: ROIPoint[] = [];
 
     constructor(parent: Figure) {
         super(parent);

@@ -3,7 +3,7 @@ import { Point, Rect } from "../types";
 import { Figure } from "../figure/figure";
 
 
-export class DraggableRegion extends GraphicObject {
+export abstract class DraggableRegion extends GraphicObject {
 
     public hovering: boolean = false;
     public dragging: boolean = false;
@@ -32,7 +32,6 @@ export class DraggableRegion extends GraphicObject {
         this.dragging = this.hovering;
 
         if (this.dragging) {
-            // this.figure.preventMouseEvents(true, true); // to prevent to change the cursor while dragging
             this.preventEventsFunc = () => {
                 this.figure.preventMouseEvents(true, true);
             };
@@ -68,7 +67,6 @@ export class DraggableRegion extends GraphicObject {
         this.preventEventsFunc = () => {
             this.figure.preventMouseEvents(false, false);
         };
-        // this.figure.preventMouseEvents(false, false);
     }
 
     public mouseMove(e: IMouseEvent): void {
@@ -95,44 +93,32 @@ export class DraggableRegion extends GraphicObject {
             this.preventEventsFunc = () => {
                 this.figure.preventMouseEvents(undefined, this.hovering);
             };
-
-            // this.setPreventEventsFunction(() => {
-            //     this.figure.preventMouseEvents(undefined, this.hovering);
-            //     // const a = 5;
-            // });
         } 
-
-        // this.figure.preventMouseEvents(undefined, this.hovering);
         
         if (this.hovering) {
             this.activeCursor = this.cursors.move;
-            // e.topCanvas.style.cursor = this.cursors.move;
         }  
-
-        // else {
-        //     e.topCanvas.style.cursor = this.cursors.crosshair;
-        // }
     }
 
     public replot() {
         if (this.paintOnTopCanvas) {
             this.figure.repaintItems();
         } else {
-            this.figure.replot();
+            this.figure.replot(false);
         }
     }
 
-    public paint(e: IPaintEvent): void {
+    // public abstract paint(e: IPaintEvent): void {
 
-        const ctx = this.paintOnTopCanvas ? e.topCtx : e.bottomCtx;
+    //     // const ctx = this.paintOnTopCanvas ? e.topCtx : e.bottomCtx;
 
-        e.topCtx.save();
+    //     // e.topCtx.save();
 
-        if (true){
-            ctx.setLineDash([4, 2]);
-            ctx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
-        }
+    //     // if (true){
+    //     //     ctx.setLineDash([4, 2]);
+    //     //     ctx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
+    //     // }
 
-        e.topCtx.restore();
-    }
+    //     // e.topCtx.restore();
+    // }
 }

@@ -1,4 +1,4 @@
-import { Dataset, Matrix, NumberArray, formatNumber } from "@pytsa/ts-graph";
+import { Dataset, Matrix, NumberArray, formatNumber, formatNumber2String } from "@pytsa/ts-graph";
 import { APICallPOST, IMatrixData, json2arr, parseMatrixData } from "../utils";
 import { GlobalState, ITabData } from "../state";
 
@@ -7,7 +7,7 @@ export interface IParam {
   min: string,
   value: string | number,
   max: string,
-  error: number | null,
+  error: string | number | null,
   fixed: boolean
 }
 
@@ -15,11 +15,12 @@ export interface IOption {
   name: string,
   backendName: string,
   type: string,
-  value: string | number | boolean,
+  value: string | number | boolean | (string | number)[],
   options?: string[], // for type select
   min?: number,
   max?: number,
   step?: number
+  rangeNames?: string[]
 }
 
 export interface IFitData {
@@ -29,17 +30,24 @@ export interface IFitData {
     CfitEAS?: IMatrixData,
     STfitEAS?: IMatrixData,
     Dfit: IMatrixData,
-    LDM?: IMatrixData
+    LDM?: IMatrixData,
+    Cartifacts?: IMatrixData,
+    STartifacts?: IMatrixData,
   },
   params: IParam[],
   chirpData?: string
 }
 
+export type IFitParsedData = {
+  [K in keyof Omit<IFitData["matrices"], "Dfit" | "LDM">]: Matrix
+} & {residuals: Dataset, LDM?: Dataset};
+
+
 function formatParams(params: IParam[]): IParam[] {
   // console.log(params);
   for (const param of params) {
-    param.value = formatNumber(param.value as number, 4);
-    param.error = formatNumber(param.error ?? 0, 4);
+    param.value = formatNumber2String(param.value as number, 4, "-");
+    param.error = formatNumber2String(param.error as number ?? 0, 2, "-");
   }
   return params;
 }
@@ -69,19 +77,25 @@ export class FitModel {
     // fitted dataset
     const ds = this.state.views[this.tabIndex].dataview.getDataset(this.tabData.selectedDatasets[0]);
 
-    const Cfit = parseMatrixData(obj.matrices.CfitDAS);
-    const STfit = parseMatrixData(obj.matrices.STfitDAS);
     const Dfit = parseMatrixData(obj.matrices.Dfit);
+    const fitDataset = new Dataset(Dfit, ds.x.copy(), ds.y.copy());
+    // const LDM = parseMatrixData(obj.matrices.Dfit);
 
-    const CfitEAS: Matrix | undefined = obj.matrices.CfitEAS ? parseMatrixData(obj.matrices.CfitEAS) : undefined;
-    const STfitEAS: Matrix | undefined = obj.matrices.STfitEAS ? parseMatrixData(obj.matrices.STfitEAS) : undefined;
+    const parsedData: IFitParsedData = {
+      CfitDAS: parseMatrixData(obj.matrices.CfitDAS),
+      STfitDAS: parseMatrixData(obj.matrices.STfitDAS),
+      CfitEAS: obj.matrices.CfitEAS ? parseMatrixData(obj.matrices.CfitEAS) : undefined,
+      STfitEAS: obj.matrices.STfitEAS ? parseMatrixData(obj.matrices.STfitEAS) : undefined,
+      Cartifacts: obj.matrices.Cartifacts ? parseMatrixData(obj.matrices.Cartifacts) : undefined,
+      STartifacts: obj.matrices.STartifacts ? parseMatrixData(obj.matrices.STartifacts) : undefined,
+      residuals: new Dataset(Matrix.mSubtract(ds.data, Dfit), ds.x.copy(), ds.y.copy()),
+      // LDM: new Dataset(Dfit, ds.x.copy(), ds.y.copy())
+    }
 
     const chirp = obj.chirpData ? json2arr(obj.chirpData) : undefined;
 
-    const resDataset = new Dataset(Matrix.mSubtract(ds.data, Dfit), ds.x.copy(), ds.y.copy());
-    const fitDataset = new Dataset(Dfit, ds.x.copy(), ds.y.copy());
     this.state.activeDataView.updateFitData(fitDataset, chirp);
-    this.state.activeFitView.updateData(ds.x, ds.y, Cfit, STfit, resDataset, CfitEAS, STfitEAS);
+    this.state.activeFitView.updateData(ds.x, ds.y, parsedData);
   }
 
   public fit() {
@@ -116,8 +130,12 @@ export class FitModel {
     });
   }
 
-  public optionChanged(value: string | boolean | number, index: number) {
-    this.tabData.fitOptions[index].value = value;
+  public optionChanged(value: string | boolean | number, index: number, index2?: number) {
+    if (index2 !== undefined) {
+      (this.tabData.fitOptions[index].value as (string | number)[])[index2] = value as (string | number);
+    } else {
+      this.tabData.fitOptions[index].value = value;
+    }
     this.updateModelOptions(index);
   }
 
@@ -267,7 +285,7 @@ public setOptions(): IOption[] {
       value: false,
     },
     {
-      name: "Number of artifacts",
+      name: "Artifact order",
       backendName: "artifact_order",
       type: "number",
       value: 2,
@@ -282,6 +300,20 @@ public setOptions(): IOption[] {
       value: 0.0001,
       min: 0,
       step: 0.0001
+    },
+    {
+      name: "Include noise range (for estimation of correct weights)",
+      backendName: "include_noise_range",
+      type: "checkbox",
+      value: false,
+    },
+    {
+      name: "Noise range",
+      backendName: "noise_range",
+      type: "range",
+      value: [400, 600],
+      rangeNames: ["Start wavelength", "End wavelength"],
+      step: 1
     },
     
   ]

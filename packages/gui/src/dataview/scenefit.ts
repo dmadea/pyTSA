@@ -1,4 +1,5 @@
 import {  Figure,  Colorbar,  Grid,  Scene,  Matrix,  NumberArray, ILinePlot, getDefaultColor, Dataset, Colormap, Colormaps, LinearROI} from "@pytsa/ts-graph";
+import { IFitParsedData } from "./fitmodel";
 
 export class SceneFit extends Scene {
 
@@ -84,58 +85,55 @@ export class SceneFit extends Scene {
     this.grid.addItem(this.LDMFigure, 2, 1);
   }
 
-  public updateData(x: NumberArray, y: NumberArray, CDAS: Matrix, STDAS: Matrix, res: Dataset, CEAS?: Matrix, STEAS?: Matrix) {
-
-    if (CDAS.ncols !== STDAS.nrows) {
-      throw Error("asdapsodas");
+  public updateData(x: NumberArray, y: NumberArray, parsedData: IFitParsedData) {
+    if (parsedData.CfitDAS.ncols !== parsedData.STfitDAS.nrows) {
+      throw Error("Number of species of C profiles and spectra does not match.");
     }
     
-    const n = CDAS.ncols;
+    const n = parsedData.CfitDAS.ncols;
+    const plotsBefore = this.CfitDASFigure.linePlots.length > 0;
 
-    const currLength = this.CfitDASFigure.linePlots.length;
-    const diff = n - currLength;
-    if (diff > 0) {   // add line plots
-      for (let i = 0; i < diff; i++) {
-        const color = getDefaultColor(i + currLength);
-        const ld: number[] = [];
+    // remove line plots
+
+    this.CfitDASFigure.linePlots = [];
+    this.CfitEASFigure.linePlots = [];
+    this.STfitDASFigure.linePlots = [];
+    this.STfitEASFigure.linePlots = [];
+
+    // plot
+
+    if (parsedData.Cartifacts && parsedData.STartifacts) {
+      for (let i = 0; i < parsedData.Cartifacts.ncols; i++) {
+        const color = getDefaultColor(i);
+        const ld: number[] = [8, 4];
         const lw = 1;
-        const labelDAS = `DAS ${i + currLength + 1}`;
-        const labelEAS = `EAS ${i + currLength + 1}`;
-        this.CfitDASFigure.plotLine([], [], color, ld, lw, labelDAS);
-        this.CfitEASFigure.plotLine([], [], color, ld, lw, labelEAS);
-        this.STfitDASFigure.plotLine([], [], color, ld, lw, labelDAS);
-        this.STfitEASFigure.plotLine([], [], color, ld, lw, labelEAS);
-      }
-    } else if (diff < 0) {   // remove line plots
-      for (let i = 0; i < -diff; i++) {
-        this.CfitDASFigure.linePlots.pop();
-        this.CfitEASFigure.linePlots.pop();
-        this.STfitDASFigure.linePlots.pop();
-        this.STfitEASFigure.linePlots.pop();
+        const label = `Artifact ${i + 1}`;
+
+        this.CfitDASFigure.plotLine(y, parsedData.Cartifacts.getCol(i) , color, ld, lw, label);
+        this.CfitEASFigure.plotLine(y, parsedData.Cartifacts.getCol(i), color, ld, lw, label);
+        this.STfitDASFigure.plotLine(x, parsedData.STartifacts.getRow(i), color, ld, lw, label);
+        this.STfitEASFigure.plotLine(x, parsedData.STartifacts.getRow(i), color, ld, lw, label);
       }
     }
 
-    for (let i = 0; i < n; i++) { 
+    for (let i = 0; i < n; i++) {
+      const color = getDefaultColor(i);
+      const ld: number[] = [];
+      const lw = 2;
+      const labelDAS = `DAS ${i + 1}`;
+      const labelEAS = `EAS ${i + 1}`;
 
-      this.CfitDASFigure.linePlots[i].x = y;
-      this.CfitEASFigure.linePlots[i].x = y;
-      this.STfitDASFigure.linePlots[i].x = x;
-      this.STfitEASFigure.linePlots[i].x = x;
-      
-      this.CfitDASFigure.linePlots[i].y = CDAS.getCol(i);
-      if (CEAS) {
-        this.CfitEASFigure.linePlots[i].y = CEAS.getCol(i);
+      this.CfitDASFigure.plotLine(y, parsedData.CfitDAS.getCol(i) , color, ld, lw, labelDAS);
+      if (parsedData.CfitEAS) {
+        this.CfitEASFigure.plotLine(y, parsedData.CfitEAS.getCol(i), color, ld, lw, labelEAS);
       }
-      
-      this.STfitDASFigure.linePlots[i].y = STDAS.getRow(i);
-      if (STEAS) {
-        this.STfitEASFigure.linePlots[i].y = STEAS.getRow(i);
+      this.STfitDASFigure.plotLine(x, parsedData.STfitDAS.getRow(i), color, ld, lw, labelDAS);
+      if (parsedData.STfitEAS) {
+        this.STfitEASFigure.plotLine(x, parsedData.STfitEAS.getRow(i), color, ld, lw, labelEAS);
       }
-      
-      // this.STEASPlots[i].y = NumberArray.mul(this.STDASPlot[i].y, 1 / this.STDASPlot[i].y.max());
     }
 
-    const hmap = this.residualsFigure.plotHeatmap(res, new Colormap(Colormaps.symgrad));
+    const hmap = this.residualsFigure.plotHeatmap(parsedData.residuals, new Colormap(Colormaps.symgrad));
     this.resCBar.linkHeatMap(hmap);
     
     // set view bounds
@@ -147,8 +145,15 @@ export class SceneFit extends Scene {
     
     this.residualsFigure.xAxis.viewBounds = [x[0], x[x.length - 1]];
     this.residualsFigure.yAxis.viewBounds = [y[0], y[y.length - 1]];
-    
+
     this.resCBar.viewAll();
+
+    if (!plotsBefore) {
+      this.CfitDASFigure.viewAll();
+      this.CfitEASFigure.viewAll();
+      this.STfitDASFigure.viewAll();
+      this.STfitEASFigure.viewAll();
+    }
 
     this.replot();
     setTimeout(() => this.resize(), 100);

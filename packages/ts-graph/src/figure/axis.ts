@@ -6,11 +6,14 @@ export enum AxisType {
     yAxis
 }
 
+export type Scale = "lin" | "symlog" | "log" | NumberArray;
+
 export class Axis {
 
     public label: string;
-    private _scale: string | NumberArray;  // lin, lo, symlog, data provided as NumberArray
-    private _viewBounds: [number, number];   // bounds of view or [x0, x1]
+    private _scale: Scale;  // lin, log, symlog, data provided as NumberArray
+    private _internalViewBounds: [number, number];   // bounds of view or [x0, x1]
+    private _viewBounds: [number, number];
     public autoscale: boolean;
     public inverted: boolean;
     private _symlogLinthresh: number; // Defines the range (-x, x), within which the plot is linear.
@@ -25,13 +28,14 @@ export class Axis {
     // public invTransform: (num: number) => number = num => num; 
     // private _range: [number, number];
 
-    constructor (figure: Figure, axisType: AxisType, label?: string, scale?: string | NumberArray, viewBounds?: [number, number],
+    constructor (figure: Figure, axisType: AxisType, label?: string, scale?: Scale, internalViewBounds?: [number, number],
         autoscale?: boolean, inverted?: boolean, symlogLinthresh?: number, symlogLinscale?: number, keepCentered?: boolean) {
             this.figure = figure;
             this.axisType = axisType;
             this.label = label ?? '';
             this._scale = scale ?? 'lin';
-            this._viewBounds = viewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];  // in internal range coordinates
+            this._internalViewBounds = internalViewBounds ?? [-Number.MAX_VALUE, Number.MAX_VALUE];  // in internal range coordinates
+            this._viewBounds = [-Number.MAX_VALUE, Number.MAX_VALUE]; // TODO make it properly
             this.autoscale = autoscale ?? true;
             this.inverted = inverted ?? false;
             this._symlogLinscale = symlogLinscale ?? 1;
@@ -41,20 +45,20 @@ export class Axis {
     }
 
     set viewBounds(bounds: [number, number]) {
-        this._viewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
+        this._viewBounds = bounds;
+        this._internalViewBounds = [this.invTransform(bounds[0]), this.invTransform(bounds[1])];
 
-        if (this.internalRange[0] < this._viewBounds[0] || this.internalRange[1] > this._viewBounds[1]) {
-            this.internalRange = this._viewBounds;
+        if (this.internalRange[0] < this._internalViewBounds[0] || this.internalRange[1] > (this._internalViewBounds[1] - this._internalViewBounds[0])) {
+            this.internalRange = [this._internalViewBounds[0], this._internalViewBounds[1] - this._internalViewBounds[0]];
         }
     }
 
     get viewBounds() {
-        return [this.transform(this._viewBounds[0]), this.transform(this._viewBounds[1])]
-        // return this._viewBounds;
+        return this._viewBounds;
     }
 
     get internalViewBounds(){
-        return this._viewBounds;
+        return this._internalViewBounds;
     }
 
     // public setViewBounds(bounds: [number, number]) {
@@ -112,12 +116,11 @@ export class Axis {
         return this._scale;
     }
 
-    set scale(scale: string | NumberArray) {
+    set scale(scale: Scale) {
         if (scale !== this._scale) {
             const prevRange = this.range;
-            const prevBounds = this.viewBounds;
             this._scale = scale;
-            this.viewBounds = prevBounds; // TODO fix change of scale !!
+            this.viewBounds = this.viewBounds; // TODO fix change of scale !!
             this.range = prevRange;
             // console.log(this.viewBounds);
         }

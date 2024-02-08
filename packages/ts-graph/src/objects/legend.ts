@@ -31,6 +31,7 @@ export class Legend extends DraggableRegion {
         e.bottomCtx.save();
 
         const r = this.figure.getEffectiveRect();
+        e.bottomCtx.beginPath();
         e.bottomCtx.rect(r.x, r.y, r.w, r.h);
         e.bottomCtx.clip();
 

@@ -27,9 +27,6 @@ import matplotlib.pyplot as plt
 import scipy.constants as sc
 # from scipy.linalg import lstsq
 
-
-
-
 # abstract class that every model must inherits
 
 # kinetic model class for models which can be solved by variable projection method, 
@@ -103,7 +100,8 @@ class KineticModel(object):
         self.fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='linear', verbose=2, jac='3-point')
 
         # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum as 1/std
-        self.noise_range: None | tuple[float, float] = None   
+        self.include_noise_range: bool = False
+        self.noise_range: tuple[float, float] = []   
 
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
 
@@ -158,7 +156,7 @@ class KineticModel(object):
         return self.species_names[i]
 
     def get_weights_lstsq(self):
-        if self.noise_range is None:
+        if not self.include_noise_range:
             return None
         
         i, j = fi(self.dataset.wavelengths, self.noise_range)
@@ -170,7 +168,7 @@ class KineticModel(object):
         weights = np.ones((self.dataset.times.shape[0], self.dataset.wavelengths.shape[0]))
 
         # https://gregorygundersen.com/blog/2022/08/09/weighted-ols/
-        if self.noise_range:
+        if self.include_noise_range:
             assert len(self.noise_range) == 2
             i, j = fi(self.dataset.wavelengths, self.noise_range)
 

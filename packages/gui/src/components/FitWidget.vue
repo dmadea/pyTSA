@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, ref, defineEmits, PropType } from "vue";
+import { defineProps, ref, defineEmits, PropType, watch } from "vue";
 import { FitModel } from "@/dataview/fitmodel";
 import { v4 } from "uuid";
 import { ITabData } from "@/state";
@@ -26,7 +26,7 @@ const emit = defineEmits<{
   (e: "paramMaxChanged", value: string, index: number, invalid: boolean): void,
   (e: "paramValueChanged", value: string, index: number, invalid: boolean): void,
   (e: "paramFixedChanged", value: boolean, index: number): void,
-  (e: "optionChanged", value: number | string | boolean, index: number): void
+  (e: "optionChanged", value: number | string | boolean, index: number, index2?: number): void
 }>();
 
 const invalidInputs: any = ref({
@@ -34,6 +34,12 @@ const invalidInputs: any = ref({
   value: {},
   max: {},
 });
+
+// TODO check error on input change
+const handle = watch(props.tabData.fitOptions, () => {
+  console.log("watch changed", props.tabData.fitOptions);
+  // throw Error("asd")
+ });
 
 
 const paramMinChanged = (value: string, index: number) => {
@@ -106,20 +112,30 @@ const collapsed = ref<boolean>(true);
         <div v-for="(option, index) in tabData.fitOptions" :key="index">
         <div v-if="option.type === 'checkbox'" class="form-check">
           <input class="form-check-input" type="checkbox" :id="v4()" :checked="(option.value as boolean)" :disabled="tabData.isFitting"
-          @input="ev => emit('optionChanged', (ev.target as HTMLInputElement).checked, index)">
+          @input="ev => emit('optionChanged', (ev.target as HTMLInputElement).checked, index)"/>
           <label class="form-check-label small" :for="v4()">
             {{ option.name }}
           </label>
         </div>
 
-        <div v-else-if="option.type === 'text' || option.type === 'number'" class="input-group input-group-sm mb-3">
+        <div v-else-if="option.type === 'text' || option.type === 'number'" class="input-group input-group-sm mb-1">
             <span class="input-group-text">{{ option.name }}</span>
             <input :type="option.type" class="form-control" :value="option.value" :disabled="tabData.isFitting"
             @input="ev => emit('optionChanged', (option.type === 'text') ? (ev.target as HTMLInputElement).value : parseFloat((ev.target as HTMLInputElement).value), index)"
-            placeholder="" :min="option.min" :max="option.max" :step="option.step" >
+            placeholder="" :min="option.min" :max="option.max" :step="option.step" />
         </div>
 
-        <div v-else-if="option.type === 'select'" class="input-group input-group-sm mb-3">
+        <div v-else-if="option.type === 'range'" class="input-group input-group-sm mb-1">
+          <span class="input-group-text">{{ option.name }}</span>
+            <template v-for="(val, index2) in (option.value as (string | number)[])">
+              <span class="input-group-text">{{ option.rangeNames ? option.rangeNames[index2] : "" }}</span>
+              <input type="number" class="form-control" :value="val" :disabled="tabData.isFitting"
+              @input="ev => emit('optionChanged', parseFloat((ev.target as HTMLInputElement).value), index, index2)"
+              placeholder="" :min="option.min" :max="option.max" :step="option.step" />
+            </template>
+        </div>
+
+        <div v-else-if="option.type === 'select'" class="input-group input-group-sm mb-1">
           <label class="input-group-text" :for="`select${index}`">{{ option.name }}</label>
           <select class="form-select" :id="`select${index}`" :disabled="tabData.isFitting" :value="option.value" @input="ev => emit('optionChanged', (ev.target as HTMLSelectElement).value, index)">
             <option disabled value="">Please select one</option>

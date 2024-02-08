@@ -35,7 +35,7 @@ const crop = () => {
       onCancel() {
         close();
       },
-      selection: ["1", "2", "3","4"]
+      selection: props.state.activeDataView.getCurrentMatrixSelection()
     },
   });
 
@@ -161,7 +161,7 @@ const dimensionMultiply = () => {
               @estimate-chirp-params="() => state.activeFitModel.estimateChirpParams()"
               @fit-model-clicked="() => state.activeFitModel.fit()"
               @simulate-model-clicked="() => state.activeFitModel.simulateModel()"
-              @option-changed="(value, index) => state.activeFitModel.optionChanged(value, index)"
+              @option-changed="(value, index, index2) => state.activeFitModel.optionChanged(value, index, index2)"
               @param-min-changed="(value, index, invalid) => state.activeFitModel.paramMinChanged(value, index, invalid)"
               @param-max-changed="(value, index, invalid) => state.activeFitModel.paramMaxChanged(value, index, invalid)"
               @param-fixed-changed="(value, index) => state.activeFitModel.paramFixedChanged(value, index)"

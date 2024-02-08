@@ -50,10 +50,12 @@ def put_matrix_data(arr: np.ndarray):
 #     CfitEAS?: IMatrixData,
 #     STfitEAS?: IMatrixData,
 #     Dfit: IMatrixData,
-#     LDM?: IMatrixData
+#     LDM?: IMatrixData,
+#     Cartifacts?: IMatrixData,
+#     STartifacts?: IMatrixData,
 #   },
 #   params: IParam[],
-#   chirpData: NumberArray
+#   chirpData?: string
 # }
 
 # interface IMatrixData {
@@ -162,9 +164,7 @@ class BackendSession(object):
     
     def estimate_chirp_params(self, tab_index: int, **data):
         model = self.tabs[tab_index].model
-        # print(data)
         model.estimate_chirp(data['x'], data['y'])
-        # print(model.params)
         return self._get_fit_params(model.params)
 
     def update_model_param(self, tab_index: int, param_data: dict):
@@ -185,10 +185,12 @@ class BackendSession(object):
         #     CfitEAS?: IMatrixData,
         #     STfitEAS?: IMatrixData,
         #     Dfit: IMatrixData,
-        #     LDM?: IMatrixData
+        #     LDM?: IMatrixData,
+        #     Cartifacts?: IMatrixData,
+        #     STartifacts?: IMatrixData,
         #   },
         #   params: IParam[],
-        #   chirpData: NumberArray
+        #   chirpData?: string
         # }
         data = dict(CfitDAS=put_matrix_data(model.C_opt if model.C_opt.ndim == 2 else model.C_opt[0]), 
                     STfitDAS=put_matrix_data(model.ST_opt),
@@ -199,6 +201,14 @@ class BackendSession(object):
 
         if model.ST_EAS is not None:
             data.update(dict(STfitEAS=put_matrix_data(model.ST_EAS)))
+
+        if model.C_artifacts is not None:
+            data.update(dict(Cartifacts=put_matrix_data(model.C_artifacts if model.C_artifacts.ndim == 2 else model.C_artifacts[0])))
+
+        if model.ST_artifacts is not None:
+            data.update(dict(STartifacts=put_matrix_data(model.ST_artifacts)))
+
+        # print(model.C_artifacts, model.ST_artifacts)
 
         return dict(matrices=data, chirpData=arr2json(model.get_actual_chirp_data()))
 
@@ -222,11 +232,6 @@ class BackendSession(object):
         m.simulate()
 
         return self._put_fit_matrices(m)
-
-
-
-
-
 
 
 def get_data():

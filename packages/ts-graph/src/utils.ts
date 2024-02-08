@@ -85,7 +85,7 @@ export function formatNumber(num: number, sigFigures: number): number {
 }
 
 
-export function formatNumber2String(num: number, sigFigures?: number): string {
+export function formatNumber2String(num: number, sigFigures?: number, minusSymbol: string = "\u2212"): string {
 
     if (num === undefined || Number.isNaN(num)) {
         return "";
@@ -113,7 +113,7 @@ export function formatNumber2String(num: number, sigFigures?: number): string {
         const places = sigFigures - 1 - order;
         str = rNum.toFixed(Math.max(0, places));
     }
-    return (negative) ? `\u2212${str}` : str;
+    return (negative) ? `${minusSymbol}${str}` : str;
 }
 
 export function genTestData(n=100){

@@ -463,10 +463,10 @@ def fit_sum_exp(x: np.ndarray, y: np.ndarray, n: int = 2, fit_intercept=True) ->
     return multipliers, lambdas
 
 
-def fit_polynomial_coefs(x: np.ndarray, y: np.ndarray, n: int = 3):
-    X = np.ones((x.shape[0], n))  # polynomial regression matrix
+def fit_polynomial_coefs(x: np.ndarray, y: np.ndarray, order: int = 3):
+    X = np.ones((x.shape[0], order + 1))  # polynomial regression matrix
 
-    for i in range(1, n):
+    for i in range(1, order + 1):
         X[:, i:] *= x[:, None] / 100
 
     coefs = scipy_lstsq(X, y)[0]

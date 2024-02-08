@@ -1,10 +1,17 @@
 <script setup lang="ts">
-  import { reactive, defineEmits, defineProps, ref, PropType} from 'vue';
+  import { defineEmits, defineProps, ref, PropType } from 'vue';
 import CustomModal from './CustomModal.vue'
+
+export interface CropData {
+  w0: string,
+  w1: string,
+  t0: string,
+  t1: string,
+}
 
 const props = defineProps({
   selection: {
-    type: Array as PropType<string[]>,
+    type: Object as PropType<CropData>,
     required: false
   }
 })
@@ -14,7 +21,7 @@ const props = defineProps({
     (e: 'cancel'): void
   }>()
 
-  const data = reactive({
+  const data = ref<CropData>({
     w0: "",
     w1: "",
     t0: "",
@@ -27,10 +34,10 @@ const errors = ref<boolean[]>([false, false, false, false]);
   const submit = () =>  {
 
     const parsedData = {
-      w0: data.w0 === "" ? null : parseFloat(data.w0),
-      w1: data.w1 === "" ? null : parseFloat(data.w1),
-      t0: data.t0 === "" ? null : parseFloat(data.t0),
-      t1: data.t1 === "" ? null : parseFloat(data.t1)
+      w0: data.value.w0 === "" ? null : parseFloat(data.value.w0),
+      w1: data.value.w1 === "" ? null : parseFloat(data.value.w1),
+      t0: data.value.t0 === "" ? null : parseFloat(data.value.t0),
+      t1: data.value.t1 === "" ? null : parseFloat(data.value.t1)
     }
 
     errors.value.fill(false);
@@ -56,10 +63,7 @@ const errors = ref<boolean[]>([false, false, false, false]);
 
   const useSelection = () => {
     if (props.selection) {
-      data.w0 = props.selection[0];
-      data.w1 = props.selection[1];
-      data.t0 = props.selection[2];
-      data.t1 = props.selection[3];
+      data.value = props.selection;
     }
   };
 

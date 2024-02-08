@@ -90,6 +90,8 @@ export class Figure extends GraphicObject {
     private _preventPanning: boolean = false;
     private _preventScaling: boolean = false;
 
+    private autoscaleOnRepaint: boolean = false;
+
     // public offScreenCanvas: OffscreenCanvas;
     // protected offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
 
@@ -584,9 +586,12 @@ export class Figure extends GraphicObject {
         super.rangeChanged(range);
     }
 
-    public replot(): void {
+    public replot(autoscaleOnRepaint: boolean = true): void {
         if (this.panning || this.scaling) return;
+        const prevValue = this.autoscaleOnRepaint;
+        this.autoscaleOnRepaint = autoscaleOnRepaint;
         super.replot();
+        this.autoscaleOnRepaint = prevValue;
     }
 
     public rangeChanged(range: Rect): void {
@@ -878,8 +883,6 @@ export class Figure extends GraphicObject {
             return;
         }
 
-        if (!this.panning && !this.scaling) this.autoscale();
-
         const yIT = this.yAxis.invTransform;
         const xIT = this.xAxis.invTransform;
 
@@ -996,14 +999,7 @@ export class Figure extends GraphicObject {
     // }
 
     paint(e: IPaintEvent): void {
-        // for (const item of this.items) {
-        //     item.canvasRect = {...this.canvasRect};
-        //     item.margin = {...this.margin};
-        // }
-
-        // if (this.colorbar) {
-        //     this.setColorbarCR();
-        // }
+        if (!this.panning && !this.scaling && this.autoscaleOnRepaint) this.autoscale();
 
         e.bottomCtx.save();
 
@@ -1038,6 +1034,9 @@ export class Figure extends GraphicObject {
         //     console.log('painting canceled');
         //     return;
         // }
+
+        // this.paintItems(e);
+
 
         e.bottomCtx.save();
 

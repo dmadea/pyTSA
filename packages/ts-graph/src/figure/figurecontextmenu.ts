@@ -2,7 +2,7 @@ import { Colormap, Colormaps, ILut } from "../color";
 import { ContextMenu } from "../contextmenu";
 import { Orientation } from "../objects/draggableLines";
 import { NumberArray } from "../array";
-import { Axis, AxisType } from "./axis";
+import { Axis, AxisType, Scale } from "./axis";
 import { Colorbar, Figure } from "./figure";
 
 
@@ -32,7 +32,7 @@ class AxisContextMenu extends ContextMenu {
         }
     }
 
-    protected getScaleFromText(scale: string): string | NumberArray {
+    protected getScaleFromText(scale: string): Scale {
         switch (scale) {
             case 'Linear': {
                 return "lin";

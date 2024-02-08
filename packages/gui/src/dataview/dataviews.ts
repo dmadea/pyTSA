@@ -1,10 +1,12 @@
-import { Dataset, Matrix, NumberArray, Point, Scene, formatNumber } from "@pytsa/ts-graph";
+import { Dataset, Matrix, NumberArray, Point, Scene, formatNumber, formatNumber2String } from "@pytsa/ts-graph";
 import { APICallPOST } from "../utils";
 import { reactive } from "vue";
 import { SceneData } from "./scenedata";
 import { GlobalState } from "../state";
 import { CanvasView as CV } from "@pytsa/ts-graph";
 import { SceneFit } from "./scenefit";
+import { IFitParsedData } from "./fitmodel";
+import { CropData } from "@/components/types";
 
 interface AssignedDataset {
   dataset: Dataset,
@@ -69,6 +71,18 @@ export class DataView extends CanvasView<SceneData> {
     return this.scene.roi.getPositions(true);
   }
 
+  public getCurrentMatrixSelection(index: number = 0): CropData | undefined {
+    if (!this.scene) return;
+
+    const rng = this.scene.groupPlots[index].heatmapFig.range;
+    return {
+      w0: formatNumber2String(rng.x, 4, "-"),
+      w1: formatNumber2String(rng.x + rng.w, 4, "-"),
+      t0: formatNumber2String(rng.y, 4, "-"),
+      t1: formatNumber2String(rng.y + rng.h, 4, "-")
+    }
+  }
+
   public updateData(datasets: Dataset[]) {
     if (!this.scene) return;
 
@@ -103,8 +117,8 @@ export class FitView extends CanvasView<SceneFit> {
     this.scene = new SceneFit(document.getElementById(this.id) as HTMLDivElement);
   }
 
-  public updateData(x: NumberArray, y: NumberArray, CDAS: Matrix, STDAS: Matrix, res: Dataset, CEAS?: Matrix, STEAS?: Matrix) {
-    this.scene?.updateData(x, y, CDAS, STDAS, res, CEAS, STEAS);
+  public updateData(x: NumberArray, y: NumberArray, parsedData: IFitParsedData) {
+    this.scene?.updateData(x, y, parsedData);
   }
 
 

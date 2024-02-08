@@ -14,7 +14,7 @@ export { Axis } from "./figure/axis";
 export { Grid } from "./objects/grid";
 export { DraggableLines } from "./objects/draggableLines";
 
-export { formatNumber } from "./utils";
+export { formatNumber, formatNumber2String } from "./utils";
 
 export { CanvasView } from "./vue/canvasview";
 
