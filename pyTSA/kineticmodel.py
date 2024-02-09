@@ -116,6 +116,7 @@ class KineticModel(object):
     def add_weight(self, w0: float, w1: float, weight: float = 1):
         self._weights.append((w0, w1, weight))
 
+
     def _update_params(self):
         """Calls internally init_params and then transfers values from old params to new ones."""
 
@@ -526,13 +527,18 @@ class FirstOrderModel(KineticModel):
         # simulation for DADS only
         self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau)
 
+    def weighted_residuals(self) -> np.ndarray:
+        if (self.matrix_opt is None):
+            raise TypeError("Optimized matrix is None")
+        R = self.dataset.matrix_fac - self.matrix_opt
+        weights = self.get_weights()
+        return R * weights
+
 
     def fit(self):
         def residuals(params):
             self.simulate(params)
-            R = self.dataset.matrix_fac - self.matrix_opt
-            weights = self.get_weights()
-            return R * weights
+            return self.weighted_residuals()
 
         # iter_cb - callback function
         self.minimizer = Minimizer(residuals, self.params, nan_policy='omit') #,

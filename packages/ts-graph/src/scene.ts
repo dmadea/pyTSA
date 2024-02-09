@@ -16,6 +16,7 @@ export class Scene extends GraphicObject {
 
     private canvasResizeObserver: ResizeObserver;
     protected navBar?: SceneNavBar;
+    private wrapper: HTMLDivElement;
 
     protected setNavBar() {
         this.navBar = new SceneNavBar(this);
@@ -26,8 +27,8 @@ export class Scene extends GraphicObject {
 
         this.objectType = ObjectType.root;
         
-        var wrapper = document.createElement("div");
-        wrapper.style.cssText = `position: relative; width: 100%; height: ${0.8 * document.body.clientHeight}px`;
+        this.wrapper = document.createElement("div") as HTMLDivElement;
+        this.wrapper.style.cssText = `position: relative; width: 100%; height: ${0.8 * document.body.clientHeight}px`;
 
         this.setNavBar();
 
@@ -39,10 +40,10 @@ export class Scene extends GraphicObject {
         mainCanvas.style.zIndex = "0";
         secCanvas.style.zIndex = "1";
 
-        wrapper.appendChild(mainCanvas);
-        wrapper.appendChild(secCanvas);
+        this.wrapper.appendChild(mainCanvas);
+        this.wrapper.appendChild(secCanvas);
         if (this.navBar) parentElement.appendChild(this.navBar.divElement);
-        parentElement.appendChild(wrapper);
+        parentElement.appendChild(this.wrapper);
 
         this.bottomCtx = mainCanvas.getContext('2d') as CanvasRenderingContext2D;
         this.topCtx = secCanvas.getContext('2d') as CanvasRenderingContext2D;
@@ -62,14 +63,15 @@ export class Scene extends GraphicObject {
                 if (this.bottomCanvas && this.topCanvas){
     
                     const dpr = window.devicePixelRatio;
+                    this.wrapper.style.height = `${0.8 * document.body.clientHeight}px`;
                     
-                    this.bottomCanvas.style.width = `${wrapper.clientWidth}px`;
-                    this.topCanvas.style.width = `${wrapper.clientWidth}px`;
-                    this.bottomCanvas.style.height = `${wrapper.clientHeight}px`;
-                    this.topCanvas.style.height = `${wrapper.clientHeight}px`;
+                    this.bottomCanvas.style.width = `${this.wrapper.clientWidth}px`;
+                    this.topCanvas.style.width = `${this.wrapper.clientWidth}px`;
+                    this.bottomCanvas.style.height = `${this.wrapper.clientHeight}px`;
+                    this.topCanvas.style.height = `${this.wrapper.clientHeight}px`;
     
-                    const w = wrapper.clientWidth * dpr;
-                    const h = wrapper.clientHeight * dpr;
+                    const w = this.wrapper.clientWidth * dpr;
+                    const h = this.wrapper.clientHeight * dpr;
     
                     this.bottomCanvas.width = w;
                     this.bottomCanvas.height = h;
@@ -80,7 +82,7 @@ export class Scene extends GraphicObject {
                 }
               });
         });
-        this.canvasResizeObserver.observe(wrapper);
+        this.canvasResizeObserver.observe(this.wrapper);
 
         var mousedown = (e: MouseEvent) => {
             const dpr = window.devicePixelRatio;
