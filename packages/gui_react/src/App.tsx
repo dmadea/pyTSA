@@ -2,7 +2,7 @@ import { useState } from 'react';
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.min.js";
 import Input from './Components/Input';
-import { GlobalState, ITabData } from './globalstate';
+import { GlobalState, ITabData } from '../../gui_react2/src/globalstate';
 import { useSignals } from "@preact/signals-react/runtime";
 // https://github.com/preactjs/signals/issues/469
 

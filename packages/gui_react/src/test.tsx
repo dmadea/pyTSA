@@ -1,5 +1,5 @@
-import { CanvasView } from './canvasview';
-import { GlobalState } from './globalstate';
+import { CanvasView } from '../../gui_react2/src/canvasview';
+import { GlobalState } from '../../gui_react2/src/globalstate';
 import { Component, ReactNode } from "react";
 
 

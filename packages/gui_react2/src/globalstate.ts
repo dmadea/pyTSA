@@ -15,13 +15,13 @@ export interface ITabData {
 export class GlobalState {
 
     private static _instance: GlobalState;
-    public activeTab: Signal<number>;
+    public activeTab: Signal<string>;
     public tabs: Signal<ITabData[]>;
     public view: CanvasView;
 
     private constructor() {
-        this.activeTab = signal<number>(0);
         this.tabs = signal<ITabData[]>([]);
+        this.activeTab = signal<string>("");
         
         this.view = new CanvasView();
         this.addNewTab();
@@ -37,16 +37,8 @@ export class GlobalState {
                 name: "abc",
                 id: v4()
             }];
-            this.activeTab.value = this.tabs.value.length - 1;
+            this.activeTab.value = this.tabs.value[this.tabs.value.length - 1].id;
         })
-
-        // this.tabs.value.push({
-        //     selectedDatasets: [],
-        //     selectedFitModel: 0,
-        //     activePanel: 0,
-        //     isFitting: false,
-        //     name: "abc"
-        // })
 
         console.log('new tab added', this.tabs.value);
 
