@@ -14,19 +14,26 @@ interface TabButtonProps {
 
     const [style, setStyle] = useState<{display: "none" | "block"}>({display: 'none'});
 
-  return (
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+      e.stopPropagation();
+      if (onClose) onClose();
+    }
+
+    return (
     <>
-        <button className={classNames("nav-link me-8", {active})} style={{position: "relative", paddingRight: "35px"}} onClick={onClick}
-         onMouseEnter={(ev) => {
-            setStyle({display: "block"});
-        }}
-        onMouseLeave={(ev) => {
-            setStyle({display: "none"});
-        }}>
-            {title}
-            <button className="btn btn-outline-danger btn-sm" style={{position: "absolute", bottom: 0, right: 0, transform: "translate(-35%, -35%)", padding: "0px 5px", margin: "0px",
-             display: active ? "block" : style.display}}  onClick={onClose} type="button" role="tab">&times;</button>
-        </button>
+      <div style={{position: "relative"}} onMouseEnter={(ev) => {
+              setStyle({display: "block"});
+          }}
+          onMouseLeave={(ev) => {
+              setStyle({display: "none"});
+          }}>
+          <button className={classNames("nav-link", {active})} style={{paddingRight: "35px"}} onClick={onClick}
+          >{title}</button>
+          <button className="btn btn-outline-danger btn-sm" style={{position: "absolute", bottom: 0, right: 0, 
+            transform: "translate(-81%, -81%)", padding: "0px 2px 2.5px 2px", margin: "0px",
+            lineHeight: "11px", display: active ? "block" : style.display}}  onClick={handleClick}
+            type="button" role="tab">&times;</button>
+      </div>
     </>
   );
 };

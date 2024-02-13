@@ -1,6 +1,6 @@
 import classNames from "classnames";
 import { useState } from "react";
-import Tab, { TabElement } from "./tab";
+import { TabElement } from "./tab";
 import TabButton from "./tabbutton";
 
 interface TabsProps{
@@ -16,7 +16,7 @@ interface TabsProps{
  function Tabs ({ id, onSelect, onClose, selected, newTabButton, onNewTabClicked, children }: TabsProps) {
   const [_activeTab, _setActiveTab] = useState(0);
 
-  const activeTab = (selected === undefined) ? _activeTab : selected;
+  const activeTab = selected ?? _activeTab;
   const _onSelect = (index: number) => {
     if (onSelect) {
         onSelect(index);
@@ -31,11 +31,12 @@ interface TabsProps{
         <ul className="nav nav-tabs" id={id} role="tablist">
             {children.map((tab: TabElement, index: number) => {
                 return (<li key={index} className="nav-item" role="presentation">
-                            <TabButton onClick={() => _onSelect(index)} onClose={() => {onClose ? onClose(index) : null}} title={tab.props.title} active={activeTab === index}/>
+                            <TabButton onClick={() => _onSelect(index)} onClose={() => {onClose ? onClose(index) : null}} 
+                            title={tab.props.title} active={activeTab === index}/>
                         </li>)
             })}
             {newTabButton && <li className="nav-item" role="presentation">
-                            <button className="nav-link" onClick={() => onNewTabClicked ? onNewTabClicked() : null}>+</button>
+                            <button className="nav-link" onClick={() => {if (onNewTabClicked) onNewTabClicked()}}>+</button>
                             </li> }
 
         </ul>

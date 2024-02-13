@@ -18,6 +18,7 @@ export class GlobalState {
     public activeTab: Signal<number>;
     public tabs: Signal<ITabData[]>;
     public view: CanvasView;
+    private tabCount: number = 0;
 
     private constructor() {
         this.tabs = signal<ITabData[]>([]);
@@ -34,7 +35,7 @@ export class GlobalState {
                 selectedFitModel: 0,
                 activePanel: 0,
                 isFitting: false,
-                name: `Set ${this.tabs.value.length}`,
+                name: `Set ${this.tabCount++}`,
                 id: v4()
             }];
             this.activeTab.value = this.tabs.value.length - 1;
@@ -51,6 +52,7 @@ export class GlobalState {
                 this.activeTab.value -= 1; 
             }
         })
+
     }
 
     // public static create(): GlobalState {
