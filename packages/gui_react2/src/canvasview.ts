@@ -12,6 +12,6 @@ export class CanvasView {
     }
 
     public mount() {
-        this.scene = new Scene(document.getElementById(this.id) as HTMLDivElement);
+        // this.scene = new Scene(document.getElementById(this.id) as HTMLDivElement);
     }
 }
