@@ -45,9 +45,9 @@ export class GlobalState {
 
     }
 
-    public removeTab(index: number) {
+    public removeTab(id: string | number) {
         batch(() => {
-            this.tabs.value = this.tabs.value.filter((tab, i) => i !== index);
+            this.tabs.value = this.tabs.value.filter(tab => id !== tab.id);
             if (this.activeTab.value > this.tabs.value.length - 1) {
                 this.activeTab.value -= 1; 
             }

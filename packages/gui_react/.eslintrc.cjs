@@ -1,3 +1,4 @@
+// https://stackoverflow.com/questions/50011443/tslint-how-to-disable-error-somevariable-is-declared-but-its-value-is-never-rea
 module.exports = {
   root: true,
   env: { browser: true, es2020: true },
@@ -14,5 +15,7 @@ module.exports = {
       'warn',
       { allowConstantExport: true },
     ],
+    'no-unused-vars': 'off',
+    '@typescript-eslint/no-unused-vars': ['error', { 'varsIgnorePattern': '^_', "argsIgnorePattern": "^_" }],
   },
 }

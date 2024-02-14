@@ -1,97 +1,92 @@
-import { useState } from 'react';
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.min.js";
-import Input from './Components/Input';
-import { GlobalState, ITabData } from '../../gui_react2/src/globalstate';
+import { GlobalState } from "./globalstate";
 import { useSignals } from "@preact/signals-react/runtime";
-// https://github.com/preactjs/signals/issues/469
-
-import Canvas from './test';
+import Tabs from './Components/tabs';
+import Tab from "./Components/tab";
+import Input from "./Components/Input";
+import FitWidget from "./Components/FitWidget";
 
 const state = GlobalState.getInstance();
 
-export interface ITab {
-  name: string
-}
-
-// const tabs = signal<ITab[]>([]);
-
-// function addNewTab() {
-//   tabs.value = [...tabs.value, {name: 'asd'}]
-//   console.log("addNewTab", tabs.value)
-// }
-
-// addNewTab()
-// addNewTab()
-
 
 function App() {
-  // const [count, setCount] = useState(0);
-  const [value, setValue] = useState<number>(0);
-
   useSignals();
 
+  const handleOnSelect = (id: string | number) => {
+    state.tabs.value.map((tab, index) => {
+      if (tab.id === id) state.activeTab.value = index;
+    })
+  }
 
   return (
     <>
-    <div className="container">
-      <div className="row">
-        <div className="col">
-          Col 1 test
-          <Input type="number" onChange={(value) => setValue(value as number)} value={value}/>
-        </div>
-        <div className="col">
-          Col 2 test
+      <div className="container-fluid my-2">
+        <div className="row">
+          <div className="col">
 
-          <button className='btn btn-secondary btn-sm' onClick={() => state.addNewTab()}>
-            Add new tab
-          </button>
-          <button className='btn btn-secondary btn-sm' onClick={() =>  {state.tabs.value[0].name = "new name 555"; state.tabs.value = [...state.tabs.value]}}>
-            change something in tab
-          </button>
+          {/* <Button variant="primary"   onClick={() => state.activeTab.value = 0}>Primary</Button>
+
+        <Input returnType="string" isValidInput={isValid}/> */}
+
+        <Tabs newTabButton onNewTabClicked={() => state.addNewTab()} 
+              selectedKey={state.tabs.value[state.activeTab.value].id} 
+              onSelect={handleOnSelect}
+              onClose={id => state.removeTab(id)}>
+
+            {state.tabs.value.map(tab => {
+              return <Tab id={tab.id} key={tab.id} title={tab.name}>
+                {tab.name} {tab.id}
+
+                {[0, 1, 2, 3, 4, 5, 6].map(() => {
+                  return  (<div className="input-group input-group-sm mb-1">
+                          <span className="input-group-text">Label</span>
+                        <Input/>
+                        <span className="input-group-text">Label</span>
+                        <Input/>
+                        </div>)
+                })}
+                
+              </Tab>
+            })}
+        </Tabs>
+
+
+
+          </div>
+          <div className="col-auto">
+            <FitWidget />
+          </div>
         </div>
-        {/* {state.tabs.value.map((tab: ITab, index: number) => {
-          
-          return <div key={index} className='col'>{tab.name}</div>
         
-        })} */}
 
       </div>
 
 
-      <nav>
-      <div className="nav nav-tabs" id="nav-tab" role="tablist">
-        {state.tabs.value.map((tab: ITabData, index: number) => {
-           return <button className={"nav-link" + ((index === state.activeTab.value) ? " active" : "")} key={index} id={`btn${tab.id}`}
-           data-bs-toggle="tab" data-bs-target={`#tab${tab.id}`} type="button" role="tab"
-            aria-controls="nav-home" aria-selected="false">{`Tab ${index}`}</button>
-        })}
+    <button type="button" className="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal">
+      Launch demo modal
+    </button>
 
-        {/* <button className="nav-link active" id="nav-home-tab" data-bs-toggle="tab" data-bs-target="#nav-home" type="button" role="tab" aria-controls="nav-home" aria-selected="true">Home</button>
-        <button className="nav-link" id="nav-profile-tab" data-bs-toggle="tab" data-bs-target="#nav-profile" type="button" role="tab" aria-controls="nav-profile" aria-selected="false">Profile</button>
-        <button className="nav-link" id="nav-contact-tab" data-bs-toggle="tab" data-bs-target="#nav-55" type="button" role="tab" aria-controls="nav-contact" aria-selected="false">Contact</button> */}
-        <button className="nav-link" type="button" role="tab" aria-selected="false" onClick={() => state.addNewTab()}>+</button>
+    <div className="modal fade" id="exampleModal"  aria-labelledby="exampleModalLabel" aria-hidden="true">
+      <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title" id="exampleModalLabel">Modal title</h5>
+            <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div className="modal-body">
+            Lorem ipsum dolor sit amet consectetur, adipisicing elit. Alias sit deserunt maxime ullam dolorem unde autem, facilis aspernatur velit expedita possimus, at deleniti labore perferendis quod natus accusamus. Ratione, dolor.
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-outline-danger btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" className="btn btn-outline-success btn-sm">Confirm</button>
+          </div>
+        </div>
       </div>
-      </nav>
-      <div className="tab-content" id="nav-tabContent">
-        {state.tabs.value.map((tab: ITabData, index: number) => {
-           return <div className={"tab-pane fade" + ((index === state.activeTab.value) ? " show active" : "")} id={`tab${tab.id}`} role="tabpanel" aria-labelledby="nav-home-tab">content tab {index}
-           <Canvas /></div>
-        })}
-
-        {/* <div className="tab-pane fade show active" id="nav-home" role="tabpanel" aria-labelledby="nav-home-tab">a tab 1</div>
-        <div className="tab-pane fade" id="nav-profile" role="tabpanel" aria-labelledby="nav-profile-tab">b</div>
-        <div className="tab-pane fade" id="nav-55" role="tabpanel" aria-labelledby="nav-contact-tab">c</div> */}
-      </div>
-
-
     </div>
-
-
-
-
+      
     </>
-  ) 
+  )
 }
 
 export default App

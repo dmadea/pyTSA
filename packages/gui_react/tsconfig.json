@@ -1,5 +1,4 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
@@ -17,10 +16,10 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
+    "noUnusedLocals": false,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
   },
-  "include": ["src", "../gui_react2/src/globalstate.ts", "../gui_react2/src/canvasview.ts"],
+  "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

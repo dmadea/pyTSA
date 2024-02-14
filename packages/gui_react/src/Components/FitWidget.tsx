@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import classNames from 'classnames';
-import Input from "./Input";
 import FitParamsTable from './fitparamstable';
 import FitOptions from './fitoptions';
 
