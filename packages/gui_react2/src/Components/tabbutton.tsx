@@ -10,7 +10,7 @@ interface TabButtonProps {
     title: string
 }
 
- function TabButton ({ id, active, onClose, onClick, title}: TabButtonProps) {
+ const TabButton: React.FC<TabButtonProps> = ({ id, active, onClose, onClick, title, ...props}) => {
 
     const [style, setStyle] = useState<{display: "none" | "block"}>({display: 'none'});
 
@@ -21,10 +21,10 @@ interface TabButtonProps {
 
     return (
     <>
-      <div style={{position: "relative"}} onMouseEnter={(ev) => {
+      <div {...props} style={{position: "relative"}} onMouseEnter={() => {
               setStyle({display: "block"});
           }}
-          onMouseLeave={(ev) => {
+          onMouseLeave={() => {
               setStyle({display: "none"});
           }}>
           <button className={classNames("nav-link", {active})} style={{paddingRight: "35px"}} onClick={onClick}

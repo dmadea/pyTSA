@@ -10,7 +10,7 @@ export interface TabElement extends ReactElement {
     props: TabProps
 }
 
-function Tab ({ children }: TabProps): TabElement {
+const Tab: React.FC<TabProps> = ({ children }) => {
     return (
         <>
         {children}

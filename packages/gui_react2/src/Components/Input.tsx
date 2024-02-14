@@ -2,42 +2,42 @@ import { useState } from 'react';
 import classNames from 'classnames';
 import "./Input.css";
 
-export type InputType = "text" | "number";
 
-export interface InputProps {
-    onChange?: (value: string | number) => void,
-    type: InputType,
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+    onValueChange?: (value: string) => void,
     value?: string | number,
-    isValidInput: (value: string, parsedNumber: number) => boolean,
+    isValidInput?: (value: string, parsedNumber: number) => boolean,
+    className?: string
 }
 
-function Input({
-  onChange,
-  type,
+const Input: React.FC<InputProps> = ({
+  onValueChange,
   value,
-  isValidInput = (value: string, parsedNumber: number) => !Number.isNaN(parsedNumber),
+  isValidInput = (value: string, parsedNumber: number) => !Number.isNaN(parsedNumber) && parsedNumber !== Number.POSITIVE_INFINITY && parsedNumber !== Number.NEGATIVE_INFINITY,
+  className = "",
   ...props
-  }: InputProps) {
+  }) => {
   
   const [invalid, setInvalid] = useState<boolean>(false);
   const [text, setText] = useState<string>("");
 
   const validateInput = (value: string) => {
-    setText(value);
-    const num = parseFloat(value);
+    const tValue = value.trim();
+    setText(tValue);
+    const num = Number(tValue); // parseFloat does not work here, but we need to check for "", because in this case Number("") returns 0, which is not correct
+    // console.log(typeof value, "value", value, "number:", num);
 
-    if (isValidInput(value, num)) {
+    if (tValue !== "" && isValidInput(value, num)) {
       setInvalid(false);
-      if (onChange) onChange(num);
+      if (onValueChange) onValueChange(value);
     } else {
       setInvalid(true);
-      // console.log("number is invalid");
     }
   }
 
   return (
-    <input {...props} className={classNames("form-control", {"form-control-error": invalid})} type={type} 
-    value={invalid ? text : (value ?? text)} onChange={(ev) => validateInput(ev.target.value)}  />
+    <input {...props} className={classNames(className, "form-control", {"form-control-error": invalid})}
+    value={invalid ? text : (value ?? text)} onChange={(ev) => validateInput(ev.target.value)} />
   ) 
 }
 

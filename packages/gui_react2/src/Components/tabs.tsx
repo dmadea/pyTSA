@@ -1,19 +1,19 @@
 import classNames from "classnames";
-import { useState } from "react";
+import { useState, PropsWithChildren } from "react";
 import { TabElement } from "./tab";
 import TabButton from "./tabbutton";
+import React from "react";
 
-interface TabsProps{
+interface TabsProps {
     id?: string,
     onSelect?: (index: number) => void,
     onClose?: (index: number) => void,
     selected?: number,
     newTabButton?: boolean,
     onNewTabClicked?: () => void,
-    children: TabElement[],
 }
 
- function Tabs ({ id, onSelect, onClose, selected, newTabButton, onNewTabClicked, children }: TabsProps) {
+ const Tabs: React.FC<PropsWithChildren<TabsProps>> =  ({ id, onSelect, onClose, selected, newTabButton, onNewTabClicked, children }) => {
   const [_activeTab, _setActiveTab] = useState(0);
 
   const activeTab = selected ?? _activeTab;
@@ -29,10 +29,10 @@ interface TabsProps{
   return (
     <>
         <ul className="nav nav-tabs" id={id} role="tablist">
-            {children.map((tab: TabElement, index: number) => {
+            {React.Children.map(children, (child, index: number) => {
                 return (<li key={index} className="nav-item" role="presentation">
                             <TabButton onClick={() => _onSelect(index)} onClose={() => {onClose ? onClose(index) : null}} 
-                            title={tab.props.title} active={activeTab === index}/>
+                            title={(child as TabElement).props.title} active={activeTab === index}/>
                         </li>)
             })}
             {newTabButton && <li className="nav-item" role="presentation">
@@ -41,9 +41,9 @@ interface TabsProps{
 
         </ul>
         <div className="tab-content">
-            {children.map((tab: TabElement, index: number) => {
-                return <div key={index} className={classNames("tab-pane", {"show active": activeTab === index })} role="tabpanel">{tab}</div>
-            })}
+            {React.Children.map(children, (child, index: number) =>  
+            <div key={index} className={classNames("tab-pane", {"show active": activeTab === index })} role="tabpanel">{child}</div>
+            )}
         </div>
     </>
   );
