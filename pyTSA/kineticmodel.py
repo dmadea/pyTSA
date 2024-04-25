@@ -15,7 +15,7 @@ from abc import abstractmethod
 # from .fit import Fitter
 # from numba import njit
 
-from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq
+from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq, square_conv_exp
 from .plot import plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax
 if TYPE_CHECKING:
     from .dataset import Dataset
@@ -211,7 +211,7 @@ class FirstOrderModel(KineticModel):
         self.num_of_exp_chirp_params = 2
 
         self.include_irf = False   # if True, irf will be used to simulate the exponentials
-        self.irf_types = ['Gaussian']
+        self.irf_types = ['Gaussian', 'Square']
         self.irf_type = self.irf_types[0]
 
         self.include_artifacts = False
@@ -270,9 +270,13 @@ class FirstOrderModel(KineticModel):
             if self.irf_type == self.irf_types[0]:
                 params.add('FWHM', value=0.15, min=0, max=np.inf, vary=True)  # full-width at half maxium of gaussian IRF
 
-            if self.include_variable_fwhm:
-                for i in range(self.num_of_poly_varfwhm_params):
-                    params.add(f'var_FWHM_p_{i+1}', value=0.01, min=-np.inf, max=np.inf, vary=True)   # wavelength-dependent FWHM
+                if self.include_variable_fwhm:
+                    for i in range(self.num_of_poly_varfwhm_params):
+                        params.add(f'var_FWHM_p_{i+1}', value=0.01, min=-np.inf, max=np.inf, vary=True)   # wavelength-dependent FWHM
+
+            elif self.irf_type == self.irf_types[1]: # square wave
+                params.add('SQW', value=0.15, min=0, max=np.inf, vary=True)  # width of the square wave
+
 
         for i in range(self.n_species):
             params.add(f'tau_{i+1}', value=10 ** (i - 1), min=0, max=np.inf, vary=True)
@@ -288,24 +292,30 @@ class FirstOrderModel(KineticModel):
         vals = np.asarray([params[f"tau_{i+1}"].value for i in range(self.n_species)])
         return 1 / vals
     
-    def get_fwhm(self, params: Parameters | None = None) -> float:
-        params = self.params if params is None else params
-        return params["FWHM"].value
-
-    def get_tau(self, params: Parameters | None = None) -> np.ndarray | float:
-        """Return the curve that defines FWHM with respect to wavelength."""
-
+    def get_width(self, params: Parameters | None = None) -> float:
         params = self.params if params is None else params
 
         if not self.include_irf:
             return 0
         
-        fwhm = self.get_fwhm(params)
+        if self.irf_type == self.irf_types[0]:
+            return params["FWHM"].value
+        elif self.irf_type == self.irf_types[1]:
+            return params["SQW"].value
 
-        if not self.include_variable_fwhm:
-            return fwhm
+    def get_tau(self, params: Parameters | None = None) -> np.ndarray | float:
+        """Return the curve that defines FWHM with respect to wavelength."""
+
+        params = self.params if params is None else params
         
-        tau = np.ones(self.dataset.wavelengths.shape[0], dtype=np.float64) * fwhm
+        width = self.get_width(params)
+        if width == 0 or self.irf_type != self.irf_types[0]:
+            return width
+        
+        if not self.include_variable_fwhm:
+            return width
+        
+        tau = np.ones(self.dataset.wavelengths.shape[0], dtype=np.float64) * width
 
         partaus = [params[f'var_FWHM_p_{i+1}'] for i in range(self.num_of_poly_varfwhm_params)]
 
@@ -506,18 +516,18 @@ class FirstOrderModel(KineticModel):
 
         ks = self.get_rates(params)
         mu = self.get_mu(params)
-        fwhm = self.get_tau(params)  # fwhm
+        width = self.get_tau(params)  # fwhm
 
         # if True, partitioned variable projection will be used for fitting
-        tensor: bool = isinstance(mu, np.ndarray) or isinstance(fwhm, np.ndarray)
+        tensor: bool = isinstance(mu, np.ndarray) or isinstance(width, np.ndarray)
 
-        _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
+        _tau = width[:, None, None] if isinstance(width, np.ndarray) else width
         _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
         _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
         tt = _t - _mu
 
         if self.include_artifacts:
-            self.C_artifacts = self._simulate_artifacts(tt, fwhm)
+            self.C_artifacts = self._simulate_artifacts(tt, width)
 
         if self.n_species == 0:
             return
@@ -525,7 +535,7 @@ class FirstOrderModel(KineticModel):
         _ks = ks[None, None, :] if tensor else ks[None, :]
         
         # simulation for DADS only
-        self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau)
+        self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau) if self.irf_type == self.irf_types[0] else square_conv_exp(tt, _ks, _tau)
 
     def weighted_residuals(self) -> np.ndarray:
         if (self.matrix_opt is None):

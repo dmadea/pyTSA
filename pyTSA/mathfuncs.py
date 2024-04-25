@@ -263,6 +263,25 @@ def fold_exp(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray | fl
         return 0.5 * np.exp(k * (k * w * w / 4.0 - tt)) * math_erfc(w * k / 2.0 - tt / w)
     else:
         return np.exp(-tt * k) if tt >= 0 else 0
+
+# exponential convoluted with square wave, from https://lpsa.swarthmore.edu/Convolution/Convolution2.html and wolfram alpha
+@vectorize(nopython=True, fastmath=False)
+def square_conv_exp(t: np.ndarray | float, k: np.ndarray | float, width: np.ndarray | float) -> np.ndarray | float:
+
+    if width == 0:
+        return np.exp(-t * k) if t >= 0 else 0
+
+    w2 = width / 2
+    tt = t + w2
+
+    if t < -w2:
+        return 0
+    elif t >= -w2 and t < w2:
+        
+        return (1 - np.exp(-tt * k)) / k 
+    else:
+        return (np.exp(k * width) - 1) * np.exp(-k * tt) / k
+
     
 @vectorize(nopython=True, fastmath=False)
 def LPL_decay(t: np.ndarray | float, m: float) -> np.ndarray | float:

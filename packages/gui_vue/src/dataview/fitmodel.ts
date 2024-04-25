@@ -262,7 +262,7 @@ public setOptions(): IOption[] {
       backendName: "irf_type",
       type: "select",
       value: 'Gaussian',
-      options: ['Gaussian']
+      options: ['Gaussian', 'Square']
     },
     {
       name: "Include variable FWHM",
