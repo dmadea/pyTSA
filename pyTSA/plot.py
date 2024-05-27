@@ -44,6 +44,18 @@ COLORS = ['blue', 'red', 'green', 'orange', 'black', 'yellow']
 COLORS_gradient = ['blue', 'lightblue']
 
 
+def save_data2csv(fname, data, x, name='DAS', unit='', delimiter = ','):
+    names = [f'{name} {i + 1}' for i in range(data.shape[0])]
+
+    mat = np.vstack((x, data))
+    buffer = f'Wavelength'
+    buffer += delimiter + delimiter.join(names) + '\n'
+    buffer += '\n'.join(delimiter.join(f"{num}" for num in row) for row in mat.T)
+
+    with open(fname, 'w', encoding='utf8') as f:
+        f.write(buffer)
+
+
 class MajorSymLogLocator(SymmetricalLogLocator):
     """
     Determine the tick locations for symmetric log axes.
@@ -302,6 +314,10 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
             trace_fit = np.trapz(D_fit[:, k:l+1], wavelengths[k:l+1], axis=1)
             tt = t - (mu[k] + mu[l+1]) / 2
             label=f'({wls[i][0]}$-${wls[i][1]}) {wl_unit}'
+            
+            ## save the traces to csv
+            # fpath = "/Users/dominikmadea/Library/CloudStorage/OneDrive-OIST/Projects/Heptazines + femto/Python/fits/Ryoko"
+            # save_data2csv(f"{fpath}/traces_{i}.csv", np.vstack((trace, trace_fit)), tt, 'traces', delimiter=',') 
         else:
             idx = fi(wavelengths, wls[i])
             trace = D[:, idx]
