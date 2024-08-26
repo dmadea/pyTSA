@@ -317,6 +317,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
             
             ## save the traces to csv
             # fpath = "/Users/dominikmadea/Library/CloudStorage/OneDrive-OIST/Projects/Heptazines + femto/Python/fits/Ryoko"
+            # fpath = r"C:\Users\domin\OneDrive - OIST\Projects\Heptazines + femto\Python\fits\Ryoko"
             # save_data2csv(f"{fpath}/traces_{i}.csv", np.vstack((trace, trace_fit)), tt, 'traces', delimiter=',') 
         else:
             idx = fi(wavelengths, wls[i])
