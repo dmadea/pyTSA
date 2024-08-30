@@ -22,10 +22,16 @@
 	const x = linspace(-1, 1, 1000);
 
 	const xyData = new Float32Array(x.length * 2);
-	for (let i = 0; i < x.length; i++) {
-		xyData[2*i] = x[i];
-		xyData[2*i + 1] = Math.random() * 4 -2;
+
+	function populateArray() {
+		for (let i = 0; i < x.length; i++) {
+			xyData[2*i] = x[i];
+			xyData[2*i + 1] = Math.random() * 4 -2;
+		}
 	}
+
+	populateArray();
+
 
 	onMount(() => {
 		ctx = canvas.getContext("webgl", {
@@ -136,6 +142,13 @@
 
 	<button on:click={handleClick}>
 		Draw line !
+	</button>
+
+	<button on:click={() => {
+		populateArray();
+		drawLine();
+		}}>
+		Change data!
 	</button>
 	
 	<canvas class="canvas" bind:this={canvas} >
