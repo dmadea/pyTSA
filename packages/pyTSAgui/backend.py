@@ -4,13 +4,13 @@ import sys, os
 import numpy as np
 import base64
 try:
-    from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel
+    from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel, DelayedFluorescenceModel
 except ImportError:
     if sys.platform == 'darwin':
         sys.path.append(os.path.abspath("/Users/dominikmadea/Documents/Python + JS/pyTSA"))
     else:
         sys.path.append(os.path.abspath(r'C:\Users\domin\Documents\Python + JS\pyTSA'))  # append library path to 
-    from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel
+    from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel, DelayedFluorescenceModel
 
 from lmfit import Parameters, Parameter
 
@@ -135,6 +135,7 @@ class BackendSession(object):
         model_map = {
             'first_order': FirstOrderModel,
             'first_order_lpl': FirstOrderLPLModel,
+            'delayed_fl': DelayedFluorescenceModel
         }
 
         self.tabs[tab_index].set_model(model_map[model_name]())
@@ -192,6 +193,7 @@ class BackendSession(object):
         #   params: IParam[],
         #   chirpData?: string
         # }
+        # print(model.C_opt.shape, model.ST_opt.shape, model.matrix_opt.shape)
         data = dict(CfitDAS=put_matrix_data(model.C_opt if model.C_opt.ndim == 2 else model.C_opt[0]), 
                     STfitDAS=put_matrix_data(model.ST_opt),
                     Dfit=put_matrix_data(model.matrix_opt))

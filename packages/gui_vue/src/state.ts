@@ -1,7 +1,7 @@
 import { Dataset } from "@pytsa/ts-graph";
 import { APICallPOST } from "./utils";
 import { reactive, shallowReactive, ref, shallowRef } from "vue";
-import { FirstOrderModel, FitModel, IParam, IOption, FirstOrderModelLPL } from "./dataview/fitmodel";
+import { FirstOrderModel, FitModel, IParam, IOption, FirstOrderModelLPL, DelayedFluorescenceModel } from "./dataview/fitmodel";
 import { DataView, FitView } from "./dataview/dataviews";
 
 export interface ITabData {
@@ -33,7 +33,7 @@ export class GlobalState  {
 
   public datasets = shallowRef<Dataset[]>([]);
   public views: IView[] = [];
-  public kineticModels: (typeof FitModel)[] = [FirstOrderModel, FirstOrderModelLPL];
+  public kineticModels: (typeof FitModel)[] = [FirstOrderModel, FirstOrderModelLPL, DelayedFluorescenceModel];
 
   constructor() {
     this.addNewTab();

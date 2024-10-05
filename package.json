@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "frontend": "cd ./packages/gui && vue-cli-service serve",
+    "frontend": "cd ./packages/gui_vue && npm run serve",
     "backend": "cd ./packages/pyTSAgui && flask --app __main__.py --debug run -p 6969"  
   },
   "workspaces": [

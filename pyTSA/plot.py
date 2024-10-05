@@ -6,7 +6,7 @@ from .mathfuncs import chirp_correction, fi, is_iterable
 
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib import cm
-from matplotlib import colormaps
+from matplotlib import colormaps as cmaps
 import matplotlib as mpl
 import matplotlib.colors as c
 from numpy import ma
@@ -862,8 +862,8 @@ def register_div_white_cmap(zmin, zmax, treshold=0.98):
 
     custom_cmap = LinearSegmentedColormap('diverging_white_tr', _cdict)
     # colormaps.register(custom_cmap, 'diverging_white_tr', force=True)
-    cm.unregister_cmap('diverging_white_tr')
-    cm.register_cmap('diverging_white_tr', custom_cmap)
+    cmaps.unregister('diverging_white_tr')
+    cmaps.register(custom_cmap, name='diverging_white_tr')
 
 
 def register_div_cmap(zmin, zmax):  # colors for femto TA heat maps: dark blue, blue, white, yellow, red, dark red
@@ -895,8 +895,8 @@ def register_div_cmap(zmin, zmax):  # colors for femto TA heat maps: dark blue, 
               }
 
     custom_cmap = LinearSegmentedColormap('diverging', _cdict)
-    cm.unregister_cmap('diverging')
-    cm.register_cmap('diverging', custom_cmap)
+    cmaps.unregister('diverging')
+    cmaps.register(custom_cmap, name='diverging')
     # colormaps.register(custom_cmap, 'diverging', force=True)
 
 

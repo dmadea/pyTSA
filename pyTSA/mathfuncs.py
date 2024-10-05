@@ -107,24 +107,26 @@ def get_EAS_transform(ks: np.ndarray):
     bjl *= k_mat
     return bjl
 
-# def simulate_model(t, K, j, mu=None, fwhm=0):
-#     # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
-#     L, Q = np.linalg.eig(K)
-#     Q_inv = np.linalg.inv(Q)
+def simulate_target_model(t: np.ndarray | float, K: np.ndarray, j: np.ndarray, f_exp: callable, *f_args):
+    """
+    f_exp: folded exponential function to be called 
+    f_kwargs: keyword arguemnts passed to f_exp function
+    """
 
-#     A2_T = Q * Q_inv.dot(j)  # Q @ np.diag(Q_inv.dot(j))
+    assert j.shape[0] == K.shape[0] == K.shape[1]
+    assert t.ndim > 1
 
-#     _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
+    # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
+    L, Q = np.linalg.eig(K)
+    Q_inv = np.linalg.inv(Q)
 
-#     if mu is not None:  # TODO !!! pořešit, ať je to obecne
-#         # C = _Femto.conv_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau)
-#         C = fold_exp(t[None, :, None] - mu[:, None, None], -L[None, None, :], _tau, 0)
+    A2_T = Q * Q_inv.dot(j)  # Q @ np.diag(Q_inv.dot(j))
 
-#     else:
-#         # C = _Femto.conv_exp(t[:, None], -L[None, :], fwhm)
-#         C = fold_exp(t[:, None], -L[None, :], fwhm, 0)
+    ks = -L[None, :] if t.ndim == 2 else -L[None, None, :]  # 3 dimensions
 
-#     return C.dot(A2_T.T)
+    C = f_exp(t, ks, *f_args)
+
+    return C.dot(A2_T.T)
 
 # def get_EAS(ks, C_base):
 #     # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
@@ -263,7 +265,7 @@ def fold_exp(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray | fl
         return 0.5 * np.exp(k * (k * w * w / 4.0 - tt)) * math_erfc(w * k / 2.0 - tt / w)
     else:
         return np.exp(-tt * k) if tt >= 0 else 0
-
+    
 # exponential convoluted with square wave, from https://lpsa.swarthmore.edu/Convolution/Convolution2.html and wolfram alpha
 @vectorize(nopython=True, fastmath=False)
 def square_conv_exp(t: np.ndarray | float, k: np.ndarray | float, width: np.ndarray | float) -> np.ndarray | float:
@@ -281,6 +283,15 @@ def square_conv_exp(t: np.ndarray | float, k: np.ndarray | float, width: np.ndar
         return (1 - np.exp(-tt * k)) / k 
     else:
         return (np.exp(k * width) - 1) * np.exp(-k * tt) / k
+    
+# def delayed_fluorescence_decay(t: np.ndarray | float, k_isc: float, k_risc: float, k_singlet: float, f_exp: callable, *f_args) -> np.ndarray | float:
+
+#     K = np.asarray([[-k_singlet - k_isc, k_risc],
+#                     [k_isc,             -k_risc]])
+    
+#     j = np.asarray([1, 0])
+
+#     return simulate_target_model(t, K, j, f_exp, *f_args)
 
     
 @vectorize(nopython=True, fastmath=False)

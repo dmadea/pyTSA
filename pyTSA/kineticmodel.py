@@ -15,7 +15,7 @@ from abc import abstractmethod
 # from .fit import Fitter
 # from numba import njit
 
-from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq, square_conv_exp
+from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq, simulate_target_model, square_conv_exp
 from .plot import plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax
 if TYPE_CHECKING:
     from .dataset import Dataset
@@ -245,6 +245,7 @@ class FirstOrderModel(KineticModel):
         # self.w_of_chirp = 0.1
         # self.t_radius_chirp = 0.2  # time radius around chirp / in ps
         self._calculate_EAS = True
+        self._include_rates_params = True
 
         super(FirstOrderModel, self).__init__(dataset, n_species)
 
@@ -281,13 +282,14 @@ class FirstOrderModel(KineticModel):
                 params.add('SQW', value=0.15, min=0, max=np.inf, vary=True)  # width of the square wave
 
 
-        for i in range(self.n_species):
-            params.add(f'tau_{i+1}', value=10 ** (i - 1), min=0, max=np.inf, vary=True)
+        if self._include_rates_params:
+            for i in range(self.n_species):
+                params.add(f'tau_{i+1}', value=10 ** (i - 1), min=0, max=np.inf, vary=True)
 
         return params
     
     def get_rates(self, params: Parameters | None = None) -> np.ndarray:
-        if (self.n_species == 0):
+        if (self.n_species == 0 or not self._include_rates_params):
             return np.asarray([])
         
         params = self.params if params is None else params
@@ -510,9 +512,7 @@ class FirstOrderModel(KineticModel):
             self.C_EAS = self.C_opt.dot(A)
             self.ST_EAS = np.linalg.inv(A).dot(self.ST_opt)
 
-        
-    def calculate_C_profiles(self, params: Parameters | None = None):
-        """Simulates concentration profiles, including coherent artifacts if setup in a model."""
+    def get_C_profiles_args(self, params: Parameters | None = None):
         params = self.params if params is None else params
         self.C_opt = None
         self.C_artifacts = None
@@ -529,16 +529,24 @@ class FirstOrderModel(KineticModel):
         _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
         tt = _t - _mu
 
+        _ks = ks[None, None, :] if tensor else ks[None, :]
+
         if self.include_artifacts:
             self.C_artifacts = self._simulate_artifacts(tt, width)
 
+        return tt, _ks, _tau
+        
+    def calculate_C_profiles(self, params: Parameters | None = None):
+        """Simulates concentration profiles, including coherent artifacts if setup in a model."""
+
+        tt, _ks, _tau = self.get_C_profiles_args(params)
+
         if self.n_species == 0:
             return
-
-        _ks = ks[None, None, :] if tensor else ks[None, :]
         
         # simulation for DADS only
         self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau) if self.irf_type == self.irf_types[0] else square_conv_exp(tt, _ks, _tau)
+        print(self.C_opt.shape)
 
     def weighted_residuals(self) -> np.ndarray:
         if (self.matrix_opt is None):
@@ -560,7 +568,8 @@ class FirstOrderModel(KineticModel):
         self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
         self.params = self.fit_result.params
 
-    def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None, **kwargs):
+    def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None,
+              X_SIZE=5.5, Y_SIZE=4.5, add_figure_labels=False, figure_labels_font_size=17, fig_labels_offset=0, **kwargs):
         """
         
         
@@ -584,7 +593,7 @@ class FirstOrderModel(KineticModel):
         elif nrows is None and ncols is not None:
             nrows = int(np.ceil(n / ncols))
 
-        fig, axes = plt.subplots(nrows, ncols, figsize=kwargs.get('figsize', (5.5 * ncols, 4.5 * nrows)))
+        fig, axes = plt.subplots(nrows, ncols, figsize=kwargs.get('figsize', (X_SIZE * ncols, Y_SIZE * nrows)))
         if nrows * ncols == 1:
             axes = np.asarray([axes])
 
@@ -597,6 +606,7 @@ class FirstOrderModel(KineticModel):
                 if key.startswith(prefix.lower()):
                     _key = key[len(prefix) + 1:]  # to account for _ symbol
                     kwargs[_key] = value
+        f_labels = list('abcdefghijklmnopqrstuvw')
 
         for i, p in enumerate(what):
             if i >= nrows * ncols:
@@ -670,6 +680,11 @@ class FirstOrderModel(KineticModel):
                     raise ValueError(f"Plot {p} is not defined.")
                 
         plt.tight_layout()
+
+        for ax in axes.flat[:n]:
+            if add_figure_labels:
+                ax.text(-0.1, 1.10, f_labels[i + fig_labels_offset], color='black', transform=ax.transAxes,
+                        fontstyle='normal', fontweight='bold', fontsize=figure_labels_font_size)
                 
         for ax in axes.flat[n:]:
             ax.set_axis_off()
@@ -678,7 +693,7 @@ class FirstOrderModel(KineticModel):
 
         if filepath:
             ext = os.path.splitext(filepath)[1].lower()[1:]
-            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
+            plt.savefig(fname=filepath, format=ext, bbox_inches='tight', transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
         else:
             plt.show()
 
@@ -712,6 +727,44 @@ class FirstOrderLPLModel(FirstOrderModel):
         m = params['LPL_slope'].value
         trace = LPL_decay(self.dataset.times - params['t0'].value, m)
         self.C_opt = np.hstack((self.C_opt, trace[:, None]))
+
+
+
+class DelayedFluorescenceModel(FirstOrderModel):
+
+    name = "Delayed fluorescence kinetic model"
+
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
+        super(DelayedFluorescenceModel, self).__init__(dataset, n_species)
+        self._calculate_EAS = False
+        self._include_rates_params = False
+
+    def init_params(self) -> Parameters:
+        params = super(DelayedFluorescenceModel, self).init_params()
+
+        params.add('tau_fl', value=200, min=0, max=np.inf, vary=True)
+        params.add('tau_isc', value=500, min=0, max=np.inf, vary=True)
+        params.add('tau_risc', value=150, min=0, max=np.inf, vary=True)
+
+        return params
+        
+    def calculate_C_profiles(self, params: Parameters | None = None):
+        params = self.params if params is None else params
+        tt, _ks, _tau = self.get_C_profiles_args(params)
+
+        if self.n_species == 0:
+            return
+        
+        tau_fl, tau_isc, tau_risc = params['tau_fl'].value, params['tau_isc'].value, params['tau_risc'].value
+        
+        K = np.asarray([[-1/tau_fl - 1/tau_isc, 1/tau_risc],
+                        [1/tau_isc,             -1/tau_risc]])
+    
+        j = np.asarray([1, 0])
+
+        f_exp = fold_exp if self.irf_type == self.irf_types[0] else square_conv_exp
+        self.C_opt = simulate_target_model(tt, K, j, f_exp, _tau)[:, 0, None]  # use only first component
+        # print(self.C_opt.shape)
 
 
 # class Target_Analysis_Femto(_Femto):

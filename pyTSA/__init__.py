@@ -1,4 +1,4 @@
 from .dataset import Dataset
 from .datasets import Datasets
 
-from .kineticmodel import FirstOrderLPLModel, FirstOrderModel
+from .kineticmodel import FirstOrderLPLModel, FirstOrderModel, DelayedFluorescenceModel

@@ -339,4 +339,11 @@ export class FirstOrderModelLPL extends FirstOrderModel {
     ]
   }
   
-  }
+}
+
+export class DelayedFluorescenceModel extends FirstOrderModel {
+
+  public static modelName: string = "Delayed fluorescence model";
+  public static backendName: string = "delayed_fl";
+  
+}

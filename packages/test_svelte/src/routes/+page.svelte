@@ -1,7 +1,7 @@
 <script>
 	import Counter from './Counter.svelte';
 	import Webglcanvas from './Webglcanvas.svelte';
-
+	import Test from './Test.svelte';
 </script>
 
 
@@ -14,6 +14,8 @@
 
 	<Counter />
 	<Webglcanvas />
+	<Test />
+
 </div>
 
 <style>
