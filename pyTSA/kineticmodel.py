@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 # from scipy.integrate import odeint
-from lmfit import Parameters, Minimizer
+from lmfit import Parameters, Minimizer, conf_interval, conf_interval2d, report_ci
 from lmfit.minimizer import MinimizerResult
 from typing import TYPE_CHECKING
 
@@ -184,6 +184,60 @@ class KineticModel(object):
             weights[:, i:j+1] *= w
 
         return weights
+    
+    def confidence_intervals(self, p_names=None, sigmas=(1, 2, 3)):
+        """Prints a confidence intervals.
+
+        Parameters
+        ----------
+        p_names : {list, None}, optional
+            Names of the parameters for which the confidence intervals are calculated. If None (default),
+            the confidence intervals are calculated for every parameter.
+        sigmas : {list, tuple}, optional
+            The sigma-levels to find (default is [1, 2, 3]). See Note below.
+
+        Note
+        ----
+        The values for sigma are taken as the number of standard deviations for a normal distribution
+        and converted to probabilities. That is, the default sigma=[1, 2, 3] will use probabilities of
+        0.6827, 0.9545, and 0.9973. If any of the sigma values is less than 1, that will be interpreted
+        as a probability. That is, a value of 1 and 0.6827 will give the same results, within precision.
+
+        """
+        ci = conf_interval(self.minimizer, self.fit_result, p_names=p_names, sigmas=sigmas)
+        report_ci(ci)
+
+    # https://lmfit.github.io/lmfit-py/confidence.html
+    def confidence_interval2D(self, x_name: str, y_name: str, nx: int = 10, ny: int = 10, limit_sigma_mul: float = 1.0):
+        """Draws a 2D confidence intervals using matplotlib.
+
+        Parameters
+        ----------
+        x_name : str
+            Name of the variable that will be on the x axis.
+        y_name : str
+            Name of the variable that will be on the y axis.
+        nx : int, optional
+            Number of points in the x direction, default 10, the higher the value, better resolution, but slower.
+        ny : int, optional
+            Number of points in the y direction, default 10, the higher the value, better resolution, but slower.
+        limits : tuple, optional
+            Should have the form ``((x_upper, x_lower), (y_upper, y_lower))``.
+            If not given, the default is nsigma*stderr in each direction.
+        """
+
+        xpar = self.fit_result.params[x_name]
+        ypar = self.fit_result.params[y_name]
+
+        limits = ((xpar.value + xpar.stderr * limit_sigma_mul, xpar.value - xpar.stderr * limit_sigma_mul),
+                   (ypar.value + ypar.stderr * limit_sigma_mul, ypar.value - ypar.stderr * limit_sigma_mul))
+
+        cx, cy, grid = conf_interval2d(self.minimizer, self.fit_result, x_name, y_name, nx, ny, limits=limits)
+        plt.contourf(cx, cy, grid, np.linspace(0, 1, 21))
+        plt.xlabel(x_name)
+        plt.colorbar()
+        plt.ylabel(y_name)
+        plt.show()
 
 
 class FirstOrderModel(KineticModel):
@@ -546,7 +600,7 @@ class FirstOrderModel(KineticModel):
         
         # simulation for DADS only
         self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau) if self.irf_type == self.irf_types[0] else square_conv_exp(tt, _ks, _tau)
-        print(self.C_opt.shape)
+        # print(self.C_opt.shape)
 
     def weighted_residuals(self) -> np.ndarray:
         if (self.matrix_opt is None):
@@ -707,6 +761,7 @@ class FirstOrderLPLModel(FirstOrderModel):
         self.include_LPL = True
         super(FirstOrderLPLModel, self).__init__(dataset, n_species)
         self._calculate_EAS = False
+        self.C_opt_full = None
 
     def init_params(self) -> Parameters:
         params = super(FirstOrderLPLModel, self).init_params()
@@ -742,9 +797,9 @@ class DelayedFluorescenceModel(FirstOrderModel):
     def init_params(self) -> Parameters:
         params = super(DelayedFluorescenceModel, self).init_params()
 
-        params.add('tau_fl', value=200, min=0, max=np.inf, vary=True)
-        params.add('tau_isc', value=500, min=0, max=np.inf, vary=True)
-        params.add('tau_risc', value=150, min=0, max=np.inf, vary=True)
+        params.add('k_rnr', value=0.05, min=0, max=np.inf, vary=True)
+        params.add('k_isc', value=0.1, min=0, max=np.inf, vary=True)
+        params.add('k_risc', value=0.05, min=0, max=np.inf, vary=True)
 
         return params
         
@@ -755,15 +810,18 @@ class DelayedFluorescenceModel(FirstOrderModel):
         if self.n_species == 0:
             return
         
-        tau_fl, tau_isc, tau_risc = params['tau_fl'].value, params['tau_isc'].value, params['tau_risc'].value
+        # tau_fl, tau_isc, tau_risc = params['tau_fl'].value, params['tau_isc'].value, params['tau_risc'].value
+        k_rnr, k_isc, k_risc = params['k_rnr'].value, params['k_isc'].value, params['k_risc'].value
+
         
-        K = np.asarray([[-1/tau_fl - 1/tau_isc, 1/tau_risc],
-                        [1/tau_isc,             -1/tau_risc]])
+        K = np.asarray([[-k_rnr - k_isc, k_risc],
+                        [k_isc,             -k_risc]])
     
         j = np.asarray([1, 0])
 
         f_exp = fold_exp if self.irf_type == self.irf_types[0] else square_conv_exp
-        self.C_opt = simulate_target_model(tt, K, j, f_exp, _tau)[:, 0, None]  # use only first component
+        self.C_opt_full = simulate_target_model(tt, K, j, f_exp, _tau) 
+        self.C_opt = self.C_opt_full[:, 0, None]  ## use only first component for singlet
         # print(self.C_opt.shape)
 
 
