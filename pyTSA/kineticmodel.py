@@ -16,11 +16,13 @@ from abc import abstractmethod
 # from numba import njit
 
 from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq, simulate_target_model, square_conv_exp
-from .plot import plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax
+from .plot import plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax, set_main_axis
 if TYPE_CHECKING:
     from .dataset import Dataset
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as mplcols
+from matplotlib import cm
 
 # from targetmodel import TargetModel
 # import glob, os
@@ -207,8 +209,84 @@ class KineticModel(object):
         ci = conf_interval(self.minimizer, self.fit_result, p_names=p_names, sigmas=sigmas)
         report_ci(ci)
 
+    def corner_plot(self, n_points: int = 10, sigmas_mul_factor: float = 1.5, colorbar_n_levels=11, plot_countours = True,
+                     X_SIZE=4, Y_SIZE=3, figsize=None, cmap='hot', filepath=None, **kwargs):
+        
+        keys = list(filter(lambda key: self.fit_result.params[key].vary, self.fit_result.params.keys()))
+        # print(keys)
+        n_params = len(keys)
+
+        if n_params < 2:
+            return
+
+        fig, axes = plt.subplots(n_params - 1, n_params - 1, 
+                                 figsize=(X_SIZE * (n_params - 1), Y_SIZE * (n_params - 1) if figsize is None else figsize))
+        
+        if n_params == 2:
+            axes = [axes]
+        
+        for i in range(n_params - 1):
+            for j in range(n_params - 1):
+                ax = axes[i, j]
+                if j > i:
+                    ax.set_axis_off()
+                    continue
+
+                xname = keys[j]
+                yname = keys[i+1]
+                xpar = self.fit_result.params[xname]
+                ypar = self.fit_result.params[yname]
+
+                limits = ((xpar.value + xpar.stderr * sigmas_mul_factor, xpar.value - xpar.stderr * sigmas_mul_factor),
+                   (ypar.value + ypar.stderr * sigmas_mul_factor, ypar.value - ypar.stderr * sigmas_mul_factor))
+                
+                cx, cy, grid = conf_interval2d(self.minimizer, self.fit_result, xname, yname, n_points, n_points, limits=limits)
+
+                # plot the data
+                levels = np.linspace(0, 1, colorbar_n_levels)
+
+                set_main_axis(ax, x_label=xname, y_label=yname)
+
+                norm = mplcols.Normalize(vmin=0,vmax=1, clip=True)
+                mappable = ax.contourf(cx, cy, grid, cmap=cmap, norm=norm, levels=levels, antialiased=True)
+
+                if plot_countours:
+                    cmap_colors = cm.get_cmap(cmap)
+                    colors = cmap_colors(np.linspace(0, 1, colorbar_n_levels + 1))
+                    colors *= 0.45  # plot contours as darkens colors of colormap, blue -> darkblue, white -> gray ...
+                    ax.contour(cx, cy, grid, colors=colors, levels=levels, antialiased=True, linewidths=0.1,
+                            alpha=1, linestyles='-')
+
+                ax.tick_params(which='major', direction='out')
+                ax.tick_params(which='minor', direction='out')
+                ax.yaxis.set_ticks_position('both')
+
+                # ax.set_axisbelow(False)
+
+                if i < n_params - 2:
+                    ax.set_xticks([])
+                    ax.set_xlabel('')
+                if j > 0:
+                    ax.set_yticks([])
+                    ax.set_ylabel('')
+                
+
+                fig.colorbar(mappable, ax=ax, label="", orientation='vertical')
+
+        plt.tight_layout()
+
+        if filepath is not None:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, bbox_inches='tight', 
+                        transparent=kwargs.get('transparent', True), 
+                        dpi=kwargs.get('dpi', 300))
+        else:
+            plt.show()
+
+
+
     # https://lmfit.github.io/lmfit-py/confidence.html
-    def confidence_interval2D(self, x_name: str, y_name: str, nx: int = 10, ny: int = 10, limit_sigma_mul: float = 1.0):
+    def confidence_interval2D(self, x_name: str, y_name: str, nx: int = 10, ny: int = 10, sigmas_mul_factor: float = 1.0):
         """Draws a 2D confidence intervals using matplotlib.
 
         Parameters
@@ -229,8 +307,8 @@ class KineticModel(object):
         xpar = self.fit_result.params[x_name]
         ypar = self.fit_result.params[y_name]
 
-        limits = ((xpar.value + xpar.stderr * limit_sigma_mul, xpar.value - xpar.stderr * limit_sigma_mul),
-                   (ypar.value + ypar.stderr * limit_sigma_mul, ypar.value - ypar.stderr * limit_sigma_mul))
+        limits = ((xpar.value + xpar.stderr * sigmas_mul_factor, xpar.value - xpar.stderr * sigmas_mul_factor),
+                   (ypar.value + ypar.stderr * sigmas_mul_factor, ypar.value - ypar.stderr * sigmas_mul_factor))
 
         cx, cy, grid = conf_interval2d(self.minimizer, self.fit_result, x_name, y_name, nx, ny, limits=limits)
         plt.contourf(cx, cy, grid, np.linspace(0, 1, 21))
@@ -815,7 +893,7 @@ class DelayedFluorescenceModel(FirstOrderModel):
 
         
         K = np.asarray([[-k_rnr - k_isc, k_risc],
-                        [k_isc,             -k_risc]])
+                        [k_isc,         -k_risc]])
     
         j = np.asarray([1, 0])
 
