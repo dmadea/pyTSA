@@ -66,6 +66,10 @@ class Datasets(object):
         for d in self:
             d.baseline_correct(t0, t1)
 
+    def baseline_drift_correct(self, w0=0, w1=300):
+        for d in self:
+            d.baseline_drift_correct(w0, w1)
+
     def transpose(self):
         for d in self:
             d.transpose()

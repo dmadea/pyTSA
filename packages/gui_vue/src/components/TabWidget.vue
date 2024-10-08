@@ -9,6 +9,7 @@ import ModalDimensionMultiply from "./ModalDimensionMultiply.vue";
 import FitWidget from "./FitWidget.vue";
 import { GlobalState } from "@/state";
 import CanvasComponent from "./CanvasComponent.vue";
+import ModalBaselineDriftCorrect from "./ModalBaselineDriftCorrect.vue";
 
 
 const props = defineProps({
@@ -49,6 +50,27 @@ const bcorrect = () => {
       onSubmit(data: any) {
         if (props.state.activeTabData.selectedDatasets.length == 0) {close(); return;}
         APICallPOST(`perform/baseline_correct/${props.state.data.activeTab}`, data, obj => {
+          const datasets = parseDatasets(obj);
+          props.state.activeDataView.updateData(datasets);
+        })
+        close();
+      },
+      onCancel() {
+        close();
+      }
+    },
+  });
+
+  open();
+};
+
+const bcorrect_drift = () => {
+  const { open, close } = useModal({
+    component: ModalBaselineDriftCorrect,
+    attrs: {
+      onSubmit(data: any) {
+        if (props.state.activeTabData.selectedDatasets.length == 0) {close(); return;}
+        APICallPOST(`perform/baseline_drift_correct/${props.state.data.activeTab}`, data, obj => {
           const datasets = parseDatasets(obj);
           props.state.activeDataView.updateData(datasets);
         })
@@ -128,6 +150,9 @@ const dimensionMultiply = () => {
             </button>
             <button class="btn btn-outline-primary btn-icon" @click="bcorrect">
               <Icon icon="ph:arrow-line-up-bold" :width="iconWidth" :rotate="2"></Icon>
+            </button>
+            <button class="btn btn-outline-primary btn-icon" @click="bcorrect_drift">
+              Baseline drift correct
             </button>
             <button class="btn btn-outline-primary btn-icon" @click="dimensionMultiply">
               <Icon icon="iconoir:axes" :width="iconWidth"></Icon>

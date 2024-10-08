@@ -83,6 +83,8 @@ class Dataset(object):
                                          name=self.name, mask=self.mask.copy())
         return m
     
+
+    
     @classmethod
     def from_file(cls, fname: str, transpose: bool = False, **kwargs):
         data = np.genfromtxt(fname, dtype=np.float64, filling_values=np.nan,  **kwargs)
@@ -159,19 +161,16 @@ class Dataset(object):
 
         self.SVD()
 
+    def get_integrated_dataset(self):
+        trace = np.trapz(self.matrix_fac, self.wavelengths, axis=1)
+        return Dataset(trace[:, None], self.times, np.asarray([0]), name=f"{self.name}-integrated")
+
     def set_model(self, model: KineticModel):
         if not isinstance(model, KineticModel):
             raise TypeError("Model needst to be type of KineticModel.")
         
         self.model = model
         self.model.dataset = self
-
-    def fit(self):
-        if self.model is None:
-            raise TypeError("Datasets needs to have a valid model instantiated.")
-
-        self.fitter.var_pro_femto()
-        
 
     # def get_filename(self) -> str | None:
     #     if not self.filepath:
@@ -466,30 +465,42 @@ class Dataset(object):
 
         self.matrix, self.times, self.wavelengths = crop_data(self.matrix, self.times, self.wavelengths,
                                                                t0, t1, w0, w1)
-        
-        a = 3
-
         self.SVD()
         self._set_D()
 
         return self
 
     def baseline_correct(self, t0=0, t1=200):
-        """Subtracts a average of specified time range from all data.
+        """Subtracts a average of specified time range from all spectra.
         Deep copies the object and new averaged one is returned."""
 
         t_idx_start = fi(self.times, t0) if t0 is not None else 0
         t_idx_end = fi(self.times, t1) + 1 if t1 is not None else self.matrix_fac.shape[0]
 
-        D_selection = self.matrix[t_idx_start:t_idx_end, :]
+        D_selection = self.matrix[t_idx_start:t_idx_end + 1, :]
         self.matrix -= D_selection.mean(axis=0)
 
         self.SVD()
         self._set_D()
 
         return self
+    
+    def baseline_drift_correct(self, w0=178, w1=300):
+        """Subtracts a average of specified wavelength range from spectra that it corresponds to.
+        Deep copies the object and new averaged one is returned."""
 
-    def reduce(self, t_dim=None, w_dim=None):
+        wl_idx_start = fi(self.wavelengths, w0) if w0 is not None else 0
+        wl_idx_end = fi(self.wavelengths, w1) + 1 if w1 is not None else self.matrix_fac.shape[1]
+
+        D_selection = self.matrix[:, wl_idx_start:wl_idx_end + 1]
+        self.matrix -= D_selection.mean(axis=1, keepdims=True)
+
+        self.SVD()
+        self._set_D()
+
+        return self
+
+    def reduce(self, t_dim: int | None = None, w_dim: int | None = None):
         """Reduces the time and wavelength dimension by t_dim and w_dim, respectively.
         eg. for t_dim=10, every 10-th row of original matrix will contain reduced matrix."""
 
@@ -549,213 +560,6 @@ class Dataset(object):
             plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
         else:
             plt.show()
-
-
-    # def plot_log_of_S(self, n=10):
-
-    #     # log_S = np.log(self.S[:n])
-    #     x_data = range(1, n + 1)
-
-    #     plt.rcParams['figure.figsize'] = [10, 6]
-
-    #     plt.scatter(x_data, self.S[:n])
-    #     plt.yscale('log')
-    #     # plt.xlabel('Significant value number')
-    #     plt.ylabel('Magnitude')
-    #     plt.xlabel('Singular value index')
-    #     min, max = np.min(self.S[:n]), np.max(self.S[:n])
-    #     # dif = max - min
-
-    #     plt.ylim(min / 2, 2 * max)
-    #     plt.title('First {} sing. values'.format(n))
-
-    #     fig = plt.gcf()
-    #     fig.canvas.set_window_title('SVD Analysis')
-
-    #     plt.show()
-
-    # def plot_figures_MCR(self):
-
-    #     if self.C_MCR is None:
-    #         return
-
-    #     n = self.C_MCR.shape[1]
-    #     plt.rcParams['figure.figsize'] = [12, 6]
-    #     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, wspace=0.33, hspace=0.33)
-
-    #     plt.subplot(2, 2, 1)
-    #     for i in range(n):
-    #         plt.plot(self.wavelengths, self.A_MCR[i], label='Species {}'.format(i + 1))
-    #     plt.xlabel('Wavelength / nm')
-    #     plt.title('Spectra')
-    #     plt.legend()
-
-    #     plt.subplot(2, 2, 2)
-    #     for i in range(n):
-    #         plt.plot(self.times, self.C_MCR[:, i], label='Species {}'.format(i + 1))
-    #     plt.xlabel('Time')
-    #     plt.title('Concentrations')
-    #     plt.legend()
-
-    #     # plot residual matrix
-    #     plt.subplot(2, 1, 2)
-    #     A_dif = self.C_MCR @ self.A_MCR - self.matrix  # the difference matrix between MCR fit and original
-    #     x, y = np.meshgrid(self.times, self.wavelengths)  # needed for pcolormesh to correctly scale the image
-    #     plt.pcolormesh(x, y, A_dif.T, cmap='seismic', vmin=-np.abs(np.max(A_dif)), vmax=np.abs(np.max(A_dif)))
-    #     plt.colorbar().set_label("$\\Delta$A")
-    #     plt.title("Residual matrix A_fit - A")
-    #     plt.ylabel('Wavelength / nm')
-    #     plt.xlabel('Time')
-
-    #     plt.tight_layout()
-
-    #     fig = plt.gcf()
-    #     # fig.canvas.set_window_title('Global fit - {}'.format(self.model.__class__.__name__))
-
-    #     plt.show()
-
-    # def plot_figures_one(self):
-
-    #     n = self.model.n
-    #     plt.rcParams['figure.figsize'] = [12, 6]
-    #     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, wspace=0.33, hspace=0.33)
-
-    #     plt.subplot(2, 2, 1)
-    #     for i in range(n):
-    #         plt.plot(self.wavelengths, self.A[i], label='Species {}'.format(self.model.get_species_name(i)))
-    #     plt.xlabel('Wavelength / nm')
-    #     plt.title('Spectra')
-    #     plt.legend()
-
-    #     plt.subplot(2, 2, 2)
-    #     for i in range(n):
-    #         plt.plot(self.times, self.C[:, i], label='Species {}'.format(self.model.get_species_name(i)))
-    #     plt.xlabel('Time')
-    #     plt.title('Concentrations')
-    #     plt.legend()
-
-    #     # plot residual matrix
-    #     plt.subplot(2, 1, 2)
-    #     A_dif = self.Y_fit - self.matrix  # the difference matrix between fit and original
-    #     x, y = np.meshgrid(self.times, self.wavelengths)  # needed for pcolormesh to correctly scale the image
-    #     plt.pcolormesh(x, y, A_dif.T, cmap='seismic', vmin=-np.abs(np.max(A_dif)), vmax=np.abs(np.max(A_dif)))
-    #     plt.colorbar().set_label("$\Delta$A")
-    #     plt.title("Residual matrix A_fit - A")
-    #     plt.ylabel('Wavelength / nm')
-    #     plt.xlabel('Time')
-
-    #     fig = plt.gcf()
-    #     fig.canvas.set_window_title('Global fit - {}'.format(self.model.__class__.__name__))
-
-    #     plt.show()
-
-    # def plot_figures_multiple(self):
-
-    #     # plt.figure(1)
-
-    #     n = self.model.n
-    #     plt.rcParams['figure.figsize'] = [12, 6]
-    #     plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.33, hspace=0.33)
-
-    #     for i in range(n):
-    #         plt.subplot(2, n, i + 1)
-    #         plt.plot(self.wavelengths, self.A[i])
-    #         plt.title('Spectrum {}'.format(self.model.get_species_name(i)))
-
-    #     for i in range(n):
-    #         plt.subplot(2, n, i + n + 1)
-    #         plt.plot(self.times, self.C[:, i])
-    #         plt.title('Conc. {}'.format(self.model.get_species_name(i)))
-
-    #     plt.show()
-        
-    
-
-    # def plot_first_n_vectors(self, n=4, symlog=False, t_unit='ms'):
-    #     # import matplotlib.ticker as ticker
-    #     S_single = []  # define a list of diagonal matrices with only one singular value
-    #     for i in range(n):
-    #         S_i = np.zeros((self.S.shape[0], self.S.shape[0]))  # recreate diagonal matrices
-    #         S_i[i, i] = self.S[i]
-    #         S_single.append(S_i)
-
-    #     plt.rcParams['figure.figsize'] = [15, 8]
-    #     plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.26, hspace=0.41)
-
-    #     x, y = np.meshgrid(self.wavelengths, self.times)  # needed for pcolormesh to correctly scale the image
-    #     for i in range(n):
-    #         plt.subplot(4, n, i + 1)
-    #         plt.plot(self.wavelengths, self.V_T[i], color='black', lw=1.5)
-    #         plt.title("{}. $V^T$ vector, $\Sigma_{{{}}}$ = {:.3g}".format(i + 1, str(i + 1) * 2, self.S[i]))
-    #         plt.xlabel('Wavelength (nm)')
-    #         # plt.xticks(np.arange(self.wavelengths[0], self.wavelengths[-1], step=50))
-    #         # plt.xlim(self.wavelengths[0], self.wavelengths[-1])
-    #         # plt.set_major_locator(ticker.MultipleLocator(100))
-    #     for i in range(n):
-    #         plt.subplot(4, n, i + n + 1)
-
-    #         plt.plot(self.times, self.U[:, i], color='black', lw=1.5)
-    #         plt.title("{}. $U$ vector".format(i + 1))
-    #         plt.xlabel(f'Time ({t_unit})')
-
-    #         if symlog:
-    #             plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
-    #             xaxis = plt.gca().xaxis
-    #             xaxis.set_minor_locator(MinorSymLogLocator(100))
-
-    #     for i in range(n):
-    #         plt.subplot(4, n, i + 2 * n + 1)
-
-    #         A_rec = self.U @ S_single[i] @ self.V_T  # reconstruct the A matrix
-    #         # setup z range so that white color corresponds to 0
-    #         plt.pcolormesh(x, y, A_rec, cmap='seismic', vmin=-np.abs(np.max(A_rec)), vmax=np.abs(np.max(A_rec)))
-    #         # plt.colorbar(label='Absorbance')
-    #         plt.colorbar()
-    #         plt.title("Component matrix {}".format(i + 1))
-    #         plt.xlabel('Wavelength (nm)')
-    #         plt.ylabel(f'Time ({t_unit})')
-
-    #         if symlog:
-    #             plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
-    #             xaxis = plt.gca().xaxis
-    #             xaxis.set_minor_locator(MinorSymLogLocator(100))
-
-    #         plt.gca().invert_yaxis()
-
-    #         plt.subplot(4, n, i + 3 * n + 1)
-
-    #         S = np.diag(self.S)
-
-    #         Ur = self.U[:, :i + 1]
-    #         Sr = S[:i + 1, :i + 1]
-    #         V_Tr = self.V_T[:i + 1, :]
-    #         Yr = Ur @ Sr @ V_Tr
-
-    #         A_diff = Yr - self.matrix
-
-    #         # E2 = (A_diff * A_diff).sum()
-    #         R2 = (1 - (A_diff * A_diff).sum() / (self.matrix * self.matrix).sum())
-
-    #         title = "Residuals (E=D$_{{rec}}$({}) - D)".format(i + 1)
-    #         title += f", $R^2$={R2:.4g}"
-
-    #         plt.pcolormesh(x, y, A_diff, cmap='seismic', vmin=-np.abs(np.max(A_diff)), vmax=np.abs(np.max(A_diff)))
-    #         plt.colorbar()
-    #         plt.title(title)
-    #         plt.xlabel('Wavelength (nm)')
-    #         plt.ylabel(f'Time ({t_unit})')
-
-    #         if symlog:
-    #             plt.xscale('symlog', subsx=[1, 2, 3, 4, 5, 6, 7, 8, 9], linscalex=1, linthreshx=100)
-    #             xaxis = plt.gca().xaxis
-    #             xaxis.set_minor_locator(MinorSymLogLocator(100))
-
-    #         plt.gca().invert_yaxis()
-
-    #     # plt.tight_layout()
-
-    #     plt.show()
-
 
     @staticmethod
     def to_string(array, separator='\t', decimal_sep='.', new_line='\n'):

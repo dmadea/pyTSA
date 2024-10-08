@@ -302,8 +302,8 @@ public setOptions(): IOption[] {
       step: 0.0001
     },
     {
-      name: "Include noise range (for estimation of correct weights)",
-      backendName: "include_noise_range",
+      name: "Use noise standard deviation weighting (weight[i, :] = 1 / std[i])",
+      backendName: "std_noise_weighting",
       type: "checkbox",
       value: false,
     },

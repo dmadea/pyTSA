@@ -4,6 +4,7 @@ import os
 
 # from functools import partial
 
+from matplotlib.ticker import AutoMinorLocator
 import numpy as np
 # from scipy.integrate import odeint
 from lmfit import Parameters, Minimizer, conf_interval, conf_interval2d, report_ci
@@ -105,8 +106,11 @@ class KineticModel(object):
         self.fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='linear', verbose=2, jac='3-point')
 
         # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum as 1/std
-        self.include_noise_range: bool = False
+        self.std_noise_weighting: bool = False
         self.noise_range: tuple[float, float] = []   
+
+        self.proportional_weighting = False  # if True, each spectrum will be weighted as reciprocal value of its summed values
+        self.prop_weighting_noise_floor: float = 1e-3  # values lower than noise floor will get weight 1
 
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
 
@@ -162,7 +166,7 @@ class KineticModel(object):
         return self.species_names[i]
 
     def get_weights_lstsq(self):
-        if not self.include_noise_range:
+        if not self.std_noise_weighting:
             return None
         
         i, j = fi(self.dataset.wavelengths, self.noise_range)
@@ -174,12 +178,17 @@ class KineticModel(object):
         weights = np.ones((self.dataset.times.shape[0], self.dataset.wavelengths.shape[0]))
 
         # https://gregorygundersen.com/blog/2022/08/09/weighted-ols/
-        if self.include_noise_range:
+        if self.std_noise_weighting:
             assert len(self.noise_range) == 2
             i, j = fi(self.dataset.wavelengths, self.noise_range)
 
-            stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1)
-            weights *= 1 / stds[:, None]
+            stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1, keepdims=True)
+            weights *= 1 / stds
+
+        if self.proportional_weighting:
+            filtered_vals = self.dataset.matrix_fac.copy()
+            filtered_vals[filtered_vals < self.prop_weighting_noise_floor] = 1
+            weights *= 1 / filtered_vals
 
         for *rng, w in self._weights:
             i, j = fi(self.dataset.wavelengths, rng)
@@ -223,7 +232,7 @@ class KineticModel(object):
                                  figsize=(X_SIZE * (n_params - 1), Y_SIZE * (n_params - 1) if figsize is None else figsize))
         
         if n_params == 2:
-            axes = [axes]
+            axes = np.asarray([[axes]])
         
         for i in range(n_params - 1):
             for j in range(n_params - 1):
@@ -245,7 +254,9 @@ class KineticModel(object):
                 # plot the data
                 levels = np.linspace(0, 1, colorbar_n_levels)
 
-                set_main_axis(ax, x_label=xname, y_label=yname)
+                set_main_axis(ax, x_minor_locator=AutoMinorLocator(2), y_minor_locator=AutoMinorLocator(2))
+                ax.set_xlabel(xname, weight='bold')
+                ax.set_ylabel(yname, weight='bold')
 
                 norm = mplcols.Normalize(vmin=0,vmax=1, clip=True)
                 mappable = ax.contourf(cx, cy, grid, cmap=cmap, norm=norm, levels=levels, antialiased=True)
@@ -264,10 +275,12 @@ class KineticModel(object):
                 # ax.set_axisbelow(False)
 
                 if i < n_params - 2:
-                    ax.set_xticks([])
+                    ax.xaxis.set_ticklabels([])
+                    # ax.set_xticks([])
                     ax.set_xlabel('')
                 if j > 0:
-                    ax.set_yticks([])
+                    ax.yaxis.set_ticklabels([])
+                    # ax.set_yticks([])
                     ax.set_ylabel('')
                 
 
