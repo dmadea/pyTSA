@@ -266,7 +266,7 @@ class Dataset(object):
         self._save_matrix(self.matrix_fac, fname=filepath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
 
     def save_matrix(self, filepath: str | None = 'file.txt', directory: str | None = None, extension: str | None = None, 
-                    delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
+                    delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None, transpose=False):
         """If filepath is None and directory and extension is provided, it will use the name of the dataset and save in the directory."""
 
         if directory is not None and extension is not None:
@@ -280,9 +280,9 @@ class Dataset(object):
         #
         # fpath = os.path.join(output_dir, f'{name}.{extension}')
 
-        self._save_matrix(self.matrix, fname=fpath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1)
+        self._save_matrix(self.matrix, fname=fpath, delimiter=delimiter, encoding=encoding, t0=t0, t1=t1, w0=w0, w1=w1, transpose=transpose)
 
-    def _save_matrix(self, D=None, fname='output.txt', delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None):
+    def _save_matrix(self, D=None, fname='output.txt', delimiter='\t', encoding='utf8', t0=None, t1=None, w0=None, w1=None, transpose=False):
         # cut data if necessary
 
         t_idx_start = fi(self.times, t0) if t0 is not None else 0
@@ -297,9 +297,15 @@ class Dataset(object):
         D_crop = D[t_idx_start:t_idx_end, wl_idx_start:wl_idx_end]
         times_crop = self.times[t_idx_start:t_idx_end]
         wavelengths_crop = self.wavelengths[wl_idx_start:wl_idx_end]
+        # print(D_crop.shape)
+        # if D_crop.ndim == 1:
+        #     if times_crop.shape[0] == 1:
+        #         D_crop = D_crop[None, :]
+        #     else:
+        #         D_crop = D_crop[:, None]
 
-        mat = np.vstack((wavelengths_crop, D_crop))
-        buffer = delimiter + delimiter.join(f"{num}" for num in times_crop) + '\n'
+        mat = np.vstack((times_crop, D_crop.T)) if transpose else np.vstack((wavelengths_crop, D_crop))
+        buffer = delimiter + delimiter.join(f"{num}" for num in (wavelengths_crop if transpose else times_crop)) + '\n'
         buffer += '\n'.join(delimiter.join(f"{num}" for num in row) for row in mat.T)
 
         with open(fname, 'w', encoding=encoding) as f:
