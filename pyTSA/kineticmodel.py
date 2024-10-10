@@ -5,6 +5,7 @@ import os
 # from functools import partial
 
 from matplotlib.ticker import AutoMinorLocator
+import matplotlib.gridspec as gridspec
 import numpy as np
 # from scipy.integrate import odeint
 from lmfit import Parameters, Minimizer, conf_interval, conf_interval2d, report_ci
@@ -17,7 +18,7 @@ from abc import abstractmethod
 # from numba import njit
 
 from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq, simulate_target_model, square_conv_exp
-from .plot import plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax, set_main_axis
+from .plot import MinorSymLogLocator, plot_SADS_ax, plot_data_ax, plot_traces_onefig_ax, set_main_axis
 if TYPE_CHECKING:
     from .dataset import Dataset
 
@@ -188,10 +189,10 @@ class KineticModel(object):
         if self.proportional_weighting:
             filtered_vals = self.dataset.matrix_fac.copy()
             filtered_vals[filtered_vals < self.prop_weighting_noise_floor] = 1
-            weights *= 1 / filtered_vals
+            weights *= 1 / filtered_vals ** 0.5
 
         for *rng, w in self._weights:
-            i, j = fi(self.dataset.wavelengths, rng)
+            i, j = fi(self.dataset.wavelengths, rng)    
             weights[:, i:j+1] *= w
 
         return weights
@@ -713,7 +714,7 @@ class FirstOrderModel(KineticModel):
         self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
         self.params = self.fit_result.params
 
-    def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None,
+    def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None, hspace=0.2, wspace=0.2,
               X_SIZE=5.5, Y_SIZE=4.5, add_figure_labels=False, figure_labels_font_size=17, fig_labels_offset=0, **kwargs):
         """
         
@@ -738,9 +739,13 @@ class FirstOrderModel(KineticModel):
         elif nrows is None and ncols is not None:
             nrows = int(np.ceil(n / ncols))
 
-        fig, axes = plt.subplots(nrows, ncols, figsize=kwargs.get('figsize', (X_SIZE * ncols, Y_SIZE * nrows)))
-        if nrows * ncols == 1:
-            axes = np.asarray([axes])
+        # fig, axes = plt.subplots(nrows, ncols, figsize=kwargs.get('figsize', (X_SIZE * ncols, Y_SIZE * nrows)))
+        fig = plt.figure(figsize=kwargs.get('figsize', (X_SIZE * ncols, Y_SIZE * nrows)))
+
+        outer_grid = gridspec.GridSpec(nrows, ncols, wspace=wspace, hspace=hspace)
+
+        # if nrows * ncols == 1:
+        #     outer_grid = np.asarray([outer_grid])
 
         mu = self.get_mu()
         COLORS = ['blue', 'red', 'green', 'orange', 'purple', 'black', 'gray']
@@ -753,13 +758,57 @@ class FirstOrderModel(KineticModel):
                     kwargs[_key] = value
         f_labels = list('abcdefghijklmnopqrstuvw')
 
-        for i, p in enumerate(what):
+        for i, (p, og) in enumerate(zip(what, outer_grid)):
             if i >= nrows * ncols:
                 break
 
-            ax = axes.flat[i]
+            # og = outer_grid[i]
+            if p.lower() != 'fitresiduals':
+                inner_grid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=og)
+                ax = fig.add_subplot(inner_grid[0])
+            
+            # ax = axes.flat[i]
             kws = kwargs.copy()
             match p.lower():
+                case "fitresiduals":
+                    update_kwargs("fitresiduals", kws)  # change to data-specific kwargs
+                    inner_grid = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=og, wspace=0.1, hspace=0.1,
+                                                      height_ratios=(3, 1))
+                    ax_data = fig.add_subplot(inner_grid[0])
+                    ax_res = fig.add_subplot(inner_grid[1])
+
+                    set_main_axis(ax_data, x_label="", y_label=kwargs.get("z_unit", 'A'), xlim=kwargs.get("t_lim", (None, None)), ylim=kwargs.get("y_lim", (None, None)))
+                    set_main_axis(ax_res, x_label=kwargs.get("x_label", 'Time') + " / " + kwargs.get("t_unit", 'ns'), ylim=kwargs.get("y_lim_residuals", (None, None)),
+                                   y_label='res.', xlim=kwargs.get("t_lim", (None, None)))
+
+                    # plot zero lines
+                    ax_res.axline((0, 0), slope=0, ls='--', color='black', lw=0.5)
+
+                    ax_data.tick_params(labelbottom=False)
+
+                    ax_data.set_title(self.dataset.name)
+                    ax_data.plot(self.dataset.times, self.dataset.matrix_fac[:, 0], lw=kwargs.get("lw_data", 1), color='black')
+                    ax_data.plot(self.dataset.times, self.matrix_opt[:, 0], lw=kwargs.get("lw_fit", 1), color='red')
+                    ax_res.plot(self.dataset.times, self.weighted_residuals(), lw=kwargs.get("lw_data", 1), color='black')
+
+                    ax_data.set_axisbelow(False)
+                    ax_res.set_axisbelow(False)
+
+                    ax_data.yaxis.set_ticks_position('both')
+                    ax_data.xaxis.set_ticks_position('both')
+
+                    ax_res.yaxis.set_ticks_position('both')
+                    ax_res.xaxis.set_ticks_position('both')
+
+                    if kwargs.get('symlog', False):
+                        ax_data.set_xscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=kwargs.get('linscale', 1), linthresh=kwargs.get('linthresh', 1))
+                        ax_res.set_xscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=kwargs.get('linscale', 1), linthresh=kwargs.get('linthresh', 1))
+                        ax_data.xaxis.set_minor_locator(MinorSymLogLocator(kwargs.get('linthresh', 1)))
+                        ax_res.xaxis.set_minor_locator(MinorSymLogLocator(kwargs.get('linthresh', 1)))
+
+                    if kwargs.get('log_y', False):
+                        ax_data.set_yscale('log')
+
                 case "data":
                     kws.update(dict(title=f"Data [{self.dataset.name}]", log=False, mu=mu))
                     update_kwargs("data", kws)  # change to data-specific kwargs
@@ -824,15 +873,15 @@ class FirstOrderModel(KineticModel):
                 case _:
                     raise ValueError(f"Plot {p} is not defined.")
                 
-        plt.tight_layout()
+        # plt.tight_layout()
 
-        for ax in axes.flat[:n]:
-            if add_figure_labels:
-                ax.text(-0.1, 1.10, f_labels[i + fig_labels_offset], color='black', transform=ax.transAxes,
-                        fontstyle='normal', fontweight='bold', fontsize=figure_labels_font_size)
+        # for ax in axes.flat[:n]:
+        #     if add_figure_labels:
+        #         ax.text(-0.1, 1.10, f_labels[i + fig_labels_offset], color='black', transform=ax.transAxes,
+        #                 fontstyle='normal', fontweight='bold', fontsize=figure_labels_font_size)
                 
-        for ax in axes.flat[n:]:
-            ax.set_axis_off()
+        # for ax in axes.flat[n:]:
+        #     ax.set_axis_off()
 
         filepath = kwargs.get('filepath', None)
 
