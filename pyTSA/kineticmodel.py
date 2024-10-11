@@ -901,7 +901,6 @@ class FirstOrderLPLModel(FirstOrderModel):
         self.include_LPL = True
         super(FirstOrderLPLModel, self).__init__(dataset, n_species)
         self._calculate_EAS = False
-        self.C_opt_full = None
 
     def init_params(self) -> Parameters:
         params = super(FirstOrderLPLModel, self).init_params()
@@ -933,6 +932,8 @@ class DelayedFluorescenceModel(FirstOrderModel):
         super(DelayedFluorescenceModel, self).__init__(dataset, n_species)
         self._calculate_EAS = False
         self._include_rates_params = False
+        self.C_opt_full = None
+
 
     def init_params(self) -> Parameters:
         params = super(DelayedFluorescenceModel, self).init_params()
