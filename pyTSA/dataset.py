@@ -159,7 +159,7 @@ class Dataset(object):
 
         self.mask = []
 
-        self.SVD()
+        # self.SVD()
 
     def get_integrated_dataset(self):
         trace = np.trapz(self.matrix_fac, self.wavelengths, axis=1)
@@ -202,7 +202,8 @@ class Dataset(object):
             matrix[t0_idx:t1_idx, w0_idx:w1_idx] = np.nan
 
     def SVD(self):
-        self.U, self.S, self.V_T = svd(self.matrix, full_matrices=False, lapack_driver='gesdd')
+        pass
+        # self.U, self.S, self.V_T = svd(self.matrix, full_matrices=False, lapack_driver='gesdd')
         # self.run_ICA()
 
     def save_fit(self, filepath, ST=None, C=None):
