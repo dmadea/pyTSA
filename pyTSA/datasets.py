@@ -1,4 +1,5 @@
 
+from matplotlib import gridspec
 from .plot import plot_data_ax
 from .dataset import Dataset
 from .kineticmodel import KineticModel #, FirstOrderModel
@@ -114,7 +115,7 @@ class Datasets(object):
 
         return Dataset(mat, times, wavelengths, name=self[0].name)
     
-    def plot(self, filepath=None, **kwargs):
+    def plot_data(self, filepath=None, **kwargs):
         n = len(self._datasets)
         if n == 0:
             return
@@ -135,6 +136,52 @@ class Datasets(object):
             plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
         else:
             plt.show()
+
+    def plot_models(self, *what, outer_nrows: int | None = None, outer_ncols: int | None = None, 
+                    inner_nrows: int | None = None, inner_ncols: int | None = None, outer_hspace=0.2, outer_wspace=0.2,
+                    inner_hspace=0.2, inner_wspace=0.2, X_SIZE=5.5, Y_SIZE=4.5, filepath=None, transparent=True, dpi=300, **kwargs):
+        
+        n_outer = self.length()
+        if n_outer == 0:
+            return
+        
+        if outer_nrows is None and outer_ncols is None:
+            outer_ncols = int(np.floor(n_outer ** 0.5))
+            outer_nrows = int(np.ceil(n_outer / outer_ncols))
+        elif outer_nrows is not None and outer_ncols is None:
+            outer_ncols = int(np.ceil(n_outer / outer_nrows))
+        elif outer_nrows is None and outer_ncols is not None:
+            outer_nrows = int(np.ceil(n_outer / outer_ncols))
+
+        n_inner = len(what)
+        if n_inner == 0:
+            return
+        
+        if inner_nrows is None and inner_ncols is None:
+            inner_ncols = int(np.floor(n_inner ** 0.5))
+            inner_nrows = int(np.ceil(n_inner / inner_ncols))
+        elif inner_nrows is not None and inner_ncols is None:
+            inner_ncols = int(np.ceil(n_inner / inner_nrows))
+        elif inner_nrows is None and inner_ncols is not None:
+            inner_nrows = int(np.ceil(n_inner / inner_ncols))
+
+        fig = plt.figure(figsize=kwargs.get('figsize', (X_SIZE * outer_ncols * inner_ncols, Y_SIZE * inner_nrows * outer_nrows)))
+
+        outer_grid = gridspec.GridSpec(outer_nrows, outer_ncols, figure=fig, wspace=outer_wspace, hspace=outer_hspace)
+
+        for i, gs in enumerate(outer_grid):
+            if i >= self.length():
+                break
+
+            assert self[i].model is not None
+            self[i].model._plot_gs(fig, gs, what, inner_nrows, inner_ncols, inner_hspace, inner_wspace, **kwargs)
+
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, bbox_inches='tight', transparent=transparent, dpi=dpi)
+        else:
+            plt.show()
+
 
     def extract_params_from_models(self, param_names: list[str] | None = None, use_unfixed_params=True,
                                    include_stderr=False, include_relative_error=True) -> pd.DataFrame:

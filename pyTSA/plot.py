@@ -696,6 +696,43 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
     if y_major_formatter:
         ax.yaxis.set_major_formatter(y_major_formatter)
 
+def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.ndarray, trace_fit: np.ndarray, trace_residuals: np.ndarray, 
+                           x_label="Time", t_unit='ns', y_lim_residuals=(None, None), z_unit='A', t_lim=(None, None),
+                           y_lim=(None, None), lw_data=1, lw_fit=1, symlog=False, linthresh=1, linscale=1, log_y=False, title="", **kwargs):
+
+
+    set_main_axis(ax_data, x_label="", y_label=z_unit, xlim=t_lim, ylim=y_lim)
+    set_main_axis(ax_res, x_label=f"{x_label} / {t_unit}", ylim=y_lim_residuals,
+                    y_label='res.', xlim=t_lim)
+
+    # plot zero lines
+    ax_res.axline((0, 0), slope=0, ls='--', color='black', lw=0.5)
+
+    ax_data.tick_params(labelbottom=False)
+
+    ax_data.set_title(title)
+    ax_data.plot(times, trace_data, lw=lw_data, color='black')
+    ax_data.plot(times, trace_fit, lw=lw_fit, color='red')
+    ax_res.plot(times, trace_residuals, lw=lw_data, color='black')
+
+    ax_data.set_axisbelow(False)
+    ax_res.set_axisbelow(False)
+
+    ax_data.yaxis.set_ticks_position('both')
+    ax_data.xaxis.set_ticks_position('both')
+
+    ax_res.yaxis.set_ticks_position('both')
+    ax_res.xaxis.set_ticks_position('both')
+
+    if symlog:
+        ax_data.set_xscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=linscale, linthresh=linthresh)
+        ax_res.set_xscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=linscale, linthresh=linthresh)
+        ax_data.xaxis.set_minor_locator(MinorSymLogLocator(linthresh))
+        ax_res.xaxis.set_minor_locator(MinorSymLogLocator(linthresh))
+
+    if log_y:
+        ax_data.set_yscale('log')
+
 #
 # def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, t_unit='ps',
 #                  z_unit=dA_unit, cmap='diverging', z_lim=(None, None),
