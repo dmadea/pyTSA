@@ -169,7 +169,7 @@ class Datasets(object):
                     values.append(params[pn].stderr)
 
                 if include_relative_error:
-                    values.append(params[pn].stderr * 100 / params[pn].value)
+                    values.append(np.abs(params[pn].stderr * 100 / params[pn].value) if params[pn].value != 0 else 0)
 
             # print(values)
             self.df_params.loc[len(self.df_params)] = values
