@@ -755,7 +755,7 @@ class FirstOrderModel(KineticModel):
         # data, traces, EADS, DADS, LDM, residuals
 
         # outer_grid = gridspec.GridSpec(nrows, ncols, wspace=wspace, hspace=hspace)
-        i_grid = gridspec.GridSpecFromSubplotSpec(nrows, ncols, wspace=wspace, hspace=hspace, subplot_spec=grid_spec)
+        inner_grid = gridspec.GridSpecFromSubplotSpec(nrows, ncols, wspace=wspace, hspace=hspace, subplot_spec=grid_spec)
 
         mu = self.get_mu()
         COLORS = ['blue', 'red', 'green', 'orange', 'purple', 'black', 'gray']
@@ -768,17 +768,17 @@ class FirstOrderModel(KineticModel):
                     kwargs[_key] = value
         f_labels = list('abcdefghijklmnopqrstuvw')
 
-        for i, (p, og) in enumerate(zip(what, i_grid)):
+        for i, (p, ig) in enumerate(zip(what, inner_grid)):
             if i >= nrows * ncols:
                 break
 
             if p.lower() == 'fitresiduals':
-                inner_grid = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=og, wspace=0.1, hspace=0.1,
+                ii_grid = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=ig, wspace=0.1, hspace=0.1,
                                                       height_ratios=(3, 1))
-                ax = fig.add_subplot(inner_grid[0])  # ax_data, ax is necessary for potential figure label
-                ax_res = fig.add_subplot(inner_grid[1])
+                ax = fig.add_subplot(ii_grid[0])  # ax_data, ax is necessary for potential figure label
+                ax_res = fig.add_subplot(ii_grid[1])
             else:
-                ax = fig.add_subplot(og)
+                ax = fig.add_subplot(ig)
             
             kws = kwargs.copy()
             match p.lower():
