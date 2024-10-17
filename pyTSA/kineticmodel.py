@@ -29,6 +29,7 @@ from matplotlib import cm
 # from targetmodel import TargetModel
 # import glob, os
 import scipy.constants as sc
+from copy import deepcopy
 
 
 
@@ -330,6 +331,11 @@ class KineticModel(object):
         plt.colorbar()
         plt.ylabel(y_name)
         plt.show()
+
+    def copy(self) -> KineticModel:
+        c = deepcopy(self)
+        c.dataset = None
+        return c
 
 
 class FirstOrderModel(KineticModel):
