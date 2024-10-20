@@ -2,7 +2,7 @@
 from matplotlib import gridspec
 from .plot import plot_data_ax
 from .dataset import Dataset
-from .kineticmodel import KineticModel #, FirstOrderModel
+from .kineticmodel import KineticModel , FirstOrderModel
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,7 +16,7 @@ class Datasets(object):
     def __init__(self):
         self._datasets: list[dict[Dataset, int | str]] = []
         self.df_params = None
-        # self.model: KineticModel = FirstOrderModel()
+        self.model: KineticModel = FirstOrderModel()
 
     def set_model(self, model: KineticModel, index: int | None = None, key: int | str | None = None):
         if key is not None:
