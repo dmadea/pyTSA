@@ -207,8 +207,7 @@ class KineticModel(object):
             exponent = self.prop_weighting_params['exponent']
 
             mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
-            mat = mat.copy()
-            mat[mat < 0] = 0
+            mat = np.abs(mat)
 
             weights *= 1 / (self.prop_weighting_params['k'] * (mat ** exponent) + noise_floor)
 
@@ -244,8 +243,7 @@ class KineticModel(object):
 
             n_floor_std = self.prop_weighting_params['noise_floor'] if self.noise_floor_estimation_from_data else params['noise_floor'].value
             mat = self.matrix_opt if use_fit_matrix else self.dataset.matrix_fac
-            mat = mat.copy()
-            mat[mat < 0] = 0
+            mat = np.abs(mat)
 
             # calculate weighted residuals
             wr = (self.dataset.matrix_fac - self.matrix_opt) / (k * mat ** exponent + n_floor_std)
