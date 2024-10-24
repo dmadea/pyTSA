@@ -108,11 +108,11 @@ class KineticModel(object):
         self.fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='linear', verbose=2, jac='3-point')
 
         # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum as 1/std
-        self.std_noise_weighting: bool = False
-        self.noise_range: tuple[float, float] = []   
+        self.noise_floor_estimation_from_data: bool = False
+        self.noise_range: tuple[float, float] = []   # wavelengths range from which the noise will be taken
 
-        self.proportional_weighting = False  # if True, each spectrum will be weighted as reciprocal value of its summed values
-        self.prop_weighting_noise_floor: float = 1e-3  # values lower than noise floor will get weight 1
+        self.prop_weighting_with_noise_floor = False
+        self.prop_weighting_params: dict[float, float | np.ndarray, float] = dict(k=0.005, noise_floor=0.005, exponent=1)
 
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
 
@@ -167,36 +167,108 @@ class KineticModel(object):
         # i is index in range(n)
         return self.species_names[i]
 
-    def get_weights_lstsq(self):
-        if not self.std_noise_weighting:
-            return None
-        
-        i, j = fi(self.dataset.wavelengths, self.noise_range)
-        stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1)
-        return 1 / stds
+    def weighted_residuals(self) -> np.ndarray:
+        if (self.matrix_opt is None):
+            raise TypeError("Optimized matrix is None")
+        R = self.dataset.matrix_fac - self.matrix_opt
+        weights = self.get_weights()
+        return R * weights
 
+    def get_weights_lstsq(self):
+        w = self.get_weights()
+        return w.sum(axis=1)
+
+        # if not self.std_noise_weighting:
+        #     return None
+        
+        # i, j = fi(self.dataset.wavelengths, self.noise_range)
+        # stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1)
+        # return 1 / stds
+
+    def _calculate_noise_floor(self):
+        if not self.noise_floor_estimation_from_data:
+            return
+
+        assert len(self.noise_range) == 2
+        i, j = fi(self.dataset.wavelengths, self.noise_range)
+
+        stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1, keepdims=True)
+        self.prop_weighting_params['noise_floor'] = stds
+        
 
     def get_weights(self):
-        weights = np.ones((self.dataset.times.shape[0], self.dataset.wavelengths.shape[0]))
+        weights = np.ones_like(self.dataset.matrix_fac)
 
         # https://gregorygundersen.com/blog/2022/08/09/weighted-ols/
-        if self.std_noise_weighting:
-            assert len(self.noise_range) == 2
-            i, j = fi(self.dataset.wavelengths, self.noise_range)
+        if self.prop_weighting_with_noise_floor:
+            self._calculate_noise_floor()
+            
+            noise_floor = self.prop_weighting_params['noise_floor']
+            exponent = self.prop_weighting_params['exponent']
 
-            stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1, keepdims=True)
-            weights *= 1 / stds
+            mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
+            mat = mat.copy()
+            mat[mat < 0] = 0
 
-        if self.proportional_weighting:
-            filtered_vals = self.dataset.matrix_fac.copy()
-            filtered_vals[filtered_vals < self.prop_weighting_noise_floor] = 1
-            weights *= 1 / filtered_vals ** 0.5
+            weights *= 1 / (self.prop_weighting_params['k'] * (mat ** exponent) + noise_floor)
 
         for *rng, w in self._weights:
             i, j = fi(self.dataset.wavelengths, rng)    
             weights[:, i:j+1] *= w
 
         return weights
+
+    def get_residuals_histogram(self, wr: np.ndarray | None = None, n = 2, rng_quantile=1e-3) -> tuple[np.ndarray, np.ndarray]:
+        wr = self.weighted_residuals() if wr is None else wr
+
+        rng = np.quantile(wr, [rng_quantile, 1 - rng_quantile], )  # to remove the outliers
+
+        hist, edge = np.histogram(wr, int(n * np.sqrt(wr.shape[0] * wr.shape[1])), range=rng, density=True)
+        x = edge[1:] - edge[1] + edge[0]
+
+        return x, hist
+
+
+    def estimate_prop_weighting_params(self, use_fit_matrix=True) -> MinimizerResult:
+
+        pars = Parameters()
+        noise_floor = self.prop_weighting_params['noise_floor']
+        noise_floor = 0 if np.iterable(noise_floor) else noise_floor
+        pars.add('noise_floor', value=noise_floor, min=0, max=np.inf, vary=not self.noise_floor_estimation_from_data)
+        pars.add('k', value=self.prop_weighting_params['k'], min=0, max=2, vary=True)
+        pars.add('exponent', value=self.prop_weighting_params['exponent'], min=0.1, max=2, vary=True)
+
+        def residuals(params):
+            k = params['k'].value
+            exponent = params['exponent'].value
+
+            n_floor_std = self.prop_weighting_params['noise_floor'] if self.noise_floor_estimation_from_data else params['noise_floor'].value
+            mat = self.matrix_opt if use_fit_matrix else self.dataset.matrix_fac
+            mat = mat.copy()
+            mat[mat < 0] = 0
+
+            # calculate weighted residuals
+            wr = (self.dataset.matrix_fac - self.matrix_opt) / (k * mat ** exponent + n_floor_std)
+
+            x, hist = self.get_residuals_histogram(wr)
+
+            gauss = np.exp(-x * x / 2) / np.sqrt(2 * np.pi)
+            # amp = (gauss * hist).sum() / (gauss * gauss).sum()  # from d/da sum(a * xi - yi)^2 = 0, a = sum(xi*yi) / sum(xi^2)
+            return gauss - hist
+
+        minimizer = Minimizer(residuals, pars, nan_policy='raise')
+        # fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='soft_l1', verbose=2, jac='3-point')
+        fitter_kwds = dict()
+        fit_result = minimizer.minimize(method='nelder_mead', **fitter_kwds)  # minimize the 
+        
+        if not self.noise_floor_estimation_from_data:
+            self.prop_weighting_params['noise_floor'] = fit_result.params['noise_floor'].value
+        
+        self.prop_weighting_params['k'] = fit_result.params['k'].value
+        self.prop_weighting_params['exponent'] = fit_result.params['exponent'].value
+
+        return fit_result
+
     
     def confidence_intervals(self, p_names=None, sigmas=(1, 2, 3)):
         """Prints a confidence intervals.
@@ -700,12 +772,7 @@ class FirstOrderModel(KineticModel):
         self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau) if self.irf_type == self.irf_types[0] else square_conv_exp(tt, _ks, _tau)
         # print(self.C_opt.shape)
 
-    def weighted_residuals(self) -> np.ndarray:
-        if (self.matrix_opt is None):
-            raise TypeError("Optimized matrix is None")
-        R = self.dataset.matrix_fac - self.matrix_opt
-        weights = self.get_weights()
-        return R * weights
+
 
 
     def fit(self):
@@ -790,8 +857,12 @@ class FirstOrderModel(KineticModel):
             match p.lower():
                 case "fitresiduals":
                     update_kwargs("fitresiduals", kws)  # change to data-specific kwargs
-                    plot_fitresiduals_axes(ax, ax_res, self.dataset.times, self.dataset.matrix_fac[:, 0],
-                                           self.matrix_opt[:, 0], self.weighted_residuals(), title=self.dataset.name, **kws)
+                    single_dim = self.dataset.matrix_fac.shape[1] == 1
+                    mat = self.dataset.matrix_fac[:, 0] if single_dim else self.dataset.matrix_fac.sum(axis=1)
+                    opt = self.matrix_opt[:, 0] if single_dim else self.matrix_opt.sum(axis=1)
+                    res = self.weighted_residuals()[:, 0] if single_dim else self.weighted_residuals().sum(axis=1)
+
+                    plot_fitresiduals_axes(ax, ax_res, self.dataset.times, mat, opt, res, title=self.dataset.name, **kws)
 
                 case "data":
                     kws.update(dict(title=f"Data [{self.dataset.name}]", log=False, mu=mu))
@@ -800,7 +871,11 @@ class FirstOrderModel(KineticModel):
                 case "residuals":
                     kws.update(dict(title=f"Residuals [{self.dataset.name}]", log=False, mu=mu))
                     update_kwargs("residuals", kws)  # change to data-specific kwargs
-                    plot_data_ax(fig, ax, self.matrix_opt - self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, **kws)
+                    plot_data_ax(fig, ax, self.weighted_residuals(), self.dataset.times, self.dataset.wavelengths, **kws)
+                case "weights":
+                    kws.update(dict(title=f"Weights [{self.dataset.name}]", log=False, mu=mu))
+                    update_kwargs("weights", kws)  # change to data-specific kwargs
+                    plot_data_ax(fig, ax, self.get_weights(), self.dataset.times, self.dataset.wavelengths, **kws)
                 case "fit":
                     kws.update(dict(title=f"Fit [{self.dataset.name}]", log=False, mu=mu))
                     update_kwargs("fit", kws)  # change to data-specific kwargs
@@ -818,6 +893,13 @@ class FirstOrderModel(KineticModel):
                     ax.set_xlabel(f'Time / {t_unit}')
                     ax.set_ylabel('Integrated intensity')
                     ax.plot(self.dataset.times, y)
+
+                case "residuals_histogram":
+                    x, hist = self.get_residuals_histogram()
+                    gauss = np.exp(-x * x / 2) / np.sqrt(2 * np.pi)
+                    ax.scatter(x, hist, edgecolor='red', facecolor='white', lw=1.5)
+                    ax.plot(x, gauss, color='k', ls='--')  #, label='norm. dist. $\\sigma = 1$')
+                    # ax.legend(frameon=False)
 
                 case "eas":
                     kws.update(dict(title="EAS", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
