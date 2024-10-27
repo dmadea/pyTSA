@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
 
-
+    let count = $state<number>(0);
 
 
 function clicked() {
@@ -32,6 +32,8 @@ onMount(() => {
 
 
 </script>
+
+<button onclick={() => count++}>Push {count} a</button>
 
 <div bind:this={gridDiv} class="grid">
  
