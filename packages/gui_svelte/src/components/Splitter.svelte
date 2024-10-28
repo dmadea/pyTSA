@@ -104,7 +104,7 @@
     .bar {
         width: var(--bar-width);
         /* background-color: #d80000; */
-        cursor: w-resize;
+        cursor: ew-resize;
     }
 
     .dragging {
