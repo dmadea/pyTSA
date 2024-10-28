@@ -45,11 +45,9 @@
         </li>
     </ul>
     {#each items as item}
-        {#if _selectedID == item.id}
-        <div class="box">
-            <item.component />
+        <div class="box" class:hidden={_selectedID != item.id}>
+            <item.component id={item.id}/>
         </div>
-        {/if}
     {/each}
 </div>
 
@@ -61,6 +59,11 @@
         border-radius: 0 0 .5rem .5rem;
         border-top: 0;
     }
+
+    .hidden {
+        display: none
+    }
+
     ul {
         display: flex;
         flex-wrap: wrap;

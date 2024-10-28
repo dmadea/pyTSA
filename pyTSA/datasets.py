@@ -99,7 +99,17 @@ class Datasets(object):
             d.dimension_multiply(x, y, z)
 
     def get_averaged_dataset(self) -> Dataset:
-        pass
+        if len(self._datasets) == 0:
+            raise ValueError("No datasets.")
+        
+        if len(self._datasets) == 1:
+            return self[0]
+
+        mats = np.stack([d.matrix for d in self], axis=2)
+        m_avrg = mats.mean(axis=2)
+
+        return Dataset(m_avrg, self[0].times, self[0].wavelengths, name=f"{self[0].name}-avrg")
+
 
     def get_combined_dataset(self, axis=0) -> Dataset | None:
         if len(self._datasets) == 0:
