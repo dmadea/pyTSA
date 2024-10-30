@@ -27,6 +27,10 @@ class Datasets(object):
         if index is not None:
             self._datasets[index]['dataset'].model = model
 
+        self.model = model
+        self[0].set_model(model)
+
+
     def __getitem__(self, key: int) -> Dataset:
         return self._datasets[key]['dataset']
     
@@ -97,6 +101,10 @@ class Datasets(object):
     def dimension_multiply(self, x: float = 1.0, y: float = 1.0, z: float = 1.0):
         for d in self:
             d.dimension_multiply(x, y, z)
+
+    def set_t0_as(self, t0=0):
+        for d in self:
+            d.times -= d.times[0] + t0
 
     def get_averaged_dataset(self) -> Dataset:
         if len(self._datasets) == 0:

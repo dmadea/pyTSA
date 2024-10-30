@@ -17,6 +17,11 @@ from .mathfuncs import crop_data, fi, chirp_correction
 from .plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
 
 
+import re
+racc = re.compile(r"(\d+)acc")
+rexposure = re.compile(r"(\d+\.?\d*)exp")
+
+
 class Dataset(object):
 
     @classmethod
@@ -86,18 +91,59 @@ class Dataset(object):
 
     
     @classmethod
-    def from_file(cls, fname: str, transpose: bool = False, **kwargs):
-        data = np.genfromtxt(fname, dtype=np.float64, filling_values=np.nan,  **kwargs)
+    def from_file(cls, fname: str, transpose: bool = False, load_TRE_ICCD = False, **kwargs):
 
-        t = data[1:, 0]
-        w = data[0, 1:]
-        mat = data[1:, 1:]
+        if load_TRE_ICCD:
+            t, w, mat = Dataset.load_TRE_ICCD(fname)
+        else:
+            data = np.genfromtxt(fname, dtype=np.float64, filling_values=np.nan,  **kwargs)
+
+            t = data[1:, 0]
+            w = data[0, 1:]
+            mat = data[1:, 1:]
 
         if transpose:
             [t, w] = [w, t]
             mat = mat.T
 
         return cls(mat, t, w, filepath=fname)
+    
+    @staticmethod
+    def load_TRE_ICCD(filename):
+
+        nw = 1024
+    
+        _dir, fname = os.path.split(filename)   # get dir and filename
+        fname, _ = os.path.splitext(fname)  # get filename without extension
+
+        data = np.genfromtxt(filename, delimiter=',', dtype=np.float64, usecols=(4, 5, 9, 10))
+        ns = int(data.shape[0] / nw)
+        
+        times = np.empty(ns, dtype=float)
+        wavelengths = data[:nw, 1]
+        D = np.empty((ns, nw), dtype=float)
+
+        macc = racc.search(fname)
+        mexp = rexposure.search(fname)
+
+        acc = 1  # number of accumulations
+        exp_time = 1
+        if macc is not None:
+            acc = int(macc.group(1))
+
+        if mexp is not None:
+            exp_time = float(mexp.group(1))
+        
+        # print(f"File: {fname},\nExposure time: {exp_time}, Number of accumulations: {acc}\n")
+
+        for i in range(ns):
+            exp_time_from_data = data[i * nw, -2]   # exposure time
+            exp_time = exp_time if np.isnan(exp_time_from_data) else exp_time_from_data   # if exposure time is not present in the datafile, 0.45 value is used
+            times[i] = data[i * nw, -1]
+            D[i, :] = data[i*nw:(i+1)*nw, 0] / (exp_time * acc)   # divide by exposure time and by number of accumulations used
+            # D[i, :] = data[i*nw:(i+1)*nw, 0] / acc   # divide by exposure time and by number of accumulations used
+
+        return times, wavelengths, D
 
     def copy(self):
         return Dataset(self.matrix.copy(), self.times.copy(), self.wavelengths.copy(), filepath=self.filepath, name=self.name)
@@ -135,6 +181,7 @@ class Dataset(object):
             self.name = os.path.splitext(tail)[0]  # without extension
         else:
             self.name = name
+
 
         # self._SVD_filter = False
         # self._ICA_filter = False

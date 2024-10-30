@@ -89,6 +89,7 @@ class BackendSession(object):
         ds = self.tabs[tab_index]
         ds.append(self.datasets[index].copy(), key=index)
         ds.set_model(ds.model) # sets the model for the first dataset
+        # print(ds.model)
 
     def remove_dataset(self, index: int, tab_index: int):
         self.tabs[tab_index].remove(key=index)

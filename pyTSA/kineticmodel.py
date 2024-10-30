@@ -206,7 +206,8 @@ class KineticModel(object):
             noise_floor = self.prop_weighting_params['noise_floor']
             exponent = self.prop_weighting_params['exponent']
 
-            mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
+            # mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
+            mat = self.dataset.matrix_fac
             mat = np.abs(mat)
 
             weights *= 1 / (self.prop_weighting_params['k'] * (mat ** exponent) + noise_floor)
