@@ -812,7 +812,7 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 #         ax.yaxis.set_major_formatter(y_major_formatter)
 
 
-def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1,
+def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1,
                  legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True,
                  area_plot_data=(None, None), area_plot_color='violet', area_plot_data2=(None, None),
                  area_plot_color2='blue', title="",
@@ -847,6 +847,11 @@ def plot_SADS_ax(ax, wls, SADS, labels=None, zero_reg=(None, None), z_unit=dA_un
             color = colors[i]
 
         ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=labels[i] if i < len(labels) else "LPL")
+
+    if Artifacts is not None:
+        colorsArt = ['black', 'grey', 'navy', 'pink']
+        for i in range(Artifacts.shape[1]):
+            ax.plot(wls, Artifacts[:, i], color=colorsArt[i], lw=1, ls='--', label=f"Artifact {i + 1}")
 
     if area_plot_data[0] is not None:
         ax.fill_between(area_plot_data[0], area_plot_data[1], color=area_plot_color, alpha=area_plot_alpha, zorder=0)

@@ -115,6 +115,7 @@ class KineticModel(object):
         self.prop_weighting_params: dict[float, float | np.ndarray, float] = dict(k=0.005, noise_floor=0.005, exponent=1)
 
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
+        self.calc_weights_from_fit_matrix = True
 
     @abstractmethod
     def plot(self, *what: str, nrows: int = 1, ncols: int = None, **kwargs):
@@ -206,8 +207,11 @@ class KineticModel(object):
             noise_floor = self.prop_weighting_params['noise_floor']
             exponent = self.prop_weighting_params['exponent']
 
-            # mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
-            mat = self.dataset.matrix_fac
+            if self.calc_weights_from_fit_matrix:
+                mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
+            else:
+                mat = self.dataset.matrix_fac
+
             mat = np.abs(mat)
 
             weights *= 1 / (self.prop_weighting_params['k'] * (mat ** exponent) + noise_floor)
@@ -229,12 +233,13 @@ class KineticModel(object):
         return x, hist
 
 
-    def estimate_prop_weighting_params(self, use_fit_matrix=True) -> MinimizerResult:
+    def estimate_prop_weighting_params(self, use_fit_matrix=True, fix_noise_floor=False) -> MinimizerResult:
 
         pars = Parameters()
         noise_floor = self.prop_weighting_params['noise_floor']
         noise_floor = 0 if np.iterable(noise_floor) else noise_floor
-        pars.add('noise_floor', value=noise_floor, min=0, max=np.inf, vary=not self.noise_floor_estimation_from_data)
+
+        pars.add('noise_floor', value=noise_floor, min=0, max=np.inf, vary=False if fix_noise_floor else not self.noise_floor_estimation_from_data)
         pars.add('k', value=self.prop_weighting_params['k'], min=0, max=2, vary=True)
         pars.add('exponent', value=self.prop_weighting_params['exponent'], min=0.1, max=2, vary=True)
 
@@ -903,7 +908,7 @@ class FirstOrderModel(KineticModel):
                 case "eas":
                     kws.update(dict(title="EAS", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
                     update_kwargs("eas", kws)  # change to data-specific kwargs
-                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_EAS.T, **kws)
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_EAS.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
                 case "eas-norm":
                     kws.update(dict(title="EAS-norm", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
                     update_kwargs("eas-norm", kws)  # change to data-specific kwargs
@@ -912,7 +917,7 @@ class FirstOrderModel(KineticModel):
                     # TODO include artifacts
                     kws.update(dict(title="DAS", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
                     update_kwargs("das", kws)  # change to data-specific kwargs
-                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, **kws)
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
                 case "das-norm":
                     kws.update(dict(title="DAS-norm", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
                     update_kwargs("das-norm", kws)  # change to data-specific kwargs
