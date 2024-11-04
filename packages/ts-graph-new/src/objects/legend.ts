@@ -28,16 +28,16 @@ export class Legend extends DraggableRegion {
     public paint(e: IPaintEvent): void {
         if (!this.figure.showLegend) return;
 
-        e.bottomCtx.save();
+        e.ctx.save();
 
         const r = this.figure.getEffectiveRect();
-        e.bottomCtx.beginPath();
-        e.bottomCtx.rect(r.x, r.y, r.w, r.h);
-        e.bottomCtx.clip();
+        e.ctx.beginPath();
+        e.ctx.rect(r.x, r.y, r.w, r.h);
+        e.ctx.clip();
 
         if (this.paintBorder){
-            e.bottomCtx.setLineDash(this.hovering ? this.hoverDash : this.dash);
-            e.bottomCtx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
+            e.ctx.setLineDash(this.hovering ? this.hoverDash : this.dash);
+            e.ctx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
         }
 
         const plots = this.figure.linePlots.filter(p => p.label !== null);
@@ -47,13 +47,13 @@ export class Legend extends DraggableRegion {
             var maxTextWidth = 0;
             var textHeight = 0;
 
-            e.bottomCtx.textAlign = 'left';  // vertical alignment
-            e.bottomCtx.textBaseline = 'middle'; // horizontal alignment
-            e.bottomCtx.font = this.figure.tickValuesFont;
+            e.ctx.textAlign = 'left';  // vertical alignment
+            e.ctx.textBaseline = 'middle'; // horizontal alignment
+            e.ctx.font = this.figure.tickValuesFont;
 
             for (const plot of plots) {
                 const text = plot.label === '' ? 'M' : plot.label as string;
-                const _metrics = e.bottomCtx.measureText(text);
+                const _metrics = e.ctx.measureText(text);
                 textHeight = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
                 if (_metrics.width > maxTextWidth) maxTextWidth = _metrics.width;
             }
@@ -72,24 +72,24 @@ export class Legend extends DraggableRegion {
             }
 
             for (let i = 0; i < plots.length; i++) {
-                e.bottomCtx.beginPath();
+                e.ctx.beginPath();
                 const plot = plots[i];
                 
-                e.bottomCtx.strokeStyle = plot.color;
-                e.bottomCtx.lineWidth = plot.lw;
-                e.bottomCtx.setLineDash(plot.ld);
+                e.ctx.strokeStyle = plot.color;
+                e.ctx.lineWidth = plot.lw;
+                e.ctx.setLineDash(plot.ld);
 
                 const y = textHeight / 2 + this.regionRect.y + newHeight * i / plots.length;
 
-                e.bottomCtx.moveTo(this.regionRect.x, y);
-                e.bottomCtx.lineTo(this.regionRect.x + 30, y);
-                e.bottomCtx.stroke();
+                e.ctx.moveTo(this.regionRect.x, y);
+                e.ctx.lineTo(this.regionRect.x + 30, y);
+                e.ctx.stroke();
 
                 // plot text
-                e.bottomCtx.fillText(plot.label as string, this.regionRect.x + 50, y);
+                e.ctx.fillText(plot.label as string, this.regionRect.x + 50, y);
             }
         }
 
-        e.bottomCtx.restore();
+        e.ctx.restore();
     }
 }

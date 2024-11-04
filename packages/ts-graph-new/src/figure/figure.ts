@@ -58,7 +58,7 @@ export class Figure extends GraphicObject {
     
     public steps: F32Array; 
     public heatmap: HeatMap | null = null;
-    public colorbar: Colorbar | null = null;
+    // public colorbar: Colorbar | null = null;
     // public contextMenu: FigureContextMenu;
     
     // public xAxisSigFigures: number = 2;
@@ -84,8 +84,8 @@ export class Figure extends GraphicObject {
 
     private marginLinks: ([Figure, Orientation])[] = [];
 
-    public panning: boolean = false;
-    public scaling: boolean = false;
+    private panning: boolean = false;
+    private scaling: boolean = false;
     private lastCenterPoint: Point;
     private _preventPanning: boolean = false;
     private _preventScaling: boolean = false;
@@ -130,33 +130,15 @@ export class Figure extends GraphicObject {
         this.yAxis = new Axis(this, AxisType.yAxis);
         this.legend = new Legend(this);
         this.addItem(this.legend);
-        this.setContextMenu();
+        // this.setContextMenu();
     }
 
-    protected setContextMenu() {
-        this.contextMenu = new FigureContextMenu(this);
-    }
+    // protected setContextMenu() {
+    //     this.contextMenu = new FigureContextMenu(this);
+    // }
 
     // public resize(): void {
     //     super.resize();
-    // }
-
-    // public setCanvasRect(cr: Rect): void {
-    //     super.setCanvasRect(cr);
-    //     this.offScreenCanvas.width = this.canvasRect.w;
-    //     this.offScreenCanvas.height = this.canvasRect.h;
-    // }
-
-    // public setViewBounds(xAxisBounds?: [number, number], yAxisBounds?: [number, number]) {
-    //     if (xAxisBounds) {
-    //         const xIT = this.xAxis.invTransform;
-    //         this.xAxis.viewBounds = [xIT(xAxisBounds[0]), xIT(xAxisBounds[1])];
-    //     }
-
-    //     if (yAxisBounds) {
-    //         const yIT = this.yAxis.invTransform;
-    //         this.yAxis.viewBounds = [yIT(yAxisBounds[0]), yIT(yAxisBounds[1])];
-    //     }
     // }
 
     get range() {
@@ -383,22 +365,22 @@ export class Figure extends GraphicObject {
         this.viewAll();        
     }
 
-    public touchStart(e: TouchEvent): void {
-        const dpr = window.devicePixelRatio;
-        // this.calcEffectiveRect();
+    // public touchStart(e: TouchEvent): void {
+    //     const dpr = window.devicePixelRatio;
+    //     // this.calcEffectiveRect();
 
-        // position are relative to start of the page
-        if (!this.isInsideEffRect(e.touches[0].clientX * dpr, e.touches[0].clientY * dpr)) {
-            return;
-        }
-        // console.log(e.touches[0].force);
-    }
+    //     // position are relative to start of the page
+    //     if (!this.isInsideEffRect(e.touches[0].clientX * dpr, e.touches[0].clientY * dpr)) {
+    //         return;
+    //     }
+    //     // console.log(e.touches[0].force);
+    // }
 
-    public touchMove(e: TouchEvent): void {
-        var first = e.touches[0]
-        // console.log(first.clientX, first.clientY, first.radiusX);
+    // public touchMove(e: TouchEvent): void {
+    //     var first = e.touches[0]
+    //     // console.log(first.clientX, first.clientY, first.radiusX);
 
-    }
+    // }
 
 
     public mouseDown(e: IMouseEvent): void {
@@ -410,27 +392,21 @@ export class Figure extends GraphicObject {
         // // we are outside of figure frame
         // if (!this.isInsideEffRect(e.x, e.y)) return;
 
+        console.log("figure mouse down")
+
         if (e.e.ctrlKey) return;  // for this case, default context menu is opened
         
-        if (this._preventPanning && !this._preventScaling) {
-            super.mouseDown(e);
-            this.scaling = e.e.button == 2;
-        } else if (!this._preventPanning && this._preventScaling) {
-            super.mouseDown(e);
-            this.panning = e.e.button == 0 || e.e.button == 1;
-        } else if (this._preventPanning && this._preventScaling) {
-            super.mouseDown(e);
-            return;
-        } else {
-            if (this.isInsideEffRect(e.x, e.y)) {
-                this.rootItem?.visibleItems.push(this);
-                this.scaling = e.e.button == 2;
-                this.panning = e.e.button == 0 || e.e.button == 1;
-            } else {
-                super.mouseDown(e);
-                return;
-            }
-        }
+        this.scaling = e.e.button == 2;
+        this.panning = e.e.button == 0 || e.e.button == 1;
+
+        // if (this.isInsideEffRect(e.x, e.y)) {
+        //     this.rootItem?.visibleItems.push(this);
+        //     this.scaling = e.e.button == 2;
+        //     this.panning = e.e.button == 0 || e.e.button == 1;
+        // } else {
+        //     // super.mouseDown(e);
+        //     return;
+        // }
 
         this.lastMouseDownPos = {x: e.x, y: e.y};
         this.lastRange = {...this.internalRange};
@@ -438,9 +414,9 @@ export class Figure extends GraphicObject {
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
 
         if (this.panning) {
-            e.topCanvas.style.cursor = this.cursors.grabbing;
+            e.glcanvas.style.cursor = this.cursors.grabbing;
         } else if (this.scaling) {
-            e.topCanvas.style.cursor = this.cursors.move;
+            e.glcanvas.style.cursor = this.cursors.move;
         } 
 
         if  (this.scaling || this.panning) {
@@ -538,7 +514,8 @@ export class Figure extends GraphicObject {
             var mouseup = (e: MouseEvent) => {
                 window.removeEventListener('mousemove', mousemove);
                 window.removeEventListener('mouseup', mouseup);
-                if (this.topCanvas) this.topCanvas.style.cursor = this.cursors.crosshair;
+                // TODO set cursor
+                // if (this.topCanvas) this.topCanvas.style.cursor = this.cursors.crosshair;
             }
 
             window.addEventListener('mousemove', mousemove);
@@ -642,32 +619,28 @@ export class Figure extends GraphicObject {
             return;
         }
 
-        if (this._preventPanning || this._preventScaling) {
-            super.mouseMove(e);
-            return;
-        }
-        
         if (this.isInsideEffRect(e.x, e.y)) {
-            e.topCanvas.style.cursor = this.cursors.crosshair;
+            // TODO set cursor
+            // e.glcanvas.style.cursor = this.cursors.crosshair;
             // this.active = false;
             this.mousePos = {x: e.x, y: e.y};
         } else {
-            e.topCanvas.style.cursor = this.cursors.default;
+            // e.glcanvas.style.cursor = this.cursors.default;
             this.mousePos = null;
             // this.active = false;
         }
 
         // for handling mousemove event of items
-        super.mouseMove(e);
+        // super.mouseMove(e);
         
         // plot mouse position
-        this.repaintItems();
+        // this.repaintItems();
     }
 
     public mouseUp(e: IMouseEvent): void {
     //     if (this._preventPanning || this._preventScaling) {
     // }
-        super.mouseUp(e);
+        // super.mouseUp(e);
 
         this.panning = false;
         this.scaling = false;
@@ -677,8 +650,12 @@ export class Figure extends GraphicObject {
         if (!this.isInsideEffRect(e.x, e.y)) return;
 
         if (e.x === this.lastMouseDownPos.x && e.y === this.lastMouseDownPos.y && e.e.button == 2) {
-            this.showContextMenu(e);
+            // this.showContextMenu(e);
+            // TODO show context menu
         }   
+    }
+    showContextMenu(e: IMouseEvent) {
+        throw new Error("Method not implemented.");
     }
 
     public addDraggableLines(orientation: Orientation): DraggableLines {
@@ -752,15 +729,15 @@ export class Figure extends GraphicObject {
     //     // this.colorbar.canvasRect = cr;
     // }
 
-    public addColorbar(colormap?: Colormap): Colorbar {
-        if (this.colorbar) return this.colorbar;
+    // public addColorbar(colormap?: Colormap): Colorbar {
+    //     if (this.colorbar) return this.colorbar;
 
-        this.colorbar = new Colorbar(this, undefined, colormap);
-        this.items.push(this.colorbar);
-        // this.colorbar.setCanvasRect(this.canvasRect);
-        this.linkMargin(this.colorbar, Orientation.Vertical);
-        return this.colorbar;
-    }   
+    //     this.colorbar = new Colorbar(this, undefined, colormap);
+    //     this.items.push(this.colorbar);
+    //     // this.colorbar.setCanvasRect(this.canvasRect);
+    //     this.linkMargin(this.colorbar, Orientation.Vertical);
+    //     return this.colorbar;
+    // }   
 
     public removePlot(plot: ILinePlot){
         let i = this.linePlots.indexOf(plot);
@@ -774,7 +751,7 @@ export class Figure extends GraphicObject {
             return;
         }
 
-        e.bottomCtx.imageSmoothingEnabled = false;
+        e.ctx.imageSmoothingEnabled = false;
 
         // this.heatmap.plot2mainCanvas(e);
 
@@ -798,7 +775,7 @@ export class Figure extends GraphicObject {
         const p0 = this.mapRange2Canvas({x: x0 - xdiff / 2, y: y0 - ydiff / 2});
         const p1 = this.mapRange2Canvas({x: x1 + xdiff / 2, y: y1 + ydiff / 2});
 
-        e.bottomCtx.drawImage(this.heatmap.getCanvas(), 
+        e.ctx.drawImage(this.heatmap.getCanvas(), 
         0, 0, this.heatmap.width(), this.heatmap.height(),
         p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
 
@@ -886,16 +863,16 @@ export class Figure extends GraphicObject {
         const yIT = this.yAxis.invTransform;
         const xIT = this.xAxis.invTransform;
 
-        e.bottomCtx.save();
+        e.ctx.save();
 
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
 
-            e.bottomCtx.strokeStyle = plot.color;
-            e.bottomCtx.lineWidth = plot.lw;
-            e.bottomCtx.setLineDash(plot.ld);
+            e.ctx.strokeStyle = plot.color;
+            e.ctx.lineWidth = plot.lw;
+            e.ctx.setLineDash(plot.ld);
 
-            e.bottomCtx.beginPath();
+            e.ctx.beginPath();
 
             let xDataScale = false; // in case the scale is determined by data
             let x0;
@@ -907,31 +884,31 @@ export class Figure extends GraphicObject {
             }
 
             const p0 = this.mapRange2Canvas({x: x0, y: yIT(plot.y[0])});
-            e.bottomCtx.moveTo(p0.x, p0.y);
+            e.ctx.moveTo(p0.x, p0.y);
 
             for (let i = 1; i < plot.x.length; i++) {
                 const x = (xDataScale) ? i : xIT(plot.x[i]);
                 const p = this.mapRange2Canvas({x, y: yIT(plot.y[i])});
-                e.bottomCtx.lineTo(p.x, p.y);
+                e.ctx.lineTo(p.x, p.y);
                 if (x > this.internalRange.x + this.internalRange.w) break;
             }
 
-            e.bottomCtx.stroke();
+            e.ctx.stroke();
         }
 
-        e.bottomCtx.restore();
+        e.ctx.restore();
         // console.timeEnd('paintPlots');
     }
 
-    public repaintItems() {
-        // console.time('repaintItems');
-        if (!this.bottomCtx || !this.topCanvas || !this.bottomCanvas || !this.topCtx) return;
+    // public repaintItems() {
+    //     // console.time('repaintItems');
+    //     if (!this.bottomCtx || !this.topCanvas || !this.bottomCanvas || !this.topCtx) return;
 
-        const e: IPaintEvent = {bottomCanvas: this.bottomCanvas, bottomCtx: this.bottomCtx, topCanvas: this.topCanvas, topCtx: this.topCtx};
+    //     const e: IPaintEvent = {canvas2d: this.bottomCanvas, ctx: this.bottomCtx, glcanvas: this.topCanvas, glctx: this.topCtx};
 
-        this.paintItems(e);
-        // console.timeEnd('repaintItems');
-    }
+    //     this.paintItems(e);
+    //     // console.timeEnd('repaintItems');
+    // }
 
     protected paintItems(e: IPaintEvent) {
         
@@ -940,50 +917,50 @@ export class Figure extends GraphicObject {
 
         // clear the secondary canvas
 
-        e.topCtx.save();
+        // e.glctx.save();
 
-        e.topCtx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // e.glctx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
 
-        e.topCtx.beginPath();
-        e.topCtx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        e.topCtx.clip();
+        // e.glctx.beginPath();
+        // e.glctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // e.glctx.clip();
 
-        // plot postion
+        // // plot postion
 
-        const xIT = this.xAxis.transform;
-        const yIT = this.yAxis.transform;
-        const figs = 4;
-        if (this.mousePos) {
-            const p = this.mapCanvas2Range(this.mousePos);
-            var text = `x: ${formatNumber2String(xIT(p.x), figs)}, y: ${formatNumber2String(yIT(p.y), figs)}`;
+        // const xIT = this.xAxis.transform;
+        // const yIT = this.yAxis.transform;
+        // const figs = 4;
+        // if (this.mousePos) {
+        //     const p = this.mapCanvas2Range(this.mousePos);
+        //     var text = `x: ${formatNumber2String(xIT(p.x), figs)}, y: ${formatNumber2String(yIT(p.y), figs)}`;
 
-            if (this.heatmap) {
-                // add z value
-                var val = this.heatmap.dataset.getNearestValue(xIT(p.x), yIT(p.y));
-                text += `, z: ${formatNumber2String(val, figs)}`
-            }
-        } else {
-            var text = "";
-        };
+        //     if (this.heatmap) {
+        //         // add z value
+        //         var val = this.heatmap.dataset.getNearestValue(xIT(p.x), yIT(p.y));
+        //         text += `, z: ${formatNumber2String(val, figs)}`
+        //     }
+        // } else {
+        //     var text = "";
+        // };
 
-        const offset = 30;
-        const r = this.getEffectiveRect();
+        // const offset = 30;
+        // const r = this.getEffectiveRect();
 
-        e.topCtx.save();
-        drawTextWithGlow(text, r.x + offset, r.y + r.h - offset, e.topCtx, this.tickValuesFont);
-        e.topCtx.restore();
+        // e.glctx.save();
+        // drawTextWithGlow(text, r.x + offset, r.y + r.h - offset, e.glctx, this.tickValuesFont);
+        // e.glctx.restore();
 
-        // repaint all other items
+        // // repaint all other items
 
-        // set canvas rect to all items
-        for (const item of this.items) {
-            // item.setCanvasRect(this.canvasRect);
-            item.setMargin(this.margin);
-        }
+        // // set canvas rect to all items
+        // for (const item of this.items) {
+        //     // item.setCanvasRect(this.canvasRect);
+        //     item.setMargin(this.margin);
+        // }
 
-        super.paint(e);
+        // super.paint(e);
 
-        e.topCtx.restore();
+        // e.glctx.restore();
 
 
         // paint colorbar
@@ -1001,34 +978,36 @@ export class Figure extends GraphicObject {
     paint(e: IPaintEvent): void {
         if (!this.panning && !this.scaling && this.autoscaleOnRepaint) this.autoscale();
 
-        e.bottomCtx.save();
+        console.log("paint from figure", this.canvasRect)
+
+        e.ctx.save();
 
         // clip to canvas rectangle
 
-        e.bottomCtx.fillStyle = backgroundColor;
-        e.bottomCtx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.ctx.fillStyle = backgroundColor;  //"rgb(230, 230, 255)"
+        e.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
 
-        e.bottomCtx.strokeStyle = frameColor;
+        e.ctx.strokeStyle = frameColor;
 
         if (this.plotCanvasRect){
-            e.bottomCtx.setLineDash([4, 2]);
-            e.bottomCtx.strokeRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-            e.bottomCtx.setLineDash([]);
+            e.ctx.setLineDash([4, 2]);
+            e.ctx.strokeRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+            e.ctx.setLineDash([]);
         }
 
         // paint everything inside the plot
 
         //plot content
         const r = this.getEffectiveRect();
-        // https://stackoverflow.com/questions/30094773/html5-canvas-cliprect-is-not-working-properly
-        e.bottomCtx.beginPath();
-        e.bottomCtx.rect(r.x, r.y, r.w, r.h);
-        e.bottomCtx.clip();
+        // // https://stackoverflow.com/questions/30094773/html5-canvas-cliprect-is-not-working-properly
+        // e.bottomCtx.beginPath();
+        // e.bottomCtx.rect(r.x, r.y, r.w, r.h);
+        // e.bottomCtx.clip();
 
-        this.paintHeatMap(e);
-        this.paintPlots(e);
+        // this.paintHeatMap(e);
+        // this.paintPlots(e);
 
-        e.bottomCtx.restore();
+        // e.bottomCtx.restore();
 
         // if (this._cancelPaining) {
         //     console.log('painting canceled');
@@ -1038,60 +1017,34 @@ export class Figure extends GraphicObject {
         // this.paintItems(e);
 
 
-        e.bottomCtx.save();
+        e.ctx.save();
 
-        e.bottomCtx.beginPath();
-        e.bottomCtx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        e.bottomCtx.clip();
+        e.ctx.beginPath();
+        e.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.ctx.clip();
 
         const dpr = window.devicePixelRatio;
         
         // draw figure rectangle
-        e.bottomCtx.lineWidth = 1 + Math.round(dpr);
-        e.bottomCtx.strokeRect(r.x, r.y, r.w, r.h);
+        e.ctx.lineWidth = 1 + Math.round(dpr);
+        e.ctx.strokeRect(r.x, r.y, r.w, r.h);
 
         var needRepaint = this.drawTicks(e);
         // console.log(needRepaint);
 
-        e.bottomCtx.restore();
+        e.ctx.restore();
+        e.ctx.restore();
+
 
         // if (needRepaint) return;
-
         // backup the figure so that it can be reused later when repainting items
-        
 
+        // this.paintItems(e);
 
-        // if (this._cancelPaining) {
-        //     console.log('painting canceled');
-        //     return;
-        // }
-
-        this.paintItems(e);
-
-        // plot rectangle
-
-        // console.time('paint');
-        // console.log('paint');
-
-        // if (this._cancelPaining) this._cancelPaining = false;
-
-        // if (this._painting) {
-        //     // cancel current paiting and start a new one
-        //     this._cancelPaining = true;
-        //     console.log('canceling painting');
-        //     return;
-        // }
-
-        // this._painting = true;
-        // this.paintAsync(e).then(() => {
-        //     this._painting = false;
-        // });
-
-        // console.timeEnd('paint');
     }
 
     public drawTicks(e: IPaintEvent): boolean{  // r is Figure Rectangle, the frame
-        e.bottomCtx.fillStyle = textColor;
+        e.ctx.fillStyle = textColor;
         const dpr = window.devicePixelRatio;
         const va = this.axisAlignment === Orientation.Vertical;
         this.requiredMargin = {left: 0, right: 0, bottom: 0, top: 0};
@@ -1099,7 +1052,7 @@ export class Figure extends GraphicObject {
         let [xticks, xticksVals, xMinors] = this.getTicks(this.xAxis);
         let [yticks, yticksVals, yMinors] = this.getTicks(this.yAxis);
 
-        const _arr: [Axis, F32Array][] = [[this.xAxis, xticksVals], [this.yAxis, yticksVals]];
+        const _arr: [Axis, number[]][] = [[this.xAxis, xticksVals], [this.yAxis, yticksVals]];
 
         for (const [ax, vals] of _arr) {
             switch (ax.scale) {
@@ -1157,67 +1110,67 @@ export class Figure extends GraphicObject {
         let textMaxHeight = 0;
         this._ticksValuesFont = `${fontSize}px sans-serif`;
 
-        e.bottomCtx.font = this._ticksValuesFont;
-        e.bottomCtx.textAlign = 'center';  // vertical alignment
-        e.bottomCtx.textBaseline = 'middle'; // horizontal alignment
+        e.ctx.font = this._ticksValuesFont;
+        e.ctx.textAlign = 'center';  // vertical alignment
+        e.ctx.textBaseline = 'middle'; // horizontal alignment
 
-        const _metrics = e.bottomCtx.measureText("M");
+        const _metrics = e.ctx.measureText("M");
         let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
         // console.log(textOffset);
 
 
 
-        e.bottomCtx.beginPath();
+        e.ctx.beginPath();
 
         for (let i = 0; i < xticks.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x: 0, y: xticks[i]} : {x: xticks[i], y: 0});
     
             if (this.showTicks.includes('bottom')){
-                e.bottomCtx.moveTo(p.x, r.y + r.h - tickSize);
-                e.bottomCtx.lineTo(p.x, r.y + r.h);
+                e.ctx.moveTo(p.x, r.y + r.h - tickSize);
+                e.ctx.lineTo(p.x, r.y + r.h);
             }
     
             if (this.showTicks.includes('top')){
-                e.bottomCtx.moveTo(p.x, r.y);
-                e.bottomCtx.lineTo(p.x, r.y + tickSize);
+                e.ctx.moveTo(p.x, r.y);
+                e.ctx.lineTo(p.x, r.y + tickSize);
             }
 
             let text = `${formatNumber2String(xticksVals[i], xFigs)}`;
-            let metrics = e.bottomCtx.measureText(text);
+            let metrics = e.ctx.measureText(text);
             let textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
             if (textMaxHeight < textHeight) {
                 textMaxHeight = textHeight;
             }
     
             if (this.showTickNumbers.includes('bottom')){
-                e.bottomCtx.fillText(text, p.x, r.y + r.h + textOffset);
+                e.ctx.fillText(text, p.x, r.y + r.h + textOffset);
             }
     
             if (this.showTickNumbers.includes('top')){
-                e.bottomCtx.fillText(text, p.x, r.y - textOffset);
+                e.ctx.fillText(text, p.x, r.y - textOffset);
             }
         }
-        e.bottomCtx.stroke();
+        e.ctx.stroke();
 
         // draw x minor ticks
-        e.bottomCtx.save();
-        e.bottomCtx.lineWidth = 1;
+        e.ctx.save();
+        e.ctx.lineWidth = 1;
 
         for (let i = 0; i < xMinors.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x: 0, y: xMinors[i]} : {x: xMinors[i], y: 0});
     
             if (this.showTicks.includes('bottom')){
-                e.bottomCtx.moveTo(p.x, r.y + r.h - minorTickSize);
-                e.bottomCtx.lineTo(p.x, r.y + r.h);
+                e.ctx.moveTo(p.x, r.y + r.h - minorTickSize);
+                e.ctx.lineTo(p.x, r.y + r.h);
             }
     
             if (this.showTicks.includes('top')){
-                e.bottomCtx.moveTo(p.x, r.y);
-                e.bottomCtx.lineTo(p.x, r.y + minorTickSize);
+                e.ctx.moveTo(p.x, r.y);
+                e.ctx.lineTo(p.x, r.y + minorTickSize);
             }
         }
-        e.bottomCtx.stroke();
-        e.bottomCtx.restore();
+        e.ctx.stroke();
+        e.ctx.restore();
 
         if (this.showTickNumbers.includes('bottom')){
             this.requiredMargin.bottom += textMaxHeight + textOffset;
@@ -1233,14 +1186,14 @@ export class Figure extends GraphicObject {
         // draw axis labels
         if (xLabel !== "") {
             const midPointX = r.x + r.w / 2;
-            e.bottomCtx.fillText(xLabel, midPointX, r.y + r.h + this.requiredMargin.bottom + textOffset);
+            e.ctx.fillText(xLabel, midPointX, r.y + r.h + this.requiredMargin.bottom + textOffset);
             this.requiredMargin.bottom += textMaxHeight + textOffset;
         }
 
         // draw title labels
         if (this.title !== "") {
             const midPointX = r.x + r.w / 2;
-            e.bottomCtx.fillText(this.title, midPointX, r.y - this.requiredMargin.top - textOffset);
+            e.ctx.fillText(this.title, midPointX, r.y - this.requiredMargin.top - textOffset);
             this.requiredMargin.top += textMaxHeight + textOffset;
         }
                 
@@ -1248,22 +1201,22 @@ export class Figure extends GraphicObject {
         // textOffset /= 2;
         let textMaxWidth = 0;
 
-        e.bottomCtx.beginPath();
+        e.ctx.beginPath();
         for (let i = 0; i < yticks.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x:yticks[i], y: 0} : {x:0, y: yticks[i]});
 
             if (this.showTicks.includes('left')){
-                e.bottomCtx.moveTo(r.x, p.y);
-                e.bottomCtx.lineTo(r.x + tickSize, p.y);
+                e.ctx.moveTo(r.x, p.y);
+                e.ctx.lineTo(r.x + tickSize, p.y);
             }
 
             if (this.showTicks.includes('right')){
-                e.bottomCtx.moveTo(r.x + r.w, p.y);
-                e.bottomCtx.lineTo(r.x + r.w - tickSize, p.y);
+                e.ctx.moveTo(r.x + r.w, p.y);
+                e.ctx.lineTo(r.x + r.w - tickSize, p.y);
             }
 
             let text = `${formatNumber2String(yticksVals[i], yFigs)}`;
-            let metrics = e.bottomCtx.measureText(text);
+            let metrics = e.ctx.measureText(text);
             let textWidth = metrics.width;
             // console.log(textWidth);
             if (textMaxWidth < textWidth) {
@@ -1271,36 +1224,36 @@ export class Figure extends GraphicObject {
             }
 
             if (this.showTickNumbers.includes('left')){
-                e.bottomCtx.textAlign = 'right';
-                e.bottomCtx.fillText(text, r.x - textOffset / 2, p.y);
+                e.ctx.textAlign = 'right';
+                e.ctx.fillText(text, r.x - textOffset / 2, p.y);
             }
 
             if (this.showTickNumbers.includes('right')){
-                e.bottomCtx.textAlign = 'left';
-                e.bottomCtx.fillText(text, r.x + r.w + textOffset / 2, p.y);
+                e.ctx.textAlign = 'left';
+                e.ctx.fillText(text, r.x + r.w + textOffset / 2, p.y);
             }
         }
-        e.bottomCtx.stroke();
+        e.ctx.stroke();
 
         // draw y minor ticks
-        e.bottomCtx.save();
-        e.bottomCtx.lineWidth = 1;
+        e.ctx.save();
+        e.ctx.lineWidth = 1;
 
         for (let i = 0; i < yMinors.length; i++) {
             let p = this.mapRange2Canvas((va) ? {x:yMinors[i], y: 0} : {x:0, y: yMinors[i]});
 
             if (this.showTicks.includes('left')){
-                e.bottomCtx.moveTo(r.x, p.y);
-                e.bottomCtx.lineTo(r.x + minorTickSize, p.y);
+                e.ctx.moveTo(r.x, p.y);
+                e.ctx.lineTo(r.x + minorTickSize, p.y);
             }
 
             if (this.showTicks.includes('right')){
-                e.bottomCtx.moveTo(r.x + r.w, p.y);
-                e.bottomCtx.lineTo(r.x + r.w - minorTickSize, p.y);
+                e.ctx.moveTo(r.x + r.w, p.y);
+                e.ctx.lineTo(r.x + r.w - minorTickSize, p.y);
             }
         }
-        e.bottomCtx.stroke();
-        e.bottomCtx.restore();
+        e.ctx.stroke();
+        e.ctx.restore();
 
         if (this.showTickNumbers.includes('left')){
             this.requiredMargin.left += textMaxWidth + textOffset / 2;
@@ -1313,18 +1266,18 @@ export class Figure extends GraphicObject {
         // draw axis labels
         if (yLabel !== "") {
             const midPointY = r.y + r.h / 2;
-            e.bottomCtx.save();
-            e.bottomCtx.textAlign = 'center';
-            e.bottomCtx.translate(r.x - this.requiredMargin.left - textOffset, midPointY);
-            e.bottomCtx.rotate(-Math.PI / 2);
-            e.bottomCtx.fillText(yLabel, 0, 0);
-            e.bottomCtx.restore();
+            e.ctx.save();
+            e.ctx.textAlign = 'center';
+            e.ctx.translate(r.x - this.requiredMargin.left - textOffset, midPointY);
+            e.ctx.rotate(-Math.PI / 2);
+            e.ctx.fillText(yLabel, 0, 0);
+            e.ctx.restore();
             this.requiredMargin.left += textMaxWidth + textOffset;
         }
 
-        if (this.colorbar) {
-            this.requiredMargin.right += this.colorbar.canvasRect.w;
-        }
+        // if (this.colorbar) {
+        //     this.requiredMargin.right += this.colorbar.canvasRect.w;
+        // }
 
         this.requiredMargin = {
             left: Math.max(this.requiredMargin.left, this.minimalMargin.left),
@@ -1387,16 +1340,16 @@ export class Figure extends GraphicObject {
     }
 
     // generates major and minor ticks and major ticks values on linear scale
-    private genLinearTicks(coor: number, size: number, prefMajorBins: number): [F32Array, F32Array, F32Array] {
+    private genLinearTicks(coor: number, size: number, prefMajorBins: number): [Array<number>, Array<number>, Array<number>] {
         const scale = 10 ** Math.floor(Math.log10(Math.abs(size)));
-        
+
         const extStepsScaled = F32Array.fromArray([
             ...F32Array.mul(this.steps, 0.01 * scale), 
             ...F32Array.mul(this.steps, 0.1 * scale), 
             ...F32Array.mul(this.steps, scale)]);
     
         const rawStep = size / prefMajorBins;
-    
+
         //find the nearest value in the array
         const _idx = extStepsScaled.nearestIndex(rawStep);
         const step = extStepsScaled[_idx];
@@ -1412,14 +1365,14 @@ export class Figure extends GraphicObject {
         const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
         const nticksMinors = 1 + (coor + size - bestMinMinor) / minorStep >> 0; // integer division
 
-        const ticks = new F32Array(nticks);
+        const ticks = new Array<number>()
     
         // generate ticks
         for (let i = 0; i < nticks; i++) {
             ticks[i] = bestMin + step * i;
         }
 
-        const minorTicks = new F32Array();
+        const minorTicks = new Array<number>()
         
         for (let i = 0; i < nticksMinors; i++) {
             const val = bestMinMinor + minorStep * i;
@@ -1484,7 +1437,7 @@ export class Figure extends GraphicObject {
     // returns tuple of arrays, first is the x tick position on dummy linear axis
     // and second is actuall value of the tick
     // returns major ticks, major ticks values and minor ticks
-    getTicks(axis: Axis): [F32Array, F32Array, F32Array]{
+    getTicks(axis: Axis): [Array<number>, Array<number>, Array<number>]{
         // calculate scale
 
         let coor: number, size: number, prefMajorBins: number, prefMinorBins: number;
@@ -1512,6 +1465,8 @@ export class Figure extends GraphicObject {
             prefMajorBins = Math.max(Math.round(fy * h / dpr), 2);
             prefMinorBins = Math.round(h * fMinor);
         }
+
+        // console.log("get ticks")
 
         switch (axis.scale) {
             case 'lin': {
@@ -1654,228 +1609,228 @@ export class Figure extends GraphicObject {
 }
 
 
-export class Colorbar extends Figure {
+// export class Colorbar extends Figure {
 
-    private _colormap: Colormap;
-    private readonly _width: number = 20;  // with of the colorbar (effective rectagle) in px
+//     private _colormap: Colormap;
+//     private readonly _width: number = 20;  // with of the colorbar (effective rectagle) in px
 
-    public offScreenCanvas: OffscreenCanvas;
-    protected offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
-    private parentCanvasRect: Rect;
-    // private heatmapList: HeatMap[] = [];
+//     public offScreenCanvas: OffscreenCanvas;
+//     protected offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
+//     private parentCanvasRect: Rect;
+//     // private heatmapList: HeatMap[] = [];
 
-    private cWidth = 1;
-    private cHeight = 500; // 500 pixels to draw the colormap
-    private lastMargin: Margin;
+//     private cWidth = 1;
+//     private cHeight = 500; // 500 pixels to draw the colormap
+//     private lastMargin: Margin;
 
-    constructor(figure: Figure, canvasRect?: Rect, colormap?: Colormap) {
-        super(figure, {x:0, y:0, w:0, h:0});
-        this._colormap = (colormap === undefined) ? new Colormap(Colormaps.symgrad) : colormap;
-        this.parentCanvasRect = {...figure.canvasRect};
+//     constructor(figure: Figure, canvasRect?: Rect, colormap?: Colormap) {
+//         super(figure, {x:0, y:0, w:0, h:0});
+//         this._colormap = (colormap === undefined) ? new Colormap(Colormaps.symgrad) : colormap;
+//         this.parentCanvasRect = {...figure.canvasRect};
 
-        this.offScreenCanvas = new OffscreenCanvas(this.cWidth, this.cHeight);
-        this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
-        if (this.offScreenCanvasCtx === null) {
-            throw new Error('this.offScreenCanvasCtx === null');
-        }
+//         this.offScreenCanvas = new OffscreenCanvas(this.cWidth, this.cHeight);
+//         this.offScreenCanvasCtx = this.offScreenCanvas.getContext('2d');
+//         if (this.offScreenCanvasCtx === null) {
+//             throw new Error('this.offScreenCanvasCtx === null');
+//         }
         
-        this.yAxis.inverted = false;
-        this.xAxis.inverted = false;
-        this.showTicks = ['right'];
-        this.showTickNumbers = ['right'];
-        this.xAxis.viewBounds = [0, 1];
-        this.xAxis.scale = 'lin';
-        this.yAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
-        this.yAxis.scale = 'lin';
-        this.yAxis.keepCentered = true;
-        this.items = [];
-        this.linePlots = [];
-        this.lastMargin = this.margin;
-        this.renderColorbar();
-    }
+//         this.yAxis.inverted = false;
+//         this.xAxis.inverted = false;
+//         this.showTicks = ['right'];
+//         this.showTickNumbers = ['right'];
+//         this.xAxis.viewBounds = [0, 1];
+//         this.xAxis.scale = 'lin';
+//         this.yAxis.viewBounds = [-Number.MAX_VALUE, +Number.MAX_VALUE];
+//         this.yAxis.scale = 'lin';
+//         this.yAxis.keepCentered = true;
+//         this.items = [];
+//         this.linePlots = [];
+//         this.lastMargin = this.margin;
+//         this.renderColorbar();
+//     }
 
-    get width() {
-        return this._width * window.devicePixelRatio;
-    }
+//     get width() {
+//         return this._width * window.devicePixelRatio;
+//     }
 
-    get colormap() {
-        return this._colormap;
-    }
+//     get colormap() {
+//         return this._colormap;
+//     }
 
-    // TODO include transform
-    set colormap(colormap: Colormap) {
-        // var inv = this._colormap.inverted;
-        this._colormap = colormap;
-        // this._colormap.inverted = inv;
-        this.renderColorbar();
-        this.renderHeatmap();
-        this.repaintFigure();
-    }
+//     // TODO include transform
+//     set colormap(colormap: Colormap) {
+//         // var inv = this._colormap.inverted;
+//         this._colormap = colormap;
+//         // this._colormap.inverted = inv;
+//         this.renderColorbar();
+//         this.renderHeatmap();
+//         this.repaintFigure();
+//     }
 
-    // public addColorbar(colormap?: Colormap | undefined): Colorbar {
-    //     // do nothing
-    // }
+//     // public addColorbar(colormap?: Colormap | undefined): Colorbar {
+//     //     // do nothing
+//     // }
 
-    public setHeatmapTransform() {
-        if (!this.heatmap) return;
+//     public setHeatmapTransform() {
+//         if (!this.heatmap) return;
 
-        const yIT = this.yAxis.invTransform;
-        this.heatmap.transform = (zVal: number) => {
-            const _rng = this.yAxis.internalRange;
+//         const yIT = this.yAxis.invTransform;
+//         this.heatmap.transform = (zVal: number) => {
+//             const _rng = this.yAxis.internalRange;
 
-            return (yIT(zVal) - _rng[0]) / _rng[1];
-        };
-    }
+//             return (yIT(zVal) - _rng[0]) / _rng[1];
+//         };
+//     }
 
-    public linkHeatMap(heatmap: HeatMap) {
-        if (this.heatmap !== heatmap) {
-            this.heatmap = heatmap;
-            this.heatmap.colorbar = this;
-            heatmap.colormap = this.colormap; // link the colormap of the colorbar to that of heatmap
-            this.setHeatmapTransform();
+//     public linkHeatMap(heatmap: HeatMap) {
+//         if (this.heatmap !== heatmap) {
+//             this.heatmap = heatmap;
+//             this.heatmap.colorbar = this;
+//             heatmap.colormap = this.colormap; // link the colormap of the colorbar to that of heatmap
+//             this.setHeatmapTransform();
 
-            // set range that corresponds to colorbar
+//             // set range that corresponds to colorbar
 
-            const m = heatmap.dataset.data;
-            const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
-            this.yAxis.range = [-extreme, 2 + extreme];
-            this.rangeChanged(this.internalRange);
-        }
-    }
+//             const m = heatmap.dataset.data;
+//             const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
+//             this.yAxis.range = [-extreme, 2 + extreme];
+//             this.rangeChanged(this.internalRange);
+//         }
+//     }
 
-    private getTargetWidth() {
-        return this.margin.left + this.width + this.margin.right;
-    }
+//     private getTargetWidth() {
+//         return this.margin.left + this.width + this.margin.right;
+//     }
 
-    public setCanvasRect(cr: Rect): void {
-        this.parentCanvasRect = cr;
+//     public setCanvasRect(cr: Rect): void {
+//         this.parentCanvasRect = cr;
 
-        // console.log(cr, "setCanvasRect colorbar")
+//         // console.log(cr, "setCanvasRect colorbar")
 
-        // cr is parent canvas rectangle
+//         // cr is parent canvas rectangle
 
-        const thisCR: Rect = {
-            x: cr.x + cr.w - this.getTargetWidth(),
-            y: cr.y,
-            w: this.getTargetWidth(),
-            h: cr.h
-        }
+//         const thisCR: Rect = {
+//             x: cr.x + cr.w - this.getTargetWidth(),
+//             y: cr.y,
+//             w: this.getTargetWidth(),
+//             h: cr.h
+//         }
 
-        super.setCanvasRect(thisCR);
-    }
+//         super.setCanvasRect(thisCR);
+//     }
 
-    public renderColorbar() {
-        if (!this.offScreenCanvasCtx) return;
+//     public renderColorbar() {
+//         if (!this.offScreenCanvasCtx) return;
 
-        const w = this.cWidth;
-        const h = this.cHeight;
+//         const w = this.cWidth;
+//         const h = this.cHeight;
 
-        // console.log("rendering colorbar")
+//         // console.log("rendering colorbar")
 
-        var iData = new ImageData(w, h);
+//         var iData = new ImageData(w, h);
 
-        // C-contiguous buffer
-        for(let row = 0; row < h; row++) {
-            const rowIdx = h - row - 1;
-            const z = rowIdx / (h - 1);
-            const rgba = this.colormap.getColor(z);
+//         // C-contiguous buffer
+//         for(let row = 0; row < h; row++) {
+//             const rowIdx = h - row - 1;
+//             const z = rowIdx / (h - 1);
+//             const rgba = this.colormap.getColor(z);
 
-            for(let col = 0; col < w; col++) {
-                const pos = (row * w + col) * 4;        // position in buffer based on x and y
+//             for(let col = 0; col < w; col++) {
+//                 const pos = (row * w + col) * 4;        // position in buffer based on x and y
 
-                iData.data[pos] = rgba[0];              // some R value [0, 255]
-                iData.data[pos+1] = rgba[1];              // some G value
-                iData.data[pos+2] = rgba[2];              // some B value
-                iData.data[pos+3] = rgba[3];              // set alpha channel
-            }
-        }
+//                 iData.data[pos] = rgba[0];              // some R value [0, 255]
+//                 iData.data[pos+1] = rgba[1];              // some G value
+//                 iData.data[pos+2] = rgba[2];              // some B value
+//                 iData.data[pos+3] = rgba[3];              // set alpha channel
+//             }
+//         }
 
-        this.offScreenCanvasCtx.putImageData(iData, 0, 0);
-    }
+//         this.offScreenCanvasCtx.putImageData(iData, 0, 0);
+//     }
 
-    public setMargin(m: Margin): void {
-        //
-    }
+//     public setMargin(m: Margin): void {
+//         //
+//     }
 
-    // paint the colorbar
-    protected paintHeatMap(e: IPaintEvent): void {
-        if (this.offScreenCanvas.width === 0 || this.offScreenCanvas.height === 0) return;
+//     // paint the colorbar
+//     protected paintHeatMap(e: IPaintEvent): void {
+//         if (this.offScreenCanvas.width === 0 || this.offScreenCanvas.height === 0) return;
 
-        e.bottomCtx.save();
-        e.bottomCtx.imageSmoothingEnabled = true;
+//         e.bottomCtx.save();
+//         e.bottomCtx.imageSmoothingEnabled = true;
 
-        // paint colorbar here
-        const r = this.getEffectiveRect();
-        e.bottomCtx.drawImage(this.offScreenCanvas, 
-        0, 0, this.cWidth, this.cHeight,
-        r.x, r.y, r.w, r.h);
-        e.bottomCtx.restore();
-        // console.log(this.margin, this.parent?.margin);
-    }
+//         // paint colorbar here
+//         const r = this.getEffectiveRect();
+//         e.bottomCtx.drawImage(this.offScreenCanvas, 
+//         0, 0, this.cWidth, this.cHeight,
+//         r.x, r.y, r.w, r.h);
+//         e.bottomCtx.restore();
+//         // console.log(this.margin, this.parent?.margin);
+//     }
 
-    protected paintItems(e: IPaintEvent): void {
-        // do nothing
-    }
+//     protected paintItems(e: IPaintEvent): void {
+//         // do nothing
+//     }
 
-    // public mouseDown(e: IMouseEvent): void {
-    //     console.log('mouse down');
-    //     super.mouseDown(e);
-    // }
+//     // public mouseDown(e: IMouseEvent): void {
+//     //     console.log('mouse down');
+//     //     super.mouseDown(e);
+//     // }
 
-    protected setContextMenu(): void {
-        this.contextMenu = new ColorbarContextMenu(this);
-    }
+//     protected setContextMenu(): void {
+//         this.contextMenu = new ColorbarContextMenu(this);
+//     }
     
-    public repaint(): void {
-        (this.parent as Figure).repaintItems();
-    }
+//     public repaint(): void {
+//         (this.parent as Figure).repaintItems();
+//     }
 
-    public repaintFigure() {
-        (this.parent as Figure).replot();
-    }
+//     public repaintFigure() {
+//         (this.parent as Figure).replot();
+//     }
 
-    public renderHeatmap() {
-        this.heatmap?.recalculateImage();
-    }
+//     public renderHeatmap() {
+//         this.heatmap?.recalculateImage();
+//     }
 
-    public viewAll(): void {
-        if (!this.heatmap) return;
-        const rng = this.range;
-        const m = this.heatmap.dataset.data;
-        const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
-        this.range = {x: rng.x, w: rng.w, y: -extreme, h: 2 * extreme};
-        this.rangeChanged(this.internalRange);
-    }
+//     public viewAll(): void {
+//         if (!this.heatmap) return;
+//         const rng = this.range;
+//         const m = this.heatmap.dataset.data;
+//         const extreme = Math.max(Math.abs(m.min()), Math.abs(m.max()));
+//         this.range = {x: rng.x, w: rng.w, y: -extreme, h: 2 * extreme};
+//         this.rangeChanged(this.internalRange);
+//     }
 
-    public rangeChanged(range: Rect): void {
-        super.rangeChanged(range);
+//     public rangeChanged(range: Rect): void {
+//         super.rangeChanged(range);
 
-        var f = this.parent as Figure;
-        if (f.panning || f.scaling) return;
+//         var f = this.parent as Figure;
+//         if (f.panning || f.scaling) return;
 
-        let repaint = false;
+//         let repaint = false;
 
-        if (this.margin.left !== this.lastMargin.left || 
-            this.margin.right !== this.lastMargin.right ||
-            this.margin.top !== this.lastMargin.top ||
-            this.margin.bottom !== this.lastMargin.bottom) {
+//         if (this.margin.left !== this.lastMargin.left || 
+//             this.margin.right !== this.lastMargin.right ||
+//             this.margin.top !== this.lastMargin.top ||
+//             this.margin.bottom !== this.lastMargin.bottom) {
 
-            // recalculate canvas rect according to new margin
+//             // recalculate canvas rect according to new margin
 
-            this.setCanvasRect(this.parentCanvasRect);
-            this.lastMargin = this.margin;
-            repaint = true;
-        }
+//             this.setCanvasRect(this.parentCanvasRect);
+//             this.lastMargin = this.margin;
+//             repaint = true;
+//         }
 
-        if (this.heatmap){
-            this.heatmap.zRange = this.yAxis.internalRange;
-            this.heatmap.recalculateImage();
-            repaint = true;
-        }
+//         if (this.heatmap){
+//             this.heatmap.zRange = this.yAxis.internalRange;
+//             this.heatmap.recalculateImage();
+//             repaint = true;
+//         }
 
-        if (repaint) f.replot();
+//         if (repaint) f.replot();
 
-    }
+//     }
 
 
-}
+// }

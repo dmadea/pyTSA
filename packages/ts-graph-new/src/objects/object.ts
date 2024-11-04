@@ -1,17 +1,17 @@
-import { ContextMenu } from "../contextmenu";
+import { Scene } from "../scene";
 import { Rect, Margin } from "../types";
 
 export interface IPaintEvent {
-    bottomCanvas: HTMLCanvasElement,
-    bottomCtx: CanvasRenderingContext2D,
-    topCanvas: HTMLCanvasElement,
-    topCtx: CanvasRenderingContext2D
+    canvas2d: HTMLCanvasElement,
+    ctx: CanvasRenderingContext2D,
+    glcanvas: HTMLCanvasElement,
+    glctx: WebGLRenderingContext
 }
 
 export interface IMouseEvent {
     e: MouseEvent,
-    bottomCanvas: HTMLCanvasElement,
-    topCanvas: HTMLCanvasElement,
+    canvas2d: HTMLCanvasElement,
+    glcanvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
     y: number  // canvas y coordinate scaled by display ratio
 }
@@ -24,11 +24,6 @@ export interface ITouchEvent {
     y: number  // canvas y coordinate scaled by display ratio
 }
 
-export interface Wasm {
-    memory: WebAssembly.Memory,
-    exports: WebAssembly.Exports
-}
-
 export enum ObjectType {
     root = 0,
     child = 1
@@ -37,19 +32,11 @@ export enum ObjectType {
 export abstract class GraphicObject{
     public items: GraphicObject[];
     public parent: GraphicObject | null; // = null;
-
-    public bottomCanvas: HTMLCanvasElement | null = null;  // main canvas for plotting figure etc.
-    public bottomCtx: CanvasRenderingContext2D | null;     // corresponding context
-
-    public topCanvas: HTMLCanvasElement | null = null; // canvas for plotting items, responsive minor stuff
-    public topCtx: CanvasRenderingContext2D | null;  // corresponding context
+    public scene: Scene | null
 
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
     public margin: Margin;      // margin from canvasRect in absolute values: [left, right, top, bottom] 
     // public effRect: Rect         // canvas rectangle minus margins
-
-    public contextMenu?: ContextMenu;
-    public wasm?: Wasm;
 
     public active: boolean = false;
     public activeCursor: string;
@@ -82,14 +69,11 @@ export abstract class GraphicObject{
         } else {
             this.parent = null;
         }
+        this.scene = null
         this.items = [];
         this.canvasRect = canvasRect ?? {x: 0, y: 0, w: 0, h: 0};
         // this.setCanvasRect(canvasRect);
         this.margin = margin ?? {left: 0, right: 0, top: 0, bottom: 0};
-        this.bottomCanvas = null;
-        this.bottomCtx  = null;
-        this.topCanvas = null;
-        this.topCtx = null;
         // this.effRect = {...this.canvasRect};
         // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
@@ -105,34 +89,20 @@ export abstract class GraphicObject{
     //     this.activeCursor = cursor;
     // }
 
-    public setWasm(wasm: Wasm) {
-        this.wasm = wasm;
-        for (const item of this.items) {
-            item.wasm = wasm;
-        }
-    }
-
-    protected setContextMenu() {
-        // to be implemented ...
-        // this.contextMenu = new ContextMenu();
-    }
 
     public setParent(parent: GraphicObject | null) {
         this.parent = parent;
         if (this.parent) {
-            this.bottomCanvas = this.parent.bottomCanvas;
-            this.bottomCtx = this.parent.bottomCtx;
-            this.topCanvas = this.parent.topCanvas;
-            this.topCtx = this.parent.topCtx;
-            this.wasm = this.parent.wasm;
+            this.scene = this.parent.scene
         }
     }
 
-    public addItem(item: GraphicObject) {
+    public addItem(item: GraphicObject): GraphicObject {
         if (this.items.indexOf(item) === -1) { 
             this.items.push(item);
             item.setParent(this);
         }
+        return item
     }
 
     public getEffectiveRect(): Rect{
@@ -181,8 +151,13 @@ export abstract class GraphicObject{
     }
 
     protected repaint() {
-        if (this.bottomCtx && this.bottomCanvas && this.topCanvas && this.topCtx) {
-            const e: IPaintEvent = {bottomCanvas: this.bottomCanvas, bottomCtx: this.bottomCtx, topCanvas: this.topCanvas, topCtx: this.topCtx};
+        if (this.scene) {
+            const e: IPaintEvent = {
+                canvas2d: this.scene.canvas2d,
+                ctx: this.scene.ctx,
+                glcanvas: this.scene.glcanvas,
+                glctx: this.scene.glctx
+            };
             this.paint(e);
         }
     }
@@ -241,40 +216,40 @@ export abstract class GraphicObject{
     }
 
     doubleClick(e: IMouseEvent) {
-        e.e.preventDefault();
-        for (const item of this.items) {
-            if (item.isInsideCanvasRect(e.x, e.y)) {
-                item.doubleClick(e);
-            }
-        }
+        // e.e.preventDefault();
+        // for (const item of this.items) {
+        //     if (item.isInsideCanvasRect(e.x, e.y)) {
+        //         item.doubleClick(e);
+        //     }
+        // }
     }
 
     mouseDown(e: IMouseEvent) {
-        this.rootItem?.visibleItems.push(this);
-        for (const item of this.items) {
-            if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
-                item.mouseDown(e);
-            }
-        }
-        this.handleMultipleItemEvents();
+        // this.rootItem?.visibleItems.push(this);
+        // for (const item of this.items) {
+        //     if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
+        //         item.mouseDown(e);
+        //     }
+        // }
+        // this.handleMultipleItemEvents();
     }
 
     mouseUp(e: IMouseEvent) {
-        this.rootItem?.visibleItems.push(this);
-        for (const item of this.items) {
-            if (item.visible) item.mouseUp(e);
-        }
-        this.handleMultipleItemEvents();
+        // this.rootItem?.visibleItems.push(this);
+        // for (const item of this.items) {
+        //     if (item.visible) item.mouseUp(e);
+        // }
+        // this.handleMultipleItemEvents();
     }
 
     mouseMove(e: IMouseEvent) {
-        this.rootItem?.visibleItems.push(this);
-        for (const item of this.items) {
-            if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
-                item.mouseMove(e);
-            }
-        }
-        this.handleMultipleItemEvents();
+        // this.rootItem?.visibleItems.push(this);
+        // for (const item of this.items) {
+        //     if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
+        //         item.mouseMove(e);
+        //     }
+        // }
+        // this.handleMultipleItemEvents();
     }
     
     public handleMultipleItemEvents() {
@@ -282,30 +257,19 @@ export abstract class GraphicObject{
         
         const activeItems = this.visibleItems.filter(item => item.active);
         // console.log(this.visibleItems, activeItems);
-        if (activeItems.length > 0) {
-            const last = activeItems[activeItems.length - 1];
-            if (this.topCanvas) this.topCanvas.style.cursor = last.activeCursor;
-            if (last.preventEventsFunc !== null) last.preventEventsFunc();
-        } else {
-            for (const item of this.visibleItems) {
-                if (item.preventEventsFunc !== null) item.preventEventsFunc();
-                if (item.passiveCursor && this.topCanvas) {
-                    this.topCanvas.style.cursor = item.passiveCursor;
-                }
-            }
-        }
-        this.visibleItems = [];
-    }
-
-    showContextMenu(e: IMouseEvent) {
-        if (e.e.ctrlKey) return;
-        e.e.preventDefault();
-        if (this.contextMenu) {
-            this.contextMenu.show({x: e.e.pageX, y: e.e.pageY});
-        }
-        // for (const item of this.items) {
-        //     item.contextMenu(e);
+        // if (activeItems.length > 0) {
+        //     const last = activeItems[activeItems.length - 1];
+        //     if (this.topCanvas) this.topCanvas.style.cursor = last.activeCursor;
+        //     if (last.preventEventsFunc !== null) last.preventEventsFunc();
+        // } else {
+        //     for (const item of this.visibleItems) {
+        //         if (item.preventEventsFunc !== null) item.preventEventsFunc();
+        //         if (item.passiveCursor && this.topCanvas) {
+        //             this.topCanvas.style.cursor = item.passiveCursor;
+        //         }
+        //     }
         // }
+        this.visibleItems = [];
     }
 
     touchStart(e: TouchEvent) {

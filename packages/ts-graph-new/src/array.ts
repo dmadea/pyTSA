@@ -2,13 +2,13 @@
 
 export class F32Array extends Float32Array {
 
-    static fromArray(array: number[] | F32Array): F32Array {
-        let arr = new F32Array();
-        Object.assign(arr, array);
-        return arr;
-    }
+    // static fromArray(array: number[] | F32Array | Array<number>): F32Array {
+    //     let arr = new F32Array(array.length);
+    //     Object.assign(arr, array);
+    //     return arr;
+    // }
 
-    static fromTypedArray(array: Float32Array | Float64Array): F32Array {
+    static fromArray(array: Float32Array | Float64Array | number[] | Array<number>): F32Array {
         const arr = new F32Array(array.length);
         for (let i = 0; i < array.length; i++) {
             arr[i] = array[i];
@@ -224,13 +224,13 @@ export class F32Array extends Float32Array {
         return this;
     }
 
-    public slice(start?: number | undefined, end?: number | undefined): F32Array {
-        return F32Array.fromArray(super.slice(start, end));
-    }
+    // public slice(start?: number | undefined, end?: number | undefined): F32Array {
+    //     return F32Array.fromArray(super.slice(start, end));
+    // }
 
-    public clear() {
-        this.length = 0;
-    }
+    // public clear() {
+    //     this.length = 0;
+    // }
 
     public log() {
         var str = "[";

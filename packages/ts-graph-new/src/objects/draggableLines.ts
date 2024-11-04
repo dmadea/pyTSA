@@ -442,40 +442,40 @@ export class DraggableLines extends GraphicObject {
     }
 
     private strokeHorizontal(e: IPaintEvent) {
-        e.topCtx.strokeStyle = (this.horizontalHovering) ? this.onHoverColor : this.color;
+        e.glctx.strokeStyle = (this.horizontalHovering) ? this.onHoverColor : this.color;
         // e.ctx.lineWidth = (this.horizontalHovering) ? 2 : 1;
         const f = this.parent as Figure;
         const r = f.getEffectiveRect();
         const va = f.axisAlignment === Orientation.Vertical;
         const p0 = f.mapRange2Canvas((va) ? {x: this.position.x, y: 0} : {x: 0, y: this.position.y});
-        e.topCtx.beginPath();
-        e.topCtx.moveTo(r.x, p0.y);
-        e.topCtx.lineTo(r.x + r.w, p0.y);
-        e.topCtx.stroke();
+        e.glctx.beginPath();
+        e.glctx.moveTo(r.x, p0.y);
+        e.glctx.lineTo(r.x + r.w, p0.y);
+        e.glctx.stroke();
 
         if (this.showText) {
             const num = (va) ? f.xAxis.transform(this.position.x) : f.yAxis.transform(this.position.y);
-            e.topCtx.save();
-            e.topCtx.textAlign = 'right';  // vertical alignment
-            e.topCtx.textBaseline = 'middle'; // horizontal alignment
-            e.topCtx.font = f.tickValuesFont;
+            e.glctx.save();
+            e.glctx.textAlign = 'right';  // vertical alignment
+            e.glctx.textBaseline = 'middle'; // horizontal alignment
+            e.glctx.font = f.tickValuesFont;
             const text = formatNumber2String(num, 1 + ((va) ? f.xAxis.displayedSignificantFigures : f.yAxis.displayedSignificantFigures));
     
-            const _metrics = e.topCtx.measureText(text);
+            const _metrics = e.glctx.measureText(text);
             let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
 
-            e.topCtx.fillStyle = "rgba(100, 100, 100, 0.9)";
-            e.topCtx.strokeStyle = "black";
-            e.topCtx.setLineDash([]);
+            e.glctx.fillStyle = "rgba(100, 100, 100, 0.9)";
+            e.glctx.strokeStyle = "black";
+            e.glctx.setLineDash([]);
 
             let wRect = 4 / 3 *_metrics.width;
     
-            e.topCtx.fillRect(r.x - wRect, p0.y - textOffset, wRect, 2 * textOffset);  //  - 1.8 * textOffset
-            e.topCtx.strokeRect(r.x - wRect, p0.y - textOffset, wRect, 2 * textOffset);  //  - 1.8 * textOffset
+            e.glctx.fillRect(r.x - wRect, p0.y - textOffset, wRect, 2 * textOffset);  //  - 1.8 * textOffset
+            e.glctx.strokeRect(r.x - wRect, p0.y - textOffset, wRect, 2 * textOffset);  //  - 1.8 * textOffset
     
-            e.topCtx.fillStyle = "white";
-            e.topCtx.fillText(text, r.x - textOffset / 2, p0.y);
-            e.topCtx.restore();
+            e.glctx.fillStyle = "white";
+            e.glctx.fillText(text, r.x - textOffset / 2, p0.y);
+            e.glctx.restore();
             
             if (f.minimalMargin.left !== wRect){
                 f.minimalMargin.left = wRect;
@@ -508,40 +508,40 @@ export class DraggableLines extends GraphicObject {
     }
 
     private strokeVertical(e: IPaintEvent) {
-        e.topCtx.strokeStyle = (this.verticalHovering) ? this.onHoverColor : this.color;
+        e.glctx.strokeStyle = (this.verticalHovering) ? this.onHoverColor : this.color;
         // e.ctx.lineWidth = (this.verticalHovering) ? 2 : 1;
         const f = this.parent as Figure;
         const r = f.getEffectiveRect();
         const va = f.axisAlignment === Orientation.Vertical;
         const p0 = f.mapRange2Canvas((va) ? {x: 0, y: this.position.y} : {x: this.position.x, y: 0});
-        e.topCtx.beginPath();
+        e.glctx.beginPath();
         // f.calcEffectiveRect();
-        e.topCtx.moveTo(p0.x, r.y + r.h);
-        e.topCtx.lineTo(p0.x, r.y);
-        e.topCtx.stroke();
+        e.glctx.moveTo(p0.x, r.y + r.h);
+        e.glctx.lineTo(p0.x, r.y);
+        e.glctx.stroke();
 
         if (this.showText) {
             const num = (va) ? f.yAxis.transform(this.position.y) : f.xAxis.transform(this.position.x);
 
-            e.topCtx.save();
-            e.topCtx.textAlign = 'center';  // vertical alignment
-            e.topCtx.textBaseline = 'middle'; // horizontal alignment
-            e.topCtx.font = f.tickValuesFont;
+            e.glctx.save();
+            e.glctx.textAlign = 'center';  // vertical alignment
+            e.glctx.textBaseline = 'middle'; // horizontal alignment
+            e.glctx.font = f.tickValuesFont;
             const text = formatNumber2String(num, 1 + ((va) ? f.yAxis.displayedSignificantFigures : f.xAxis.displayedSignificantFigures));
 
-            const _metrics = e.topCtx.measureText(text);
+            const _metrics = e.glctx.measureText(text);
             let textOffset = _metrics.actualBoundingBoxAscent + _metrics.actualBoundingBoxDescent;
 
-            e.topCtx.fillStyle = "rgba(100, 100, 100, 0.9)";
-            e.topCtx.strokeStyle = "black";
-            e.topCtx.setLineDash([]);
+            e.glctx.fillStyle = "rgba(100, 100, 100, 0.9)";
+            e.glctx.strokeStyle = "black";
+            e.glctx.setLineDash([]);
 
-            e.topCtx.fillRect(p0.x - _metrics.width / 1.5, r.y + r.h + 0, 4 / 3 * _metrics.width, 1.8 * textOffset);
-            e.topCtx.strokeRect(p0.x - _metrics.width / 1.5, r.y + r.h + 0, 4 / 3 * _metrics.width, 1.8 * textOffset);
+            e.glctx.fillRect(p0.x - _metrics.width / 1.5, r.y + r.h + 0, 4 / 3 * _metrics.width, 1.8 * textOffset);
+            e.glctx.strokeRect(p0.x - _metrics.width / 1.5, r.y + r.h + 0, 4 / 3 * _metrics.width, 1.8 * textOffset);
 
-            e.topCtx.fillStyle = "white";
-            e.topCtx.fillText(text, p0.x, r.y + r.h + textOffset);
-            e.topCtx.restore();
+            e.glctx.fillStyle = "white";
+            e.glctx.fillText(text, p0.x, r.y + r.h + textOffset);
+            e.glctx.restore();
         }
     }
 
@@ -551,15 +551,15 @@ export class DraggableLines extends GraphicObject {
 
         // this.checkRangeChanged(f.internalRange);
 
-        e.topCtx.save();
+        e.glctx.save();
 
         // https://stackoverflow.com/questions/39048227/html5-canvas-invert-color-of-pixels
         // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation
         // e.topCtx.globalCompositeOperation = 'difference';  // calculate the difference of the colors
         
         // let pr = window.devicePixelRatio;
-        e.topCtx.lineWidth = 2;
-        e.topCtx.setLineDash([10, 6]);
+        e.glctx.lineWidth = 2;
+        e.glctx.setLineDash([10, 6]);
 
         var h = Orientation.Horizontal;
         var v = Orientation.Vertical;
@@ -576,6 +576,6 @@ export class DraggableLines extends GraphicObject {
             this.strokeHorizontal(e);
         }
 
-        e.topCtx.restore();
+        e.glctx.restore();
     }
 }

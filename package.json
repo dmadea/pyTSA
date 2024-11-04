@@ -1,6 +1,7 @@
 {
   "scripts": {
     "frontend": "cd ./packages/gui_vue && npm run serve",
+    "tsgraph": "cd ./packages/ts-graph-svelte && npm run dev",
     "backend": "cd ./packages/pyTSAgui && python -m flask --app __main__.py --debug run -p 6969"  
   },
   "workspaces": [

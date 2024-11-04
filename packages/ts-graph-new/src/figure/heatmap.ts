@@ -165,7 +165,7 @@ export class HeatMap {
             }
         }
 
-        e.bottomCtx.putImageData(iData, r.x, r.y);
+        e.ctx.putImageData(iData, r.x, r.y);
     }
 
 

@@ -73,17 +73,17 @@ export class ROIPoint extends DraggableRegion {
 
     public paint(e: IPaintEvent): void {
         
-        e.topCtx.save();
+        e.glctx.save();
 
-        e.topCtx.lineWidth = this.hovering ? 7 : 5;
-        e.topCtx.strokeStyle = 'white';
-        e.topCtx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
+        e.glctx.lineWidth = this.hovering ? 7 : 5;
+        e.glctx.strokeStyle = 'white';
+        e.glctx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
 
-        e.topCtx.strokeStyle = 'black';
-        e.topCtx.lineWidth = this.hovering ? 3 : 1;
-        e.topCtx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
+        e.glctx.strokeStyle = 'black';
+        e.glctx.lineWidth = this.hovering ? 3 : 1;
+        e.glctx.strokeRect(this.regionRect.x, this.regionRect.y, this.regionRect.w, this.regionRect.h);
 
-        e.topCtx.restore();
+        e.glctx.restore();
     }
 
 }
@@ -136,29 +136,29 @@ export class LinearROI extends GraphicObject {
         const positions = this._getSortedCanvasCoordinates();
         if (positions.length === 0) return;
 
-        e.topCtx.save();
+        e.glctx.save();
 
         const r = this.figure.getEffectiveRect();
-        e.topCtx.beginPath();
-        e.topCtx.rect(r.x, r.y, r.w, r.h);
-        e.topCtx.clip();
+        e.glctx.beginPath();
+        e.glctx.rect(r.x, r.y, r.w, r.h);
+        e.glctx.clip();
         
         // paint connecting line
         // first calculate the nearest line, how to connect points
 
-        e.topCtx.strokeStyle = 'black';
-        e.topCtx.lineWidth = 3;
-        e.topCtx.setLineDash([]);
-        e.topCtx.beginPath();
-        e.topCtx.moveTo(positions[0].x, positions[0].y);
+        e.glctx.strokeStyle = 'black';
+        e.glctx.lineWidth = 3;
+        e.glctx.setLineDash([]);
+        e.glctx.beginPath();
+        e.glctx.moveTo(positions[0].x, positions[0].y);
         
         for (let i = 1; i < positions.length; i++) {
-            e.topCtx.lineTo(positions[i].x, positions[i].y);
+            e.glctx.lineTo(positions[i].x, positions[i].y);
         }
-        e.topCtx.stroke();
+        e.glctx.stroke();
 
         super.paint(e);
 
-        e.topCtx.restore();
+        e.glctx.restore();
     }
 }
