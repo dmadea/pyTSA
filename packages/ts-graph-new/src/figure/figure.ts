@@ -649,8 +649,8 @@ export class Figure extends GraphicObject {
         if (!this.isInsideEffRect(e.x, e.y)) return;
 
         if (e.x === this.lastMouseDownPos.x && e.y === this.lastMouseDownPos.y && e.e.button == 2) {
+            e.openContextMenu(e.e.layerX, e.e.layerY)
             // this.showContextMenu(e);
-            // TODO show context menu
         }   
     }
     showContextMenu(e: IMouseEvent) {

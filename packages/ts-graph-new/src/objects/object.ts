@@ -16,7 +16,8 @@ export interface IMouseEvent {
     glcanvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
     y: number,  // canvas y coordinate scaled by display ratio
-    setCursor: (cursor: Cursor) => void
+    setCursor: (cursor: Cursor) => void,
+    openContextMenu: (x: number, y: number) => void, // opens a context menu for Figure
 }
 
 export interface ITouchEvent {

@@ -15,6 +15,9 @@
     import type { Rect } from "@pytsa/ts-graph-new/src/types.js";
     import { Figure } from "@pytsa/ts-graph-new";
     import type { Cursor, IMouseEvent } from "@pytsa/ts-graph-new/src/objects/object.js";
+    import ContextMenu from "./ContextMenu.svelte";
+    import type { ContextMenuItem } from "./ContextMenu.svelte";
+
     // import Scene from "./Scene.svelte";
 
     let {row, col, colspan = 1, rowspan = 1, figure}: FigureProps = $props()
@@ -107,7 +110,8 @@
             glcanvas: sceneContext.scene!.glcanvas,
             x: e.offsetX * dpr + canvasRect.x,
             y: e.offsetY * dpr + canvasRect.y,
-            setCursor: (_cursor: Cursor) => {cursor = _cursor}
+            setCursor: (_cursor: Cursor) => {cursor = _cursor},
+            openContextMenu: (x: number, y: number) => {contextMenu?.open(x, y)}
         }
     }
 
@@ -133,7 +137,32 @@
 
     function onContextMenu(e: MouseEvent) {
         e.preventDefault()
+        console.log("svg onContextMenu")
+        // contextMenu?.open(e.offsetX, e.offsetY)
     }
+
+    const items: ContextMenuItem[] = [
+        {
+            type: "action",
+            label: "Copy plot to clipboard",
+            onClick: () => {return}
+        },
+        {
+            type: "divider",
+        },
+        {
+            type: "action",
+            label: "Copy figure",
+            onClick: () => {return}
+        },
+        {
+            type: "action",
+            label: "Copy copy copy copy",
+            onClick: () => {return}
+        }
+    ]
+
+    let contextMenu = $state<ReturnType<typeof ContextMenu>>()
 
 </script>
 
@@ -153,6 +182,8 @@
     </text>
 
 </svg>
+
+<ContextMenu bind:this={contextMenu} items={items}/>
 
 
 <style>

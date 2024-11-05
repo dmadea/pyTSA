@@ -1,7 +1,6 @@
 <script lang="ts">
   import Figure from "$lib/Figure.svelte";
   import Scene from "$lib/Scene.svelte";
-  import ContextMenu from "$lib/ContextMenu.svelte";
 
   import { Figure as Fig } from "@pytsa/ts-graph-new";
   import { Orientation } from "@pytsa/ts-graph-new/src/objects/draggableLines.js";
@@ -17,6 +16,33 @@
   fig.title = "Title"
   fig.axisAlignment = Orientation.Horizontal
 
+  // const items: ContextMenuItem[] = [
+  //       {
+  //           type: "action",
+  //           label: "Copy plot to clipboard",
+  //           onClick: () => {return}
+  //       },
+  //       {
+  //           type: "divider",
+  //       },
+  //       {
+  //           type: "action",
+  //           label: "Copy figure",
+  //           onClick: () => {return}
+  //       },
+  //       {
+  //           type: "action",
+  //           label: "Copy copy copy copy",
+  //           onClick: () => {return}
+  //       }
+
+  //   ]
+
+  // let menu = $state()
+
+  // $inspect(menu)
+
+
 </script>
 
 <svelte:head>
@@ -31,7 +57,6 @@
 <h1>Welcome to your library project</h1>
 <button class="btn btn-primary">Button</button>
 
-<ContextMenu></ContextMenu>
 
 <Scene templateCols="2fr 1fr 2fr" templateRows="1fr 1fr">
   <Figure figure={fig} row=1 col=1 rowspan=1 colspan=1/>
