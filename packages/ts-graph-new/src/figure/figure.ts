@@ -414,9 +414,9 @@ export class Figure extends GraphicObject {
         this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
 
         if (this.panning) {
-            e.glcanvas.style.cursor = this.cursors.grabbing;
+            e.setCursor("grabbing")
         } else if (this.scaling) {
-            e.glcanvas.style.cursor = this.cursors.move;
+            e.setCursor("move")
         } 
 
         if  (this.scaling || this.panning) {
@@ -511,11 +511,10 @@ export class Figure extends GraphicObject {
                 }
             }
 
-            var mouseup = (e: MouseEvent) => {
+            var mouseup = (ev: MouseEvent) => {
                 window.removeEventListener('mousemove', mousemove);
                 window.removeEventListener('mouseup', mouseup);
-                // TODO set cursor
-                // if (this.topCanvas) this.topCanvas.style.cursor = this.cursors.crosshair;
+                e.setCursor("crosshair")
             }
 
             window.addEventListener('mousemove', mousemove);

@@ -14,6 +14,7 @@
     import type { SceneContext } from "./Scene.svelte"
     import type { Rect } from "@pytsa/ts-graph-new/src/types.js";
     import { Figure } from "@pytsa/ts-graph-new";
+    import type { Cursor, IMouseEvent } from "@pytsa/ts-graph-new/src/objects/object.js";
     // import Scene from "./Scene.svelte";
 
     let {row, col, colspan = 1, rowspan = 1, figure}: FigureProps = $props()
@@ -21,6 +22,7 @@
 
     let svgEl = $state<SVGSVGElement>()
     let svgRect = $state<Rect>({x: 0, y: 0, h: 1, w: 1})
+    let cursor =  $state<Cursor>("crosshair")
     const newFig = new Figure()
     let fig = $derived<Figure>(figure ?? newFig)
 
@@ -97,7 +99,7 @@
 
     }  
     
-    function getIMouseEvent(e: MouseEvent) {
+    function getIMouseEvent(e: MouseEvent): IMouseEvent {
         const dpr = window.devicePixelRatio;
         return {
             e: e,
@@ -105,6 +107,7 @@
             glcanvas: sceneContext.scene!.glcanvas,
             x: e.offsetX * dpr + canvasRect.x,
             y: e.offsetY * dpr + canvasRect.y,
+            setCursor: (_cursor: Cursor) => {cursor = _cursor}
         }
     }
 
@@ -135,7 +138,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<svg  bind:this={svgEl} style="--col: {col}; --row: {row}; --colspan: {colspan}; --rowspan: {rowspan}" version="1.2"
+<svg  bind:this={svgEl} style="--col: {col}; --row: {row}; --colspan: {colspan}; --rowspan: {rowspan}; --cursor: {cursor}" version="1.2"
  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"  
  aria-labelledby="title" role="img"
  onmousedown={onMouseDown} 
@@ -165,7 +168,7 @@
         grid-row-end: span var(--rowspan);
 
         user-select: none;
-        cursor: crosshair;
+        cursor: var(--cursor, crosshair);
     }
 
 </style>

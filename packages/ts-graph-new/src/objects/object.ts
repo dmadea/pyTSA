@@ -8,12 +8,15 @@ export interface IPaintEvent {
     glctx: WebGLRenderingContext
 }
 
+export type Cursor = "default" | "move" | "grab" | "grabbing" | "crosshair" | "pointer" | "w-resize" | "n-resize" | "ew-resize" | "ns-resize"
+
 export interface IMouseEvent {
     e: MouseEvent,
     canvas2d: HTMLCanvasElement,
     glcanvas: HTMLCanvasElement,
     x: number,  // canvas x coordinate scaled by display ratio
-    y: number  // canvas y coordinate scaled by display ratio
+    y: number,  // canvas y coordinate scaled by display ratio
+    setCursor: (cursor: Cursor) => void
 }
 
 export interface ITouchEvent {
@@ -38,10 +41,10 @@ export abstract class GraphicObject{
     public margin: Margin;      // margin from canvasRect in absolute values: [left, right, top, bottom] 
     // public effRect: Rect         // canvas rectangle minus margins
 
-    public active: boolean = false;
-    public activeCursor: string;
-    public passiveCursor: string | null;
-    public preventEventsFunc: null | (() => void) = null;
+    // public active: boolean = false;
+    // public activeCursor: string;
+    // public passiveCursor: string | null;
+    // public preventEventsFunc: null | (() => void) = null;
 
     public visibleItems: GraphicObject[] = [];
     public objectType: ObjectType = ObjectType.child; 
@@ -77,8 +80,8 @@ export abstract class GraphicObject{
         // this.effRect = {...this.canvasRect};
         // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
-        this.activeCursor = this.cursors.default;
-        this.passiveCursor = null;
+        // this.activeCursor = this.cursors.default;
+        // this.passiveCursor = null;
     }
 
     // public setPreventEventsFunction(f: () => void) {
@@ -215,62 +218,62 @@ export abstract class GraphicObject{
         }
     }
 
-    doubleClick(e: IMouseEvent) {
-        // e.e.preventDefault();
-        // for (const item of this.items) {
-        //     if (item.isInsideCanvasRect(e.x, e.y)) {
-        //         item.doubleClick(e);
-        //     }
-        // }
-    }
+    // doubleClick(e: IMouseEvent) {
+    //     // e.e.preventDefault();
+    //     // for (const item of this.items) {
+    //     //     if (item.isInsideCanvasRect(e.x, e.y)) {
+    //     //         item.doubleClick(e);
+    //     //     }
+    //     // }
+    // }
 
-    mouseDown(e: IMouseEvent) {
-        // this.rootItem?.visibleItems.push(this);
-        // for (const item of this.items) {
-        //     if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
-        //         item.mouseDown(e);
-        //     }
-        // }
-        // this.handleMultipleItemEvents();
-    }
+    // mouseDown(e: IMouseEvent) {
+    //     // this.rootItem?.visibleItems.push(this);
+    //     // for (const item of this.items) {
+    //     //     if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
+    //     //         item.mouseDown(e);
+    //     //     }
+    //     // }
+    //     // this.handleMultipleItemEvents();
+    // }
 
-    mouseUp(e: IMouseEvent) {
-        // this.rootItem?.visibleItems.push(this);
-        // for (const item of this.items) {
-        //     if (item.visible) item.mouseUp(e);
-        // }
-        // this.handleMultipleItemEvents();
-    }
+    // mouseUp(e: IMouseEvent) {
+    //     // this.rootItem?.visibleItems.push(this);
+    //     // for (const item of this.items) {
+    //     //     if (item.visible) item.mouseUp(e);
+    //     // }
+    //     // this.handleMultipleItemEvents();
+    // }
 
-    mouseMove(e: IMouseEvent) {
-        // this.rootItem?.visibleItems.push(this);
-        // for (const item of this.items) {
-        //     if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
-        //         item.mouseMove(e);
-        //     }
-        // }
-        // this.handleMultipleItemEvents();
-    }
+    // mouseMove(e: IMouseEvent) {
+    //     // this.rootItem?.visibleItems.push(this);
+    //     // for (const item of this.items) {
+    //     //     if (item.visible && item.isInsideCanvasRect(e.x, e.y)) {
+    //     //         item.mouseMove(e);
+    //     //     }
+    //     // }
+    //     // this.handleMultipleItemEvents();
+    // }
     
-    public handleMultipleItemEvents() {
-        if (this.objectType !== ObjectType.root) return;
+    // public handleMultipleItemEvents() {
+    //     if (this.objectType !== ObjectType.root) return;
         
-        const activeItems = this.visibleItems.filter(item => item.active);
-        // console.log(this.visibleItems, activeItems);
-        // if (activeItems.length > 0) {
-        //     const last = activeItems[activeItems.length - 1];
-        //     if (this.topCanvas) this.topCanvas.style.cursor = last.activeCursor;
-        //     if (last.preventEventsFunc !== null) last.preventEventsFunc();
-        // } else {
-        //     for (const item of this.visibleItems) {
-        //         if (item.preventEventsFunc !== null) item.preventEventsFunc();
-        //         if (item.passiveCursor && this.topCanvas) {
-        //             this.topCanvas.style.cursor = item.passiveCursor;
-        //         }
-        //     }
-        // }
-        this.visibleItems = [];
-    }
+    //     // const activeItems = this.visibleItems.filter(item => item.active);
+    //     // console.log(this.visibleItems, activeItems);
+    //     // if (activeItems.length > 0) {
+    //     //     const last = activeItems[activeItems.length - 1];
+    //     //     if (this.topCanvas) this.topCanvas.style.cursor = last.activeCursor;
+    //     //     if (last.preventEventsFunc !== null) last.preventEventsFunc();
+    //     // } else {
+    //     //     for (const item of this.visibleItems) {
+    //     //         if (item.preventEventsFunc !== null) item.preventEventsFunc();
+    //     //         if (item.passiveCursor && this.topCanvas) {
+    //     //             this.topCanvas.style.cursor = item.passiveCursor;
+    //     //         }
+    //     //     }
+    //     // }
+    //     this.visibleItems = [];
+    // }
 
     touchStart(e: TouchEvent) {
         // const dpr = window.devicePixelRatio;

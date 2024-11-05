@@ -1,29 +1,49 @@
 <script lang="ts">
-    import Figure from "$lib/Figure.svelte";
-    import Scene from "$lib/Scene.svelte";
+  import Figure from "$lib/Figure.svelte";
+  import Scene from "$lib/Scene.svelte";
+  import ContextMenu from "$lib/ContextMenu.svelte";
+
+  import { Figure as Fig } from "@pytsa/ts-graph-new";
+  import { Orientation } from "@pytsa/ts-graph-new/src/objects/draggableLines.js";
+
+    // import 'bootstrap/dist/css/bootstrap.min.css';
+    // import 'bootstrap/dist/js/bootstrap.min.js';
+
+  const fig = new Fig()
+  // fig.showTicks = ['left', 'bottom']
+  fig.showTickNumbers = ['left', 'bottom']
+  fig.xAxis.label = "X axis"
+  fig.yAxis.label = "Y axis"
+  fig.title = "Title"
+  fig.axisAlignment = Orientation.Horizontal
 
 </script>
 
 <svelte:head>
   <style>
     html, body {
-      background: AliceBlue;
+      /* background: AliceBlue; */
       height: 87%;
     }
   </style>
 </svelte:head>
 
 <h1>Welcome to your library project</h1>
-<p>Create your package using @sveltejs/package and preview/showcase your work with SvelteKit</p>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+<button class="btn btn-primary">Button</button>
+
+<ContextMenu></ContextMenu>
 
 <Scene templateCols="2fr 1fr 2fr" templateRows="1fr 1fr">
-  <Figure row=1 col=1 rowspan=1 colspan=1/>
+  <Figure figure={fig} row=1 col=1 rowspan=1 colspan=1/>
   <Figure row=1 col=2/> 
   <Figure row=2 col=1/>
   <Figure row=2 col=2 colspan=2/>
 </Scene>
 
 
+
+
+
 <style>
+  @import 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css';
 </style>
