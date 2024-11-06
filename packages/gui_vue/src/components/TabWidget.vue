@@ -160,6 +160,8 @@ const dimensionMultiply = () => {
             <button class="btn btn-outline-primary btn-icon" @click="state.activeDataView.activateChirpSelection">
               <Icon icon="iconoir:curve-array" :width="iconWidth"></Icon>
             </button>
+
+            
             
             <!-- <button class="btn btn-outline-primary btn-icon" @click="">
               <Icon icon="solar:test-tube-bold" :width="iconWidth"></Icon>

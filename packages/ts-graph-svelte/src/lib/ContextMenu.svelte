@@ -1,6 +1,6 @@
 <script module>
     export interface ContextMenuItem {
-        type: 'action' | 'divider' | "checkbox",
+        type: 'action' | 'divider',
         label?: String,
         onClick?: () => void
     }
@@ -85,8 +85,6 @@
     {#each items as item}
         {#if item.type === "divider"}
             <li><hr class="dropdown-divider" /></li>
-        {:else if item.type === "checkbox"}
-            <div class="dropdown-divider"></div>
         {:else}
         <li><button class="dropdown-item small" onclick={() => item.onClick?.()}>{item.label}</button></li>
         {/if}

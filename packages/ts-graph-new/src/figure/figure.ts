@@ -1042,6 +1042,24 @@ export class Figure extends GraphicObject {
 
     }
 
+
+    // Context menu functions
+
+    public copyPlotToClipboard() {
+        const cr = this.canvasRect;
+
+        const ofc = new OffscreenCanvas(cr.w, cr.h);
+        const ctx = ofc.getContext("2d");
+        if (!ctx || !this.scene) return;
+
+        ctx.drawImage(this.scene.canvas2d, cr.x, cr.y, cr.w, cr.h, 0, 0, cr.w, cr.h);
+
+        ofc.convertToBlob().then(blob => {
+            navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+        });
+    }
+
+
     public drawTicks(e: IPaintEvent): boolean{  // r is Figure Rectangle, the frame
         e.ctx.fillStyle = textColor;
         const dpr = window.devicePixelRatio;
