@@ -18,7 +18,6 @@
 
     let { items }: ContextMenuProps = $props()
 
-
     let pos = $state({ x: 0, y: 0 })
     // menu is dimension (height and width) of context menu
     let menu = { h: 0, w: 0 }
@@ -37,25 +36,9 @@
         showMenu = true
     }
 
-    function rightClickContextMenu(e: MouseEvent){
-        // if (e.ctrlKey) {
-        //     return
-        // }
-
-        // e.preventDefault()
-        // pos = {
-        //     x: e.clientX,
-        //     y: e.clientY
-        // };
-
-        // if (window.innerHeight -  pos.y < menu.h)
-        //     pos.y = pos.y - menu.h
-        // if (window.innerWidth -  pos.x < menu.w)
-        //     pos.x = pos.x - menu.w
-
-        // showMenu = true
+    // function rightClickContextMenu(e: MouseEvent){
         
-    }
+    // }
 
     function onPageClick(e: MouseEvent){
         // To make context menu disappear when
@@ -76,7 +59,8 @@
 
 </script>
 
-<svelte:window oncontextmenu={rightClickContextMenu} onclick={onPageClick} />
+<!-- oncontextmenu={} -->
+<svelte:window onclick={onPageClick} />  
 
 {#if showMenu}
 <!-- svelte-ignore a11y_no_static_element_interactions -->

@@ -41,7 +41,7 @@ export function determineSigFigures(num: number): number {
     }
 
     const order = Math.floor(Math.log10(Math.abs(num)));
-    const maxFigures = 10;
+    const maxFigures = 7;
     const treshhold = 10 ** (-maxFigures);
     for (var i = 1; i <= maxFigures; i++) {
         const multiplier = 10 ** (i - 1 - order);
