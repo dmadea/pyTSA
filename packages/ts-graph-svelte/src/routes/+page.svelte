@@ -15,33 +15,7 @@
   fig.yAxis.label = "Y axis"
   fig.title = "Title"
   fig.axisAlignment = Orientation.Horizontal
-
-  // const items: ContextMenuItem[] = [
-  //       {
-  //           type: "action",
-  //           label: "Copy plot to clipboard",
-  //           onClick: () => {return}
-  //       },
-  //       {
-  //           type: "divider",
-  //       },
-  //       {
-  //           type: "action",
-  //           label: "Copy figure",
-  //           onClick: () => {return}
-  //       },
-  //       {
-  //           type: "action",
-  //           label: "Copy copy copy copy",
-  //           onClick: () => {return}
-  //       }
-
-  //   ]
-
-  // let menu = $state()
-
-  // $inspect(menu)
-
+  fig.xAxis.scale = 'lin'
 
 </script>
 
@@ -68,7 +42,7 @@
 
 
 
-
 <style>
-  @import 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css';
+
+
 </style>

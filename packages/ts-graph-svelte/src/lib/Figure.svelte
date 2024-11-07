@@ -72,6 +72,8 @@
         svgRect.w = rect.width
         svgRect.h = rect.height
 
+        console.log(rect.x, rect.left, rect.y, rect.top)
+
         // console.log(cr, plotRect)
     })
 
@@ -164,7 +166,9 @@
 
     function openSettings(e: MouseEvent) {
         e.stopPropagation()
-        settingsMenu?.openClose(svgRect.x + svgRect.w, 24)
+        const x = svgRect.x + svgRect.w - sceneContext.canvasBoundingRect.x - 10
+        const y = svgRect.y - sceneContext.canvasBoundingRect.y + 24
+        settingsMenu?.openClose(x, y)
     }
 
 

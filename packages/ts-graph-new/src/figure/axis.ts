@@ -6,7 +6,9 @@ export enum AxisType {
     yAxis
 }
 
-export type Scale = "lin" | "symlog" | "log" | F32Array;
+export type Scale = "lin" | "log" | "symlog" | F32Array;
+export type ScaleText = "Linear" | "Logarithmic" | "Symmetric logarithmic" | "Data bound";
+
 
 export class Axis {
 
@@ -125,6 +127,55 @@ export class Axis {
             // console.log(this.viewBounds);
         }
     }
+
+    public getScaleText(): ScaleText {
+        switch (this._scale) {
+            case 'lin': {
+                return "Linear";
+            }
+            case 'log': {
+                return "Logarithmic";
+            }                
+            case 'symlog': {
+                return "Symmetric logarithmic";
+            }
+            default: // for data bound scale
+                if (!(this._scale instanceof F32Array)) {
+                    throw new Error("Not implemented");
+                }
+
+                return "Data bound";
+        }
+    }
+
+    public setScaleFromText(scale: ScaleText) {
+        switch (scale) {
+            case 'Linear': {
+                this.scale = 'lin';
+                return;
+            }
+            case 'Logarithmic': {
+                this.scale = 'log';
+                return;
+            }                
+            case 'Symmetric logarithmic': {
+                this.scale = 'symlog';
+                return;
+            }
+            default: {  // data bound
+                var _scale: Scale;
+                if (this.figure.heatmap) {
+                    _scale =  (this.axisType === AxisType.xAxis) ? this.figure.heatmap.dataset.x : this.figure.heatmap.dataset.y;
+                } else if (this.figure.linePlots.length > 0) {
+                    _scale = this.figure.linePlots[0].x;
+                } else {
+                    _scale = "lin";
+                }
+                this.scale = _scale
+            }
+        }
+    }
+
 
     get symlogLinthresh () {
         return this._symlogLinthresh;

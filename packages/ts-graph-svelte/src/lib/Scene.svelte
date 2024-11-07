@@ -127,8 +127,8 @@
 
 <div class="wrapper" bind:this={wrapper}>
 
-	<canvas style="--width: {canvasWidth}; --height: {canvasHeight}; z-index: 0" bind:this={glcanvas}></canvas>
-    <canvas style="--width: {canvasWidth}; --height: {canvasHeight}; z-index: 1" bind:this={canvas2d}></canvas>
+	<canvas style="--width: {canvasWidth}; --height: {canvasHeight}; z-index: -2" bind:this={glcanvas}></canvas>
+    <canvas style="--width: {canvasWidth}; --height: {canvasHeight}; z-index: -1" bind:this={canvas2d}></canvas>
 
     <!-- rendering of figures -->
     <div class="grid" 
@@ -142,8 +142,9 @@
 
 .wrapper {
     position: relative;
-    width: 100%;
+    width: 95%;
     height: 100%;
+    margin: 10px 50px;
 }
 
 canvas {
