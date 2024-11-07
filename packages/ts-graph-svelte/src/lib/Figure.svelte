@@ -196,7 +196,7 @@
 </svg>
 
 <ContextMenu bind:this={contextMenu} items={items}/>
-<SettingsMenu bind:this={settingsMenu} />
+<SettingsMenu fig={fig} bind:this={settingsMenu}/>
 
 
 <style>
