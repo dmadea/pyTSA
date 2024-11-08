@@ -10,6 +10,7 @@
 <script lang="ts">
     import type { ScaleText } from "@pytsa/ts-graph-new/src/figure/axis.js";
     import { Orientation } from "@pytsa/ts-graph-new/src/objects/draggableLines.js";
+  import Input from "./Input.svelte";
 
     interface AxisSettings {
         label: string,
@@ -36,8 +37,10 @@
     // let form = $state()
     let opacity = $state<number>(HIGH_OPACITY)
     // let showZAxis = $derived<boolean>(fig.colorbar !== null)
-    let showZAxis = $derived<boolean>(true)
-
+    let showZAxis = $derived<boolean>(false)
+    
+    const firstSpanWidth = "70px"
+    let formWidth = $derived(showZAxis ? "400px" : "300px")
 
     // value bindings
 
@@ -120,7 +123,8 @@
         }
 
         console.log("open settings menu")
-        pos = {x: x - menu.w, y};
+        const mw = Number.parseFloat(formWidth.substring(0, formWidth.length - 2))
+        pos = {x: x - mw, y};
 
         if (window.innerHeight -  pos.y < menu.h)
             pos.y = pos.y - menu.h
@@ -161,13 +165,16 @@
 
 {#if showMenu}
 <form class="card rounded-0" use:getMenuDimension onmouseenter={() => opacity = HIGH_OPACITY} onmouseleave={() => opacity = LOW_OPACITY}
-     style="left: {pos.x}px; top: {pos.y}px; opacity: {opacity}; --calc-width: calc((100% - 68px) / {showZAxis ? 3 : 2})">
-
-     <!-- <span class="card-header">
-        Header
-     </span> -->
+     style="width: {formWidth}; left: {pos.x}px; top: {pos.y}px; opacity: {opacity}; --fs-width: {firstSpanWidth}; --calc-width: calc((100% - {firstSpanWidth}) / {showZAxis ? 3 : 2})">
 
      <div class="card-body px-2 py-2">
+
+         <div class="header">
+             <h6>Settings</h6>
+             <button class="btn-close" aria-label="Close" onclick={() => showMenu = false}></button>
+         </div>
+
+         <hr />
          
          <div class="input-group sm mb-1">
              <span class="input-group-text">Title</span>
@@ -183,16 +190,13 @@
                 </select>
             </div>
             
-            <!-- <div class="fixed-width"> -->
-                <span class="form-check-label"></span>
-                <div class="sm axis-labels">
-                    <span class="form-check-label">X Axis</span>
-                    <span class="form-check-label">Y Axis</span>
-                    {#if showZAxis}
-                        <span class="form-check-label">Z Axis</span>
-                    {/if}
-                </div>
-            <!-- </div> -->
+            <div class="sm axis-labels" style="grid-template-columns: {firstSpanWidth} repeat({showZAxis ? 3 : 2}, 1fr)">
+                <span class="form-check-label">X Axis</span>
+                <span class="form-check-label">Y Axis</span>
+                {#if showZAxis}
+                    <span class="form-check-label">Z Axis</span>
+                {/if}
+            </div>
             
             
             <div class="input-group sm mb-1 fixed-width">
@@ -204,104 +208,123 @@
                 {/if}
             </div>
 
-            {#snippet axisScaleoOptions()}
-                {#each axisScaleOptions as item}
-                    <option value={item}>{item}</option>
-                {/each}
+            {#snippet scaleSelect(axis: AxisSettings)}
+                <select class="form-select" bind:value={axis.scale}>
+                    {#each axisScaleOptions as item}
+                        <option value={item}>{item}</option>
+                    {/each}
+                </select>
             {/snippet}
             
             <div class="input-group sm mb-1 fixed-width">
                 <span class="input-group-text">Axis scale</span>
-                <select class="form-select" bind:value={xAxis.scale}>
-                    {@render axisScaleoOptions()}
-                </select>
-                <select class="form-select" bind:value={yAxis.scale}>
-                    {@render axisScaleoOptions()}
-                </select>
+                {@render scaleSelect(xAxis)}
+                {@render scaleSelect(yAxis)}
                 {#if showZAxis}
-                <select class="form-select" bind:value={zAxis.scale}>
-                    {@render axisScaleoOptions()}
-                </select>
+                    {@render scaleSelect(zAxis)}
                 {/if}
             </div>
+
+            {#snippet snLinthresh(axis: AxisSettings)}
+                <Input class="sm" disabled={axis.scale !== "Symmetric logarithmic"} bind:value={axis.linthresh} />
+                <!-- <input type="text" class="form-control" disabled={axis.scale !== "Symmetric logarithmic"} bind:value={axis.linthresh}/> -->
+            {/snippet}
             
             <div class="input-group sm mb-1 fixed-width">
                 <span class="input-group-text">Linthresh</span>
-                <input type="text" class="form-control" disabled={xAxis.scale !== "Symmetric logarithmic"} bind:value={xAxis.linthresh}/>
-                <input type="text" class="form-control" disabled={yAxis.scale !== "Symmetric logarithmic"} bind:value={yAxis.linthresh}/>
+                {@render snLinthresh(xAxis)}
+                {@render snLinthresh(yAxis)}
                 {#if showZAxis}
-                <input type="text" class="form-control" disabled={zAxis.scale !== "Symmetric logarithmic"} bind:value={zAxis.linthresh}/>
+                    {@render snLinthresh(zAxis)}
                 {/if}
             </div>
+
+            {#snippet snLinscale(axis: AxisSettings)}
+                <input type="text" class="form-control" disabled={axis.scale !== "Symmetric logarithmic"} bind:value={axis.linscale}/>
+            {/snippet}
             
             <div class="input-group sm mb-1 fixed-width">
                 <span class="input-group-text">Linscale</span>
-                <input type="text" class="form-control" disabled={xAxis.scale !== "Symmetric logarithmic"} bind:value={xAxis.linscale}/>
-                <input type="text" class="form-control" disabled={yAxis.scale !== "Symmetric logarithmic"} bind:value={yAxis.linscale}/>
+                {@render snLinscale(xAxis)}
+                {@render snLinscale(yAxis)}
                 {#if showZAxis}
-                <input type="text" class="form-control" disabled={zAxis.scale !== "Symmetric logarithmic"} bind:value={zAxis.linscale}/>
+                    {@render snLinscale(zAxis)}
                 {/if}
             </div>
+
+            {#snippet snCheckboxInverted(axis: AxisSettings)}
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={axis.inverted}>
+                </div>
+            {/snippet}
+
+            {#snippet snCheckboxAutoscale(axis: AxisSettings)}
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={axis.autoscale}>
+                </div>
+            {/snippet}
+
+            {#snippet snCheckboxKeepCentered(axis: AxisSettings)}
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={axis.keepCentered}>
+                </div>
+            {/snippet}
             
             <div class="input-group sm mb-1 fixed-width">
                 <span class="input-group-text">Inverted</span>
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={xAxis.inverted}>
-                </div>
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={yAxis.inverted}>
-                </div>
+                {@render snCheckboxInverted(xAxis)}
+                {@render snCheckboxInverted(yAxis)}
                 {#if showZAxis}
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={zAxis.inverted}>
-                </div>
+                    {@render snCheckboxInverted(zAxis)}
                 {/if}
             </div>
-            
+
             <div class="input-group sm mb-1 fixed-width">
                 <span class="input-group-text">Autoscale</span>
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={xAxis.autoscale}>
-                </div>
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0" type="checkbox" value=""  bind:checked={yAxis.autoscale}>
-                </div>
+                {@render snCheckboxAutoscale(xAxis)}
+                {@render snCheckboxAutoscale(yAxis)}
                 {#if showZAxis}
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={zAxis.autoscale}>
-                </div>
+                    {@render snCheckboxAutoscale(zAxis)}
                 {/if}
             </div>
 
             <div class="input-group sm mb-1 fixed-width">
                 <span class="input-group-text">Keep centered (around 0)</span>
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={xAxis.keepCentered}>
-                </div>
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0" type="checkbox" value="" bind:checked={yAxis.keepCentered}>
-                </div>
+                {@render snCheckboxKeepCentered(xAxis)}
+                {@render snCheckboxKeepCentered(yAxis)}
                 {#if showZAxis}
-                <div class="input-group-text">
-                    <input class="form-check-input mt-0 mb-0" type="checkbox" value="" bind:checked={zAxis.keepCentered}>
-                </div>
+                    {@render snCheckboxKeepCentered(zAxis)}
                 {/if}
             </div>
             
-            
-            
         </div>
-
-
-
 </form>
 {/if}
 
 
-<style>
+<style> 
     @import 'https://cdn.jsdelivr.net/npm/bosotstrap@5.3.3/dist/css/bootstrap.min.css';
 
-    .sm>.btn, .sm>.form-control, .sm>.form-select, .sm>.input-group-text, .sm>.form-check-label, .sm>.form-check-input{
+    hr {
+        margin: 5px 0px;
+    }
+
+    .header {
+        display: flex;
+        justify-content: space-between;
+        flex-direction: row;
+    }
+
+    .header > button {
+        width: 0.5em;
+        height: 0.5em;
+    }
+
+    .header > h6 {
+        margin-bottom: 0px;
+    }
+
+    :global(.sm>.btn, .sm>.form-control, .sm>.form-select, .sm>.input-group-text, .sm>.form-check-label, .sm>.form-check-input){
         padding: 0.15rem 0.3rem !important;
         font-size: 0.7rem !important;
     }
@@ -312,17 +335,27 @@
     }
 
     .fixed-width > span:first-child {
-        width: 70px;
+        width: var(--fs-width);
     }
 
     .axis-labels {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-around;
+        display: grid;
+        justify-items: center;
+        grid-template-rows: auto;
+    }
+
+    .axis-labels > span:first-child {
+        grid-column-start: 2;
+    }
+    .axis-labels > span:nth-child(2) {
+        grid-column-start: 3;
+    }
+
+    .axis-labels > span:nth-child(3) {
+        grid-column-start: 4;
     }
 
     form {
-        width: 400px;
         /* padding: 5px 5px; */
         /* border: 1px solid; */
         position: absolute;

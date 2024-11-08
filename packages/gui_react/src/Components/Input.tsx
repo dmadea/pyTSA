@@ -10,7 +10,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
     className?: string
 }
 
-const Input: React.FC<InputProps> = ({
+const Input: React.FC<InputProps> = ({  
   onValueChange,
   value,
   isValidInput = (value: string, parsedNumber: number) => !Number.isNaN(parsedNumber) && parsedNumber !== Number.POSITIVE_INFINITY && parsedNumber !== Number.NEGATIVE_INFINITY,

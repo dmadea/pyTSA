@@ -1,5 +1,6 @@
 <script lang="ts">
   import Figure from "$lib/Figure.svelte";
+  import Input from "$lib/Input.svelte";
   import Scene from "$lib/Scene.svelte";
 
   import { Figure as Fig } from "@pytsa/ts-graph-new";
@@ -31,8 +32,10 @@
 <h1>Welcome to your library project</h1>
 <button class="btn btn-primary">Button</button>
 
+<Input />
 
-<Scene templateCols="2fr 1fr 2fr" templateRows="1fr 1fr">
+
+<Scene templateCols="2fr 1fr 1fr" templateRows="1fr 1fr">
   <Figure figure={fig} row=1 col=1 rowspan=1 colspan=1/>
   <Figure row=1 col=2/> 
   <Figure row=2 col=1/>
