@@ -1,5 +1,5 @@
 {
-	"name": "@pyts/ts-graph-svelte",
+	"name": "@pytsa/ts-graph-svelte",
 	"version": "0.0.1",
 	"scripts": {
 		"dev": "vite dev",

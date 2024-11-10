@@ -46,7 +46,7 @@
         redrawScene()
     })
 
-    function redrawScene(timeout: number = 1) {
+    function redrawScene(timeout: number = 0) {
         setTimeout(() => {
                 if (sceneContext.scene) {
                     sceneContext.scene.replot()

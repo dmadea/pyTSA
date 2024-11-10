@@ -1,5 +1,5 @@
 <script module>
-    import type { Figure } from "@pytsa/ts-graph-new";
+    import { Colormaps, type Figure } from "@pytsa/ts-graph-new";
 
     export interface SettingsMenuProps {
         fig: Figure
@@ -10,7 +10,8 @@
 <script lang="ts">
     import type { ScaleText } from "@pytsa/ts-graph-new/src/figure/axis.js";
     import { Orientation } from "@pytsa/ts-graph-new/src/objects/draggableLines.js";
-  import Input from "./Input.svelte";
+    import Input from "./Input.svelte";
+    import CloseButton from "./CloseButton.svelte";
 
     interface AxisSettings {
         label: string,
@@ -37,7 +38,7 @@
     // let form = $state()
     let opacity = $state<number>(HIGH_OPACITY)
     // let showZAxis = $derived<boolean>(fig.colorbar !== null)
-    let showZAxis = $derived<boolean>(false)
+    let showZAxis = $derived<boolean>(fig.colorbar !== null)
     
     const firstSpanWidth = "70px"
     let formWidth = $derived(showZAxis ? "400px" : "300px")
@@ -46,6 +47,9 @@
 
     let title = $state<string>(fig.title)
     let axisAlignment = $state<Orientation>(fig.axisAlignment)
+
+    const colormapNames = Colormaps.getColormapsNames();
+    let colormapSelect = $state<string>("symgrad") // TODO
 
     let xAxis = $state<AxisSettings>({
         label: fig.xAxis.label,
@@ -109,6 +113,7 @@
             fig.colorbar.yAxis.symlogLinthresh = zAxis.linthresh
             fig.colorbar.yAxis.inverted = zAxis.inverted
             fig.colorbar.yAxis.keepCentered = zAxis.keepCentered
+            fig.colorbar.colormap.lut = Colormaps.getLut(colormapSelect)
         }
 
         fig.replot()
@@ -164,14 +169,16 @@
 <svelte:window onclick={onPageClick} />  
 
 {#if showMenu}
-<form class="card rounded-0" use:getMenuDimension onmouseenter={() => opacity = HIGH_OPACITY} onmouseleave={() => opacity = LOW_OPACITY}
+<form class="card rounded-0" use:getMenuDimension 
+        onmouseenter={() => opacity = HIGH_OPACITY} onmouseleave={() => opacity = LOW_OPACITY}
+        onsubmit={(e) => e.preventDefault()}
      style="width: {formWidth}; left: {pos.x}px; top: {pos.y}px; opacity: {opacity}; --fs-width: {firstSpanWidth}; --calc-width: calc((100% - {firstSpanWidth}) / {showZAxis ? 3 : 2})">
 
      <div class="card-body px-2 py-2">
 
          <div class="header">
              <h6>Settings</h6>
-             <button class="btn-close" aria-label="Close" onclick={() => showMenu = false}></button>
+              <CloseButton size="0.4em" onclick={() => showMenu = false}/>
          </div>
 
          <hr />
@@ -296,6 +303,19 @@
                     {@render snCheckboxKeepCentered(zAxis)}
                 {/if}
             </div>
+
+            {#if showZAxis}
+                <div class="input-group sm mb-1 fixed-width">
+                    <span class="input-group-text">Colormap</span>
+                    <select class="form-select" bind:value={colormapSelect}>
+                        {#each colormapNames as item}
+                            <option value={item}>{item}</option>
+                        {/each}
+                    </select>
+                </div>
+            {/if}
+            
+
             
         </div>
 </form>
@@ -313,11 +333,8 @@
         display: flex;
         justify-content: space-between;
         flex-direction: row;
-    }
-
-    .header > button {
-        width: 0.5em;
-        height: 0.5em;
+        /* justify-items: center; */
+        align-items: center;
     }
 
     .header > h6 {

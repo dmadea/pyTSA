@@ -77,7 +77,7 @@ export abstract class DraggableRegion extends GraphicObject {
             return;
         }
         
-        if (!this.figure.isInsideEffRect(e.x, e.y)) return;
+        if (!this.figure.isInsidePlotRect(e.x, e.y)) return;
 
         var hovering = true;
         if (e.x < this.regionRect.x || e.x > this.regionRect.x + this.regionRect.w || 

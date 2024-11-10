@@ -40,7 +40,7 @@ export abstract class GraphicObject{
 
     public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
     public margin: Margin;      // margin from canvasRect in absolute values: [left, right, top, bottom] 
-    // public effRect: Rect         // canvas rectangle minus margins
+    public plotRect: Rect         // canvas rectangle minus margins
 
     // public active: boolean = false;
     // public activeCursor: string;
@@ -78,6 +78,7 @@ export abstract class GraphicObject{
         this.canvasRect = canvasRect ?? {x: 0, y: 0, w: 0, h: 0};
         // this.setCanvasRect(canvasRect);
         this.margin = margin ?? {left: 0, right: 0, top: 0, bottom: 0};
+        this.plotRect = {x: 0, y: 0, w: 0, h: 0};
         // this.effRect = {...this.canvasRect};
         // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
@@ -120,10 +121,11 @@ export abstract class GraphicObject{
         }
     }
 
-    public isInsideEffRect(x: number, y: number): boolean
+    public isInsidePlotRect(x: number, y: number): boolean
     {
         // we are outside of figure frame
-        const r = this.getEffectiveRect();
+        // const r = this.getEffectiveRect();
+        const r = this.plotRect;
         if (x < r.x || x > r.x + r.w || 
             y < r.y || y > r.y + r.h) {
             return false;

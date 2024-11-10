@@ -105,24 +105,24 @@ export class Colormap {
         this.inverted = inverted;
     }
 
-    public getLut2Wasm(buff: ArrayBuffer, posPtr: number, lutPtr: number): [Float32Array, Uint8Array] {
-        const lut = this.lut;
-        const n = lut.length;
+    // public getLut2Wasm(buff: ArrayBuffer, posPtr: number, lutPtr: number): [Float32Array, Uint8Array] {
+    //     const lut = this.lut;
+    //     const n = lut.length;
 
-        var positions = new Float32Array(buff, posPtr, n);
-        var data = new Uint8Array(buff, lutPtr, n * 4);
+    //     var positions = new Float32Array(buff, posPtr, n);
+    //     var data = new Uint8Array(buff, lutPtr, n * 4);
 
-        for (let i = 0; i < n; i++) {
-            const entry = lut[i];
-            positions[i] = entry.pos;
-            data[4 * i] = entry.r;
-            data[4 * i + 1] = entry.g;            
-            data[4 * i + 2] = entry.b;            
-            data[4 * i + 3] = entry.a;            
-        }
+    //     for (let i = 0; i < n; i++) {
+    //         const entry = lut[i];
+    //         positions[i] = entry.pos;
+    //         data[4 * i] = entry.r;
+    //         data[4 * i + 1] = entry.g;            
+    //         data[4 * i + 2] = entry.b;            
+    //         data[4 * i + 3] = entry.a;            
+    //     }
 
-        return [positions, data];
-    }
+    //     return [positions, data];
+    // }
 
     public getColor(position: number): [number, number, number, number] {
         const colormap = this.lut;

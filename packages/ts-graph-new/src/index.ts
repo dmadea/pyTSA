@@ -9,7 +9,9 @@ export { Scene } from "./scene";
 // export { Dataset } from "./utils";
 
 
-export { Figure } from "./figure/figure";
+export { Figure, Colorbar } from "./figure/figure";
+export type { Rect } from "./types";
+
 // export { Axis } from "./figure/axis";
 // export { Grid } from "./objects/grid";
 // export { DraggableLines } from "./objects/draggableLines";

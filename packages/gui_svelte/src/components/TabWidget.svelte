@@ -57,7 +57,7 @@
         padding: 10px;
         border: 1px solid #dee2e6;
         border-radius: 0 0 .5rem .5rem;
-        border-top: 0;
+        /* border-top: 0; */
     }
 
     .hidden {
@@ -70,10 +70,10 @@
         padding-left: 0;
         margin-bottom: 0;
         list-style: none;
-        border-bottom: 1px solid #dee2e6;
+        /* border-bottom: 1px solid #dee2e6; */
     }
     li {
-        margin-bottom: -1px;
+        margin-bottom: 0px;
         position: relative;
     }
 
@@ -115,13 +115,14 @@
     }
 
     button:hover {
-        border-color: #e9ecef #e9ecef #dee2e6;
+        border-color: #e9ecef #e9ecef #00376d;
     }
 
     li.active .tabbutton {
         color: #2600ff;
-        background-color: #fff;
+        /* background-color: #fff; */
         border-color: #dee2e6 #dee2e6 #fff;
+        padding-bottom: -10px;
     }
 
     li:hover .closebutton {

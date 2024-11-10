@@ -32,7 +32,7 @@
 <h1>Welcome to your library project</h1>
 <button class="btn btn-primary">Button</button>
 
-<Input />
+<!-- <Input /> -->
 
 
 <Scene templateCols="2fr 1fr 1fr" templateRows="1fr 1fr">

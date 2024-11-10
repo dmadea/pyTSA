@@ -10,6 +10,9 @@
     import Tab2 from '../components/Tab2.svelte';
     import TreeView, { type TreeViewProps } from '../components/TreeView.svelte';
 
+	// import { Figure, Scene } from "@pytsa/ts-graph-svelte";
+	import { Figure as Fig } from "@pytsa/ts-graph-new";
+
 
 	const items: TabItem[] = [{
 		label: "Tabasd asd 1",

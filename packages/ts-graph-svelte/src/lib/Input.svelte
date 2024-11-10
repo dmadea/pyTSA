@@ -34,8 +34,7 @@
 </script>
 
 
-<input type="text" {...props} class="form-control" class:form-control-error={invalid} bind:value={text}/>
-<!-- <input type="text" class="form-control" disabled={axis.scale !== "Symmetric logarithmic"} bind:value={axis.linthresh}/> -->
+<input type="text" {...props} class="form-control {props.class}" class:form-control-error={invalid} bind:value={text}/>
 
 
 <style>
