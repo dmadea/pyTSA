@@ -6,7 +6,7 @@
     export const ytextOffset = 5
 
     export const textHeight = 21.6
-    export const textLiteralWidth = 60 / 7
+    export const textLiteralWidth = 70 / 7
 
 </script>
 

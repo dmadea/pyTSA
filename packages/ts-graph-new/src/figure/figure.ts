@@ -1473,7 +1473,7 @@ export class Figure extends GraphicObject {
         // calculate scale
 
         let coor: number, size: number, prefMajorBins: number, prefMinorBins: number;
-        const f = 0.005;
+        const f = 0.01;
         const fMinor = 0.05;
         const dpr = window.devicePixelRatio;
         let fx = f * 2;

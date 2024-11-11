@@ -77,6 +77,12 @@
         colorbar.mouseUp(getIMouseEvent(e))
     }       
 
+    function onDblClick(e: MouseEvent) {
+        e.preventDefault()
+        e.stopPropagation()
+        colorbar.doubleClick(getIMouseEvent(e))
+    }
+
     // function onMouseMove(e: MouseEvent) {
     //     e.preventDefault()
     //     e.stopPropagation()
@@ -105,7 +111,7 @@
 
 
  <!-- svelte-ignore a11y_no_static_element_interactions -->
- <rect class="colorbar" onmousedown={onMouseDown} onmouseup={onMouseUp} 
+ <rect class="colorbar" onmousedown={onMouseDown} onmouseup={onMouseUp} ondblclick={onDblClick}
   x={plotRect.x.toFixed(2)}
   y={plotRect.y.toFixed(2)}
   width={plotRect.w}
