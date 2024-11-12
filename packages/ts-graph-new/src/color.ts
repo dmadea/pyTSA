@@ -99,30 +99,17 @@ export class Colormap {
 
     public lut: ILut;
     public inverted: boolean = false;
+    public name: string
 
-    constructor (lut: ILut, inverted: boolean = false) {
-        this.lut = lut;
-        this.inverted = inverted;
+    static fromName(name: string, inverted: boolean = false): Colormap {
+        return new Colormap(Colormaps.getLut(name), inverted, name)
     }
 
-    // public getLut2Wasm(buff: ArrayBuffer, posPtr: number, lutPtr: number): [Float32Array, Uint8Array] {
-    //     const lut = this.lut;
-    //     const n = lut.length;
-
-    //     var positions = new Float32Array(buff, posPtr, n);
-    //     var data = new Uint8Array(buff, lutPtr, n * 4);
-
-    //     for (let i = 0; i < n; i++) {
-    //         const entry = lut[i];
-    //         positions[i] = entry.pos;
-    //         data[4 * i] = entry.r;
-    //         data[4 * i + 1] = entry.g;            
-    //         data[4 * i + 2] = entry.b;            
-    //         data[4 * i + 3] = entry.a;            
-    //     }
-
-    //     return [positions, data];
-    // }
+    constructor (lut: ILut, inverted: boolean = false, name: string) {
+        this.name = name
+        this.lut = lut
+        this.inverted = inverted;
+    }
 
     public getColor(position: number): [number, number, number, number] {
         const colormap = this.lut;
@@ -152,11 +139,11 @@ export class Colormap {
         ];
     }
 
-    static getStringColor(position: number, lut: ILut): string {
-        const cmap = new Colormap(lut);
-        const rgba = cmap.getColor(position);
-        return `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]})`;
-    }
+    // static getStringColor(position: number, lut: ILut): string {
+    //     const cmap = new Colormap(lut);
+    //     const rgba = cmap.getColor(position);
+    //     return `rgba(${rgba[0]}, ${rgba[1]}, ${rgba[2]}, ${rgba[3]})`;
+    // }
 }
 
 export class Colormaps {

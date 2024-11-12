@@ -191,11 +191,9 @@
 
     <rect class="plot-rect" x={fc.plotRect.x} y={fc.plotRect.y} width={fc.plotRect.w} height={fc.plotRect.h}/>
 
-    <!-- <text alignment-baseline="middle" text-anchor="middle" x={fc.svgRect.w / 2} y={fc.svgRect.h / 2}>
+     <text alignment-baseline="middle" text-anchor="middle" x={fc.svgRect.w / 2} y={fc.svgRect.h / 2}>
         x: {canvasRect.x.toFixed(1)} y: {canvasRect.y.toFixed(1)}, w: {canvasRect.w.toFixed(1)}, h: {canvasRect.h.toFixed(1)}
-    </text> -->
-
-    
+    </text> 
     
     <!-- Settings button -->
     

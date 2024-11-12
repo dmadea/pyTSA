@@ -1647,17 +1647,9 @@ export class Colorbar extends Figure {
     private _colormap: Colormap;
     // private readonly _width: number = 20;  // with of the colorbar (effective rectagle) in px
 
-    // public offScreenCanvas: OffscreenCanvas;
-    // protected offScreenCanvasCtx: OffscreenCanvasRenderingContext2D | null;
-    // private parentCanvasRect: Rect;
-    // private heatmapList: HeatMap[] = [];
-
-    private cWidth = 1;
-    private cHeight = 500; // 500 pixels to draw the colormap
-
     constructor(figure: Figure, canvasRect?: Rect, colormap?: Colormap) {
         super(figure, {x:0, y:0, w:0, h:0});
-        this._colormap = (colormap === undefined) ? new Colormap(Colormaps.symgrad) : colormap;
+        this._colormap = (colormap === undefined) ? new Colormap(Colormaps.symgrad, false, 'symgrad') : colormap;
         // this.parentCanvasRect = {...figure.canvasRect};
 
         // this.offScreenCanvas = new OffscreenCanvas(this.cWidth, this.cHeight);

@@ -82,7 +82,7 @@
 
         title = figure.title
         bottomAxisLabel = figure.xAxis.label
-        leftAxisLabel = figure.yAxis.label
+        leftAxisLabel = rightAxisLabel ? "" : figure.yAxis.label
 
         
         let topMargin = figure.showTickNumbers.includes('top') ? textHeight : 0
@@ -96,7 +96,7 @@
         leftMargin += minMargin.left
         
         let rightMargin = figure.showTickNumbers.includes('right') ? (leftLongest * textLiteralWidth + ytextOffset / 2 ) : 0
-        rightMargin += minMargin.right + fc.colorbarWidth
+        rightMargin += minMargin.right + (calcPlotRect ? 0 : fc.colorbarWidth)
 
         var r: Rect  // plot rect
 

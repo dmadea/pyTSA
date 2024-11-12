@@ -18,7 +18,8 @@
     let fc: FigureContext = getContext('FigureContext')
     let sceneContext: SceneContext = getContext('SceneContext')
     let colorbarRightLabel = $state<string>(colorbar.yAxis.label)
-    let colormapLut = $state<ILut>(Colormaps.symgrad)
+    let colormapLut = $state<ILut>(colorbar.colormap.lut)
+    const gradientID = crypto.randomUUID()
 
     // colorbar plot rect
     
@@ -33,7 +34,7 @@
 
         const containsLabel = colorbar.yAxis.label !== ""
 
-        var colorbarWidth = margin.left + margin.right - fc.colorbarWidth + WIDTH
+        var colorbarWidth = margin.left + margin.right + WIDTH
         colorbarWidth += containsLabel ? textHeight : 0
         fc.colorbarWidth = colorbarWidth
 
@@ -48,7 +49,7 @@
         colorbarRightLabel = colorbar.yAxis.label
         colorbar.plotRect = r
         colormapLut = colorbar.colormap.lut
-        console.log(colorbar.colormap.lut)
+        // console.log(colorbar.colormap.lut)
         return r
     }
 
@@ -99,13 +100,10 @@
 </script>
 
 <defs>
-    <linearGradient id="Gradient2" x1="0" x2="0" y1="0" y2="1">
+    <linearGradient id={gradientID} x1="0" x2="0" y1="0" y2="1">
         {#each colormapLut as entry}
             <stop offset="{entry.pos * 100}%" stop-color="rgb({entry.r}, {entry.g}, {entry.b})" />
       {/each}
-      <!-- <stop offset="25%" stop-color="red" />
-      <stop offset="50%" stop-color="white"  />
-      <stop offset="100%" stop-color="blue" /> -->
     </linearGradient>
   </defs>
 
@@ -116,12 +114,10 @@
   y={plotRect.y.toFixed(2)}
   width={plotRect.w}
   height={plotRect.h}
-  fill="url(#Gradient2)" /> 
+  fill="url(#{gradientID})" /> 
 
 
 <TicksAndLabels figure={colorbar} calcPlotRect={calcPlotRect} rightAxisLabel={colorbarRightLabel}  />
-
-
 
 <style>
 
