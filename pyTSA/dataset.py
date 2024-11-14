@@ -210,6 +210,7 @@ class Dataset(object):
 
     def get_integrated_dataset(self):
         trace = np.trapz(self.matrix_fac, self.wavelengths, axis=1)
+        # trace = self.matrix_fac.sum(axis=1)
         return Dataset(trace[:, None], self.times, np.asarray([0]), name=f"{self.name}-integrated")
 
     def set_model(self, model: KineticModel):
