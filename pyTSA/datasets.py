@@ -1,8 +1,12 @@
 
+from typing import Generator
 from matplotlib import gridspec
 from .plot import plot_data_ax
 from .dataset import Dataset
 from .kineticmodel import KineticModel , FirstOrderModel
+
+from lmfit import Parameters, Minimizer
+from lmfit.minimizer import MinimizerResult
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,6 +22,15 @@ class Datasets(object):
         self.df_params = None
         self.model: KineticModel = FirstOrderModel()
 
+        # for augmented model
+
+        self.minimizer: Minimizer | None = None
+        self.aug_fit_result: MinimizerResult | None = None
+        # fitter arguments to the underlying fitting algorithm
+        self.fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='linear', verbose=2, jac='3-point')
+
+        self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
+
     def set_model(self, model: KineticModel, index: int | None = None, key: int | str | None = None):
         if key is not None:
             dct = list(filter(lambda d: d['key'] == key, self._datasets))[0]
@@ -31,8 +44,15 @@ class Datasets(object):
         self[0].set_model(model)
 
 
-    def __getitem__(self, key: int) -> Dataset:
-        return self._datasets[key]['dataset']
+    def __getitem__(self, key: int | slice) -> Dataset | list[Dataset]:
+        if isinstance(key, slice):
+            return [d['dataset'] for d in self._datasets[key]]
+
+        elif isinstance(key, int):
+            return self._datasets[key]['dataset']
+        else:
+            raise TypeError("Invalid input")
+
     
     def __setitem__(self, key: int, newvalue: Dataset): 
 
@@ -67,7 +87,7 @@ class Datasets(object):
         if index is not None:
             self._datasets.pop(index)
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[Dataset]:
         for d in map(lambda d: d['dataset'], self._datasets):
             yield d
 
@@ -242,7 +262,73 @@ class Datasets(object):
         return self.df_params
 
 
+    def fit_augmented(self, global_params: Parameters | None = None, global_param_names: list[str] | None = None) -> MinimizerResult:
+        for d in self.__iter__():
+            if d.model is None:
+                raise ValueError("Each dataset needs to have assigned model")
+            
+        aug_params = Parameters() if global_params is None else global_params
+
+        # fill the global params from model
+        # assuming the global params are present in first model of dataset
+        if global_params is None:
+            assert global_param_names is not None, "global_param_names cannot be None"
+            pars = self[0].model.params
+
+            for n in global_param_names:
+                if n in pars.keys():
+                    aug_params.add(n, value=pars[n].value, vary=pars[n].vary, min=pars[n].min, max=pars[n].max)
+
+        global_param_names = list(aug_params.keys())
+
+        # fill in all the params from model and change the name of them according to their index
+        for i, d in enumerate(self.__iter__()):
+            for name, par in d.model.params.items():
+                if name in global_param_names:
+                    continue
+
+                aug_params.add(f"{name}_{i}", value=par.value, vary=par.vary, min=par.min, max=par.max)
+
+        def residuals(params):
+
+            res_list = []
+
+            # update all parameter values and simulate every model
+            for i, d in enumerate(self.__iter__()):
+                for name, par in params.items():
+                    # assign the global parameter value
+                    if name in global_param_names:
+                        try:
+                            d.model.params[name].value = par.value
+                        except KeyError:
+                            pass
+                    _n = 1 + len(str(i))  # f"{name}_{i}"
+                    _name = name[:-_n]
+                    if _name in d.model.params.keys():
+                        d.model.params[_name].value = par.value
+
+                d.model.simulate()
+                res_list.append(d.model.weighted_residuals())
+
+            # find common dimension, and concatenate, if no common dimension, concatenate flat arrays
+            axis_0_shapes = np.asarray([m.shape[0] for m in res_list])
+            axis_1_shapes = np.asarray([m.shape[1] for m in res_list])
+
+            axis_0_same = np.all(axis_0_shapes == axis_0_shapes[0])
+            axis_1_same = np.all(axis_1_shapes == axis_1_shapes[0])
+
+            if axis_0_same:
+                return np.concatenate(res_list, axis=1)
+
+            if axis_1_same:
+                return np.concatenate(res_list, axis=0)
+            
+            # flat stack arrays
+            return np.concatenate([ar.flat for ar in res_list], axis=0)
 
 
+        self.minimizer = Minimizer(residuals, aug_params, nan_policy='omit')
+        self.aug_fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
+        return self.aug_fit_result
 
 
