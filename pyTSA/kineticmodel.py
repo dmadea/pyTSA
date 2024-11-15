@@ -1019,9 +1019,11 @@ class DelayedFluorescenceModel(FirstOrderModel):
         # tau_fl, tau_isc, tau_risc = params['tau_fl'].value, params['tau_isc'].value, params['tau_risc'].value
         k_rnr, k_isc, k_risc = params['k_rnr'].value, params['k_isc'].value, params['k_risc'].value
 
+        kq_s = 0
+        kq_t = 0
         
-        K = np.asarray([[-k_rnr - k_isc, k_risc],
-                        [k_isc,         -k_risc]])
+        K = np.asarray([[-k_rnr - k_isc - kq_s, k_risc],
+                        [k_isc,         -k_risc - kq_t]])
     
         j = np.asarray([1, 0])
 
@@ -1029,6 +1031,13 @@ class DelayedFluorescenceModel(FirstOrderModel):
         self.C_opt_full = simulate_target_model(tt, K, j, f_exp, _tau) 
         self.C_opt = self.C_opt_full[:, 0, None]  ## use only first component for singlet
         # print(self.C_opt.shape)
+
+
+
+
+
+
+
 
 
 # class Target_Analysis_Femto(_Femto):

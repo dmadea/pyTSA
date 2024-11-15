@@ -280,9 +280,9 @@ def square_conv_exp(t: np.ndarray | float, k: np.ndarray | float, width: np.ndar
         return 0
     elif t >= -w2 and t < w2:
         
-        return (1 - np.exp(-tt * k)) / k 
+        return (1 - np.exp(-tt * k)) / (k * width) 
     else:
-        return (np.exp(k * width) - 1) * np.exp(-k * tt) / k
+        return (np.exp(k * width) - 1) * np.exp(-k * tt) / (k * width) 
     
 # def delayed_fluorescence_decay(t: np.ndarray | float, k_isc: float, k_risc: float, k_singlet: float, f_exp: callable, *f_args) -> np.ndarray | float:
 
