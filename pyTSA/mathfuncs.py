@@ -1,3 +1,4 @@
+from typing import Callable
 import numpy as np
 from numba import njit, vectorize
 
@@ -107,7 +108,8 @@ def get_EAS_transform(ks: np.ndarray):
     bjl *= k_mat
     return bjl
 
-def simulate_target_model(t: np.ndarray | float, K: np.ndarray, j: np.ndarray, f_exp: callable, *f_args):
+def simulate_target_model(t: np.ndarray | float, K: np.ndarray, j: np.ndarray,
+                           f_exp: Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float], *f_args):
     """
     f_exp: folded exponential function to be called 
     f_kwargs: keyword arguemnts passed to f_exp function
@@ -255,7 +257,7 @@ def fast_erfc(x):
     return ret
 
 
-@vectorize(nopython=True, fastmath=False)
+@vectorize(nopython=True, fastmath=True)
 def fold_exp(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray | float) -> np.ndarray | float:
 
     w = fwhm / (2 * np.sqrt(np.log(2)))  # gaussian width
@@ -267,7 +269,7 @@ def fold_exp(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray | fl
         return np.exp(-tt * k) if tt >= 0 else 0
     
 # exponential convoluted with square wave, from https://lpsa.swarthmore.edu/Convolution/Convolution2.html and wolfram alpha
-@vectorize(nopython=True, fastmath=False)
+@vectorize(nopython=True, fastmath=True)
 def square_conv_exp(t: np.ndarray | float, k: np.ndarray | float, width: np.ndarray | float) -> np.ndarray | float:
 
     if width == 0:

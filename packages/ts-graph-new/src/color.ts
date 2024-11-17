@@ -1,5 +1,12 @@
 
 
+export interface Color {
+    r: number,
+    g: number,
+    b: number,
+    alpha: number
+}
+
 const defaultColors: string[] = [
     "rgb(255, 0, 0)",  // red
     "rgb(0, 255, 0)",  // green

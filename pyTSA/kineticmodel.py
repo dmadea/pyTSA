@@ -10,7 +10,7 @@ import numpy as np
 # from scipy.integrate import odeint
 from lmfit import Parameters, Minimizer, conf_interval, conf_interval2d, report_ci
 from lmfit.minimizer import MinimizerResult
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from abc import abstractmethod
 
@@ -763,6 +763,10 @@ class FirstOrderModel(KineticModel):
             self.C_artifacts = self._simulate_artifacts(tt, width)
 
         return tt, _ks, _tau
+
+    def get_exp_function(self) -> Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float]:
+        return fold_exp if self.irf_type == self.irf_types[0] else square_conv_exp
+
         
     def calculate_C_profiles(self, params: Parameters | None = None):
         """Simulates concentration profiles, including coherent artifacts if setup in a model."""
@@ -773,10 +777,8 @@ class FirstOrderModel(KineticModel):
             return
         
         # simulation for DADS only
-        self.C_opt: np.ndarray = fold_exp(tt, _ks, _tau) if self.irf_type == self.irf_types[0] else square_conv_exp(tt, _ks, _tau)
-        # print(self.C_opt.shape)
-
-
+        f = self.get_exp_function()
+        self.C_opt: np.ndarray = f(tt, _ks, _tau)
 
 
     def fit(self):
@@ -989,15 +991,77 @@ class FirstOrderLPLModel(FirstOrderModel):
 
 
 
-class DelayedFluorescenceModel(FirstOrderModel):
+class TargetFirstOrderModel(FirstOrderModel):
+
+    name = "General abstract class for creating target models"
+
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
+        super(TargetFirstOrderModel, self).__init__(dataset, n_species)
+        self._calculate_EAS = False
+        self._include_rates_params = False
+        self.C_opt_full = None
+
+        # list of compartments that will be assigned from simulated target model (C_opt_full)
+        # to C_opt
+        self.used_compartments = [0]
+
+    def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
+        raise NotImplementedError()
+
+
+    def calculate_C_profiles(self, params: Parameters | None = None):
+        params = self.params if params is None else params
+        tt, _ks, _tau = self.get_C_profiles_args(params)
+
+        if self.n_species == 0:
+            return
+        
+        j, K = self.target_params(params)
+
+        f = self.get_exp_function()
+        self.C_opt_full = simulate_target_model(tt, K, j, f, _tau)
+
+        if len(self.used_compartments) == 0:
+            raise ValueError("At least one compartment has to be assigned to C_opt")
+        else:
+            self.C_opt = self.C_opt_full[:, self.used_compartments]
+
+
+
+class SensitizationModel(TargetFirstOrderModel):
+
+    name = "Sensitizatization kinetic model"
+
+    def init_params(self) -> Parameters:
+        params = super(SensitizationModel, self).init_params()
+
+        params.add('k_sens_0', value=2, min=0, max=np.inf, vary=True)
+        params.add('Kq', value=1, min=0, max=np.inf, vary=True)
+        params.add('k_T', value=0.5, min=0, max=np.inf, vary=True)
+
+        return params
+    
+    def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
+        
+        k_sens_0, Kq, k_T = params['k_sens_0'].value, params['Kq'].value, params['k_T'].value
+
+        K = np.asarray([[-k_sens_0 - Kq, 0],
+                        [Kq,      -k_T]])
+    
+        j = np.asarray([1, 0])
+
+        return j, K
+
+
+class DelayedFluorescenceModel(TargetFirstOrderModel):
 
     name = "Delayed fluorescence kinetic model"
 
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
-        super(DelayedFluorescenceModel, self).__init__(dataset, n_species)
-        self._calculate_EAS = False
-        self._include_rates_params = False
-        self.C_opt_full = None
+        super(DelayedFluorescenceModel, self).__init__(dataset, 2)
+        self.add_quenching_rates = False
 
 
     def init_params(self) -> Parameters:
@@ -1007,72 +1071,28 @@ class DelayedFluorescenceModel(FirstOrderModel):
         params.add('k_isc', value=0.1, min=0, max=np.inf, vary=True)
         params.add('k_risc', value=0.05, min=0, max=np.inf, vary=True)
 
-        return params
-        
-    def calculate_C_profiles(self, params: Parameters | None = None):
-        params = self.params if params is None else params
-        tt, _ks, _tau = self.get_C_profiles_args(params)
+        if self.add_quenching_rates:
+            params.add('Kq_singlet', value=0.05, min=0, max=np.inf, vary=True)
+            params.add('Kq_triplet', value=0.05, min=0, max=np.inf, vary=True)
 
-        if self.n_species == 0:
-            return
+        return params
+    
+    def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
         
-        # tau_fl, tau_isc, tau_risc = params['tau_fl'].value, params['tau_isc'].value, params['tau_risc'].value
         k_rnr, k_isc, k_risc = params['k_rnr'].value, params['k_isc'].value, params['k_risc'].value
 
         kq_s = 0
         kq_t = 0
+
+        if self.add_quenching_rates:
+            kq_s = params['Kq_singlet'].value
+            kq_t = params['Kq_triplet'].value
         
         K = np.asarray([[-k_rnr - k_isc - kq_s, k_risc],
                         [k_isc,         -k_risc - kq_t]])
     
         j = np.asarray([1, 0])
 
-        f_exp = fold_exp if self.irf_type == self.irf_types[0] else square_conv_exp
-        self.C_opt_full = simulate_target_model(tt, K, j, f_exp, _tau) 
-        self.C_opt = self.C_opt_full[:, 0, None]  ## use only first component for singlet
-        # print(self.C_opt.shape)
-
-
-
-
-
-
-
-
-
-# class Target_Analysis_Femto(_Femto):
-
-#     name = 'Target Analysis'
-#     _class = 'Femto'
-
-#     def init_model_params(self):
-#         params = super(Target_Analysis_Femto, self).init_model_params()
-
-#         if self.target_model:
-#             for par_name, rate in self.target_model.get_names_rates():
-#                 par_name = 'tau' + par_name[1:]
-#                 params.add(par_name, value=1/rate, min=0, max=np.inf)
-
-#         return params
-
-#     def open_model_settings(self, show_target_model=False):
-#         super(Target_Analysis_Femto, self).open_model_settings(show_target_model=True)
-
-#     def calc_C(self, params=None, C_out=None):
-#         super(Target_Analysis_Femto, self).calc_C(params, C_out)
-
-#         fwhm, ks = self.get_kin_pars(params)
-#         mu = self.get_mu(params)
-#         n = self.n
-#         fwhm = self.get_tau(params)  # fwhm
-
-#         if self.j is None:
-#             self.j = np.zeros(n)
-#             self.j[0] = 1
-
-#         self.target_model.set_rates(ks)
-#         K = self.target_model.build_K_matrix()
-
-#         self.C = self.simulate_model(self.times, K, self.j, mu, fwhm)
-
-#         return self.get_conc_matrix(C_out, self._connectivity)
+        return j, K
+        

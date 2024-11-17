@@ -656,6 +656,7 @@ export class Figure extends GraphicObject {
     // }
         // super.mouseUp(e);
 
+
         this.panning = false;
         this.scaling = false;
 
@@ -664,6 +665,8 @@ export class Figure extends GraphicObject {
         // if (!this.isInsideEffRect(e.x, e.y)) return;
 
         if (e.x === this.lastMouseDownPos.x && e.y === this.lastMouseDownPos.y && e.e.button == 2) {
+            console.log("opening context menu")
+
             e.openContextMenu(e.e.layerX, e.e.layerY)
             // this.showContextMenu(e);
         }   
@@ -1808,14 +1811,14 @@ export class Colorbar extends Figure {
     //     (this.parent as Figure).repaintItems();
     // }
 
-    public mouseDown(e: IMouseEvent): void {
-        // console.log("mouseDown from colorbar")
-        super.mouseDown(e)
-    }
+    // public mouseDown(e: IMouseEvent): void {
+    //     // console.log("mouseDown from colorbar")
+    //     super.mouseDown(e)
+    // }
 
-    public mouseUp(e: IMouseEvent): void {
-        super.mouseUp(e)
-    }
+    // public mouseUp(e: IMouseEvent): void {
+    //     super.mouseUp(e)
+    // }
 
     public mouseMove(e: IMouseEvent): void {
         // empty

@@ -10,6 +10,8 @@
     import type { SceneContext } from "./Scene.svelte";
     import type { IMouseEvent,  Cursor } from "@pytsa/ts-graph-new/src/objects/object.js";
     import { Colormaps, type ILut } from "@pytsa/ts-graph-new/src/color.js";
+    import type { ContextMenuItem } from "./ContextMenu.svelte";
+    import ContextMenu from "./ContextMenu.svelte";
 
     let { colorbar }: {colorbar: Colorbar} = $props()
 
@@ -20,6 +22,8 @@
     let colorbarRightLabel = $state<string>(colorbar.yAxis.label)
     let colormapLut = $state<ILut>(colorbar.colormap.lut)
     const gradientID = crypto.randomUUID()
+
+    let contextMenu = $state<ReturnType<typeof ContextMenu>>()
 
     // colorbar plot rect
     
@@ -61,7 +65,7 @@
             x: e.offsetX,
             y: e.offsetY,
             setCursor: (_cursor: Cursor) => {fc.cursor = _cursor},
-            openContextMenu: (x: number, y: number) => {}
+            openContextMenu: (x: number, y: number) => {contextMenu?.open(x, y)}
         }
     }
 
@@ -83,6 +87,15 @@
         e.stopPropagation()
         colorbar.doubleClick(getIMouseEvent(e))
     }
+
+    const contextMenuItems: ContextMenuItem[] = [
+        {
+            type: "action",
+            label: "View all",
+            onClick: () => colorbar.viewAll()
+        },
+    ]
+
 
     // function onMouseMove(e: MouseEvent) {
     //     e.preventDefault()
@@ -108,6 +121,15 @@
   </defs>
 
 
+  <!-- <foreignObject  
+    x={plotRect.x.toFixed(2)}
+    y={plotRect.y.toFixed(2)}
+    width={plotRect.w}
+    height={plotRect.h}>
+    <ContextMenu bind:this={contextMenu} items={contextMenuItems}/>
+</foreignObject> -->
+
+
  <!-- svelte-ignore a11y_no_static_element_interactions -->
  <rect class="colorbar" onmousedown={onMouseDown} onmouseup={onMouseUp} ondblclick={onDblClick}
   x={plotRect.x.toFixed(2)}
@@ -118,6 +140,8 @@
 
 
 <TicksAndLabels figure={colorbar} calcPlotRect={calcPlotRect} rightAxisLabel={colorbarRightLabel}  />
+
+
 
 <style>
 

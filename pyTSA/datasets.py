@@ -12,7 +12,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
+from itertools import chain
+from typing import Callable
 
+from copy import deepcopy
 # dataset dict  {dataset=, key=}
     
 class Datasets(object):
@@ -43,10 +46,20 @@ class Datasets(object):
         self.model = model
         self[0].set_model(model)
 
+    def __copy__(self):
+        ds = Datasets()
+        ds.fitter_kwds = deepcopy(self.fitter_kwds)
+        ds.fit_algorithm = deepcopy(self.fit_algorithm)
+        ds._datasets = deepcopy(self._datasets)
+        return ds
 
     def __getitem__(self, key: int | slice) -> Dataset | list[Dataset]:
         if isinstance(key, slice):
-            return [d['dataset'] for d in self._datasets[key]]
+            ds = Datasets()
+            ds.fitter_kwds = deepcopy(self.fitter_kwds)
+            ds.fit_algorithm = deepcopy(self.fit_algorithm)
+            ds._datasets = deepcopy(self._datasets[key])
+            return ds
 
         elif isinstance(key, int):
             return self._datasets[key]['dataset']
@@ -87,7 +100,7 @@ class Datasets(object):
         if index is not None:
             self._datasets.pop(index)
 
-    def __iter__(self) -> Generator[Dataset]:
+    def __iter__(self) -> Generator[Dataset, None, None]:
         for d in map(lambda d: d['dataset'], self._datasets):
             yield d
 
@@ -262,7 +275,18 @@ class Datasets(object):
         return self.df_params
 
 
-    def fit_augmented(self, global_params: Parameters | None = None, global_param_names: list[str] | None = None) -> MinimizerResult:
+    def fit_augmented(self, global_params: Parameters | None = None, global_param_names: list[str] | None = None,
+                      group_params: dict[str,tuple[tuple[int]]] = {}) -> MinimizerResult:
+        """
+            group params argument defines the parameters that will be kept the same within specified group of datasets
+
+            example: there are total of 6 datasets but only in total 3 params par1 will be fitted
+            first will be shared with first two datasets, second with another two, etc.
+
+            group_params = {
+                'par1': ((0, 1), (2, 3), (4, 5))
+            }
+        """
         for d in self.__iter__():
             if d.model is None:
                 raise ValueError("Each dataset needs to have assigned model")
@@ -280,48 +304,88 @@ class Datasets(object):
                     aug_params.add(n, value=pars[n].value, vary=pars[n].vary, min=pars[n].min, max=pars[n].max)
 
         global_param_names = list(aug_params.keys())
+        group_param_names = group_params.keys()
+        group_params_indexes = {name: list(chain.from_iterable(group)) for name, group in group_params.items()}
 
-        # fill in all the params from model and change the name of them according to their index
+        get_group_name: Callable[[str, tuple[int]], str] = lambda par_name, indexes: f"{par_name}_{"".join([str(idx) for idx in indexes])}"
+        get_par_name: Callable[[str, int], str] = lambda par_name, index: f"{par_name}_{index}"
+
+        ## fill group params, change the names accordingnly to unique names
+        for g_par_name, group in group_params.items():
+            for indexes in group:  # ((0, 1), (2, 3), (4, 5))
+                assert len(indexes) > 1, "at least 2 datasets must be used for group param"
+
+                # use parameter corresponding to the first index in the index group
+                par = self[indexes[0]].model.params[g_par_name]
+
+                # suffix = "".join([str(idx) for idx in indexes])
+                aug_params.add(get_group_name(g_par_name, indexes), value=par.value, vary=par.vary, min=par.min, max=par.max)
+
+        # fill in all the params from models and change the name of them according to their index
         for i, d in enumerate(self.__iter__()):
             for name, par in d.model.params.items():
                 if name in global_param_names:
                     continue
 
-                aug_params.add(f"{name}_{i}", value=par.value, vary=par.vary, min=par.min, max=par.max)
+                if name in group_param_names:
+                    if i in group_params_indexes[name]:
+                        continue
+
+                aug_params.add(get_par_name(name, i), value=par.value, vary=par.vary, min=par.min, max=par.max)
+
+        def fill_params2models(params):
+            # update all parameter values and simulate every model
+            for i, d in enumerate(self.__iter__()):
+                for name, par in d.model.params.items():
+                    # assign the global parameter value
+                    if name in global_param_names:
+                        try:
+                            par.value = params[name].value
+                            par.stderr = params[name].stderr
+                        except KeyError:
+                            pass
+                        continue
+
+                    if name in group_param_names and i in group_params_indexes[name]:
+                        # find the group
+                        idx_group = None
+                        for indexes in group_params[name]:  # ((0, 1), (2, 3), (4, 5))
+                            if i in indexes:
+                                idx_group = indexes
+                                break
+                        else:
+                            raise ValueError("Group param was not found")
+                        _name = get_group_name(name, idx_group)
+                    else:
+                        _name = get_par_name(name, i)
+                    
+                    # assign param
+                    par.value = params[_name].value
+                    par.stderr = params[_name].stderr
 
         def residuals(params):
 
             res_list = []
 
-            # update all parameter values and simulate every model
-            for i, d in enumerate(self.__iter__()):
-                for name, par in params.items():
-                    # assign the global parameter value
-                    if name in global_param_names:
-                        try:
-                            d.model.params[name].value = par.value
-                        except KeyError:
-                            pass
-                    _n = 1 + len(str(i))  # f"{name}_{i}"
-                    _name = name[:-_n]
-                    if _name in d.model.params.keys():
-                        d.model.params[_name].value = par.value
+            fill_params2models(params)
 
+            # update all parameter values and simulate every model
+            for d in self.__iter__():
                 d.model.simulate()
                 res_list.append(d.model.weighted_residuals())
 
             # find common dimension, and concatenate, if no common dimension, concatenate flat arrays
-            axis_0_shapes = np.asarray([m.shape[0] for m in res_list])
-            axis_1_shapes = np.asarray([m.shape[1] for m in res_list])
+            # axis_0_shapes = np.asarray([m.shape[0] for m in res_list])
+            # axis_1_shapes = np.asarray([m.shape[1] for m in res_list])
 
-            axis_0_same = np.all(axis_0_shapes == axis_0_shapes[0])
-            axis_1_same = np.all(axis_1_shapes == axis_1_shapes[0])
+            # axis_0_same = np.all(axis_0_shapes == axis_0_shapes[0])
+            # axis_1_same = np.all(axis_1_shapes == axis_1_shapes[0])
 
-            if axis_0_same:
-                return np.concatenate(res_list, axis=1)
+            # if axis_0_same:
+            #     return np.concatenate(res_list, axis=1)
 
-            if axis_1_same:
-                return np.concatenate(res_list, axis=0)
+            # if axis_1_same:
+            #     return np.concatenate(res_list, axis=0)
             
             # flat stack arrays
             return np.concatenate([ar.flat for ar in res_list], axis=0)
@@ -329,6 +393,9 @@ class Datasets(object):
 
         self.minimizer = Minimizer(residuals, aug_params, nan_policy='omit')
         self.aug_fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
+
+        fill_params2models(self.aug_fit_result.params)
+
         return self.aug_fit_result
 
 
