@@ -4,7 +4,9 @@
   import Scene from "$lib/Scene.svelte";
 
   import { Figure as Fig } from "@pytsa/ts-graph-new";
+    import { F32Array } from "@pytsa/ts-graph-new/src/array.js";
   import { Orientation } from "@pytsa/ts-graph-new/src/objects/draggableLines.js";
+    import { onMount } from "svelte";
 
     // import 'bootstrap/dist/css/bootstrap.min.css';
     // import 'bootstrap/dist/js/bootstrap.min.js';
@@ -17,6 +19,29 @@
   fig.title = "Title"
   fig.axisAlignment = Orientation.Horizontal
   fig.xAxis.scale = 'lin'
+
+  const fig2 = new Fig()
+  const fig3 = new Fig()
+
+
+  const x = F32Array.linspace(-1, 1, 1000)
+  const y = F32Array.random(-1, 1, x.length)
+
+  // fig.plotLine(x, y, {r: 0, g: 0, b: 0, alpha: 0})
+
+  console.log(x, y)
+
+  function onSceneInit(scene: Scene) {
+
+    setTimeout(() => {
+      fig.plotLine(x, y, {r: 1.0, g: 0.0, b: 0.0, alpha: 1.0})
+      fig2.plotLine(x, y, {r: 0.0, g: 1, b: 0.0, alpha: 1.0})
+      fig3.plotLine(x, y, {r: 0.0, g: 0, b: 1.0, alpha: 1.0})
+
+
+    }, 10)
+
+  }
 
 </script>
 
@@ -35,11 +60,11 @@
 <!-- <Input /> -->
 
 
-<Scene templateCols="2fr 1fr 1fr" templateRows="1fr 1fr">
+<Scene templateCols="2fr 1fr 1fr" templateRows="1fr 1fr" onSceneInit={onSceneInit}>
   <Figure figure={fig} row=1 col=1 rowspan=1 colspan=1/>
   <Figure row=1 col=2/> 
-  <Figure row=2 col=1/>
-  <Figure row=2 col=2 colspan=2/>
+  <Figure figure={fig3} row=2 col=1/>
+  <Figure figure={fig2} row=2 col=2 colspan=2/>
 </Scene>
 
 

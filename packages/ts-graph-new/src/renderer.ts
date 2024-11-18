@@ -19,7 +19,7 @@ interface ThinLineProgram extends Program {
     }
 }
 
-interface IThinLinePlot {
+export interface IThinLinePlot {
     buffer: WebGLBuffer,
     xyData: F32Array,
     color: Color,
@@ -27,7 +27,7 @@ interface IThinLinePlot {
 }
 
 
-class GLRenderer {
+export class GLRenderer {
 
     public glctx: WebGLRenderingContext
     public thinLineProgram: ThinLineProgram | null = null
@@ -40,22 +40,42 @@ class GLRenderer {
 
     private initWebGL () {
 
-        this.glctx.clearColor(1, 1, 1, 1);
-        this.glctx.clear(this.glctx.COLOR_BUFFER_BIT);
+        // this.glctx.clearColor(1, 1, 1, 1);
+        // this.glctx.clear(this.glctx.COLOR_BUFFER_BIT);
     
         // Set the view port
         // ctx.viewport(crop, crop, canvas.width - 2 * crop, canvas.height  - 2 * crop);
     
         this.initThinLineProgram();
     
-        this.glctx.enable(this.glctx.BLEND);
-        this.glctx.blendFunc(this.glctx.SRC_ALPHA, this.glctx.ONE_MINUS_SRC_ALPHA);
+        // this.glctx.enable(this.glctx.BLEND);
+        // this.glctx.blendFunc(this.glctx.SRC_ALPHA, this.glctx.ONE_MINUS_SRC_ALPHA);
     }
 
-    public drawThinLine(line: IThinLinePlot, uscale: [number, number, number, number], uoffset: [number, number, number, number]) {
+    public createThinLine(x: F32Array | number[],  y: F32Array | number[], color: Color, label: string | null = null): IThinLinePlot {
+        // x.length === y.length
+
+        const xyData = new F32Array(x.length * 2)
+        for (let i = 0; i < x.length; i++) {
+            xyData[2 * i] = x[i]
+            xyData[2 * i + 1] = y[i]
+        }
+
+        var buffer = this.glctx.createBuffer() as WebGLBuffer;
+        this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, buffer);
+		this.glctx.bufferData(this.glctx.ARRAY_BUFFER, xyData as ArrayBuffer, this.glctx.STREAM_DRAW);
+
+        return {
+            buffer, xyData, color, label
+        }
+    }
+
+    public drawThinLine(line: IThinLinePlot, uscale: [number, number, number, number], uoffset: [number, number]) {
 
         if (!this.thinLineProgram)
             throw Error("Thin line program does is not instantiated.")
+
+		this.glctx.useProgram(this.thinLineProgram.program);
 
         const numComponents = 2; // pull out 2 values per iteration
         const type = this.glctx.FLOAT; // the data in the buffer is 32bit floats
@@ -72,13 +92,13 @@ class GLRenderer {
 
         // assign uniforms
 
-        this.glctx.uniformMatrix2fv(this.thinLineProgram.uniformLocations.uscale, false, uscale);
-        this.glctx.uniformMatrix2fv(this.thinLineProgram.uniformLocations.uoffset, false, uoffset);
+        this.glctx.uniformMatrix2fv(this.thinLineProgram.uniformLocations.uscale, false, new Float32Array(uscale));
+        this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.uoffset, new Float32Array(uoffset));
 
-        this.glctx.uniformMatrix2fv(
-            this.thinLineProgram.uniformLocations.uscale, 
-            false,
-            [line.color.r, line.color.g, line.color.b, line.color.alpha]);
+        this.glctx.uniform4fv(
+            this.thinLineProgram.uniformLocations.ucolor, 
+            new Float32Array([line.color.r, line.color.g, line.color.b, line.color.alpha]))
+
 
         // draw arrays
 
@@ -98,9 +118,9 @@ class GLRenderer {
     
         const fragCode = `
         precision mediump float;
-        uniform highp vec4 uColor;
+        uniform highp vec4 ucolor;
         void main(void) {
-            gl_FragColor =  uColor;
+            gl_FragColor =  ucolor;
         }`;
 
         const program = this.initProgram(vertCode, fragCode)

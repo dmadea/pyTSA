@@ -12,7 +12,8 @@
         templateRows?: string,
         templateCols?: string,
         colgap?: string,
-        rowgap?: string
+        rowgap?: string,
+        onSceneInit?: (scene: Scene) => void
     }
 
 </script>
@@ -21,7 +22,7 @@
     import { onMount, setContext, type Snippet } from "svelte";
     import { Matrix, Scene } from "@pytsa/ts-graph-new";
     import type { Rect } from "@pytsa/ts-graph-new/src/types.js";
-    let { children, templateRows = "1fr 1fr", templateCols = "1fr 1fr", colgap = "5px", rowgap = "5px" }: SceneProps = $props()
+    let { children, templateRows = "1fr 1fr", templateCols = "1fr 1fr", colgap = "5px", rowgap = "5px", onSceneInit }: SceneProps = $props()
 
     let glcanvas = $state<HTMLCanvasElement>()
     let canvas2d = $state<HTMLCanvasElement>()
@@ -114,10 +115,12 @@
 
         const ctx = canvas2d!.getContext('2d') as CanvasRenderingContext2D;
 
+        // const p = glctx.getParameter(glctx.ALIASED_LINE_WIDTH_RANGE)
+        // console.log("parameter", p)
+
         // const scene = new Scene(glcanvas!, canvas2d!, glctx, ctx)
         sceneContext.scene = new Scene(glcanvas!, canvas2d!, glctx, ctx)
-        // console.log(scene)
-
+        onSceneInit?.(sceneContext.scene)
     })
 
 
@@ -127,8 +130,8 @@
 
 <div class="wrapper" bind:this={wrapper}>
 
-	<canvas style="--width: {canvasWidth}; --height: {canvasHeight}; z-index: -2" bind:this={glcanvas}></canvas>
-    <canvas style="--width: {canvasWidth}; --height: {canvasHeight}; z-index: -1" bind:this={canvas2d}></canvas>
+	<canvas style="--width: {canvasWidth}; --height: {canvasHeight}; z-index: 0" bind:this={glcanvas}></canvas>
+    <canvas style="--width: {canvasWidth}; --height: {canvasHeight}; z-index: -2" bind:this={canvas2d}></canvas>
 
     <!-- rendering of figures -->
     <div class="grid" 

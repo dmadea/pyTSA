@@ -4,13 +4,14 @@ import { Rect, Point, Margin } from "../types";
 import { F32Array } from "../array";
 import { backgroundColor,  frameColor, textColor } from "../settings";
 import { Dataset, determineSigFigures, drawTextWithGlow, formatNumber2String } from "../utils";
-import { Colormap, Colormaps, ILut } from "../color";
+import { Color, Colormap, Colormaps, ILut } from "../color";
 import { HeatMap } from "./heatmap";
 import { DraggableLines, Orientation } from "../objects/draggableLines";
 import { Axis, AxisType } from "./axis";
 import { ContextMenu } from "../contextmenu";
 import { ColorbarContextMenu, FigureContextMenu } from "./figurecontextmenu";
 import { Legend } from "../objects/legend";
+import { IThinLinePlot } from "../renderer";
 // import { Colorbar } from "./colorbar";
 
 
@@ -75,7 +76,7 @@ export class Figure extends GraphicObject {
     private lastMouseDownPos: Point;
     private mousePos: Point | null;
     private lastRange: Rect;
-    public linePlots: Array<ILinePlot> = [];
+    public linePlots: Array<IThinLinePlot> = [];
 
     private xRangeLinks: Figure[] = [];
     private yRangeLinks: Figure[] = [];
@@ -683,11 +684,13 @@ export class Figure extends GraphicObject {
 
     public plotLine(x: F32Array | number[],
          y: F32Array | number[],
-         color = "black", ld: number[] = [], lw = 1, 
-         label: string | null = null, zValue = 10) {
-        var plot: ILinePlot = {x: F32Array.fromArray(x).copy(), y: F32Array.fromArray(y).copy(), color, ld, lw, zValue, label}; 
+         color: Color, ld: number[] = [], lw = 1, 
+         label: string | null = null, zValue = 10): IThinLinePlot {
+
+        const plot = this.scene!.renderer.createThinLine(x, y, color, label)
         this.linePlots.push(plot);
         this.repaint();
+        console.log(plot)
         return plot;
     }
 
@@ -756,12 +759,12 @@ export class Figure extends GraphicObject {
         return this.colorbar;
     }   
 
-    public removePlot(plot: ILinePlot){
-        let i = this.linePlots.indexOf(plot);
-        if (i > -1) {
-            this.linePlots.splice(i, 0);
-        }
-    }
+    // public removePlot(plot: ILinePlot){
+    //     let i = this.linePlots.indexOf(plot);
+    //     if (i > -1) {
+    //         this.linePlots.splice(i, 0);
+    //     }
+    // }
 
     protected paintHeatMap(e: IPaintEvent){
         if (!this.heatmap) {
@@ -813,60 +816,60 @@ export class Figure extends GraphicObject {
         const fx = 0.05;  // autoscale margins
 
         if (this.yAxis.autoscale || forceAutoscale) {
-            const yIT = this.yAxis.invTransform;
-            const mins = [];
-            const maxs = [];
-            for (const plot of this.linePlots) {
-                if (plot.y.length === 0) continue;
-                const [min, max] = plot.y.minmax();
-                mins.push(min);
-                maxs.push(max);
-            }
-            if (this.heatmap) {
-                mins.push(this.heatmap.dataset.y[0]);
-                maxs.push(this.heatmap.dataset.y[this.heatmap.dataset.y.length - 1]);
-            }
-            let y0 = yIT(Math.min(...mins));
-            let y1 = yIT(Math.max(...maxs));
+            // const yIT = this.yAxis.invTransform;
+            // const mins = [];
+            // const maxs = [];
+            // for (const plot of this.linePlots) {
+            //     if (plot.y.length === 0) continue;
+            //     const [min, max] = plot.y.minmax();
+            //     mins.push(min);
+            //     maxs.push(max);
+            // }
+            // if (this.heatmap) {
+            //     mins.push(this.heatmap.dataset.y[0]);
+            //     maxs.push(this.heatmap.dataset.y[this.heatmap.dataset.y.length - 1]);
+            // }
+            // let y0 = yIT(Math.min(...mins));
+            // let y1 = yIT(Math.max(...maxs));
 
-            y0 = (Number.isNaN(y0) || y0 === undefined || !Number.isFinite(y0)) ? -1 : y0;
-            y1 = (Number.isNaN(y1) || y1 === undefined || !Number.isFinite(y1)) ? 1 : y1;
+            // y0 = (Number.isNaN(y0) || y0 === undefined || !Number.isFinite(y0)) ? -1 : y0;
+            // y1 = (Number.isNaN(y1) || y1 === undefined || !Number.isFinite(y1)) ? 1 : y1;
 
-            const diff = y1 - y0;
+            // const diff = y1 - y0;
 
-            y0 = Math.max(this.yAxis.internalViewBounds[0], y0 - fy * diff);
-            y1 = Math.min(this.yAxis.internalViewBounds[1], y1 + fy * diff);
+            // y0 = Math.max(this.yAxis.internalViewBounds[0], y0 - fy * diff);
+            // y1 = Math.min(this.yAxis.internalViewBounds[1], y1 + fy * diff);
 
-            this.internalRange.y = y0;
-            this.internalRange.h = y1 - y0;
+            // this.internalRange.y = y0;
+            // this.internalRange.h = y1 - y0;
         }
 
         if (this.xAxis.autoscale || forceAutoscale) {
-            const xIT = this.xAxis.invTransform;
-            const mins = [];
-            const maxs = [];
-            for (const plot of this.linePlots) {
-                if (plot.x.length === 0) continue;
-                mins.push(plot.x[0]);
-                maxs.push(plot.x[plot.x.length - 1]);
-            }
-            if (this.heatmap) {
-                mins.push(this.heatmap.dataset.x[0]);
-                maxs.push(this.heatmap.dataset.x[this.heatmap.dataset.x.length - 1]);
-            }
-            let x0 = xIT(Math.min(...mins));
-            let x1 = xIT(Math.max(...maxs));
+            // const xIT = this.xAxis.invTransform;
+            // const mins = [];
+            // const maxs = [];
+            // for (const plot of this.linePlots) {
+            //     if (plot.x.length === 0) continue;
+            //     mins.push(plot.x[0]);
+            //     maxs.push(plot.x[plot.x.length - 1]);
+            // }
+            // if (this.heatmap) {
+            //     mins.push(this.heatmap.dataset.x[0]);
+            //     maxs.push(this.heatmap.dataset.x[this.heatmap.dataset.x.length - 1]);
+            // }
+            // let x0 = xIT(Math.min(...mins));
+            // let x1 = xIT(Math.max(...maxs));
 
-            x0 = (Number.isNaN(x0) || x0 === undefined || !Number.isFinite(x0)) ? -1 : x0;
-            x1 = (Number.isNaN(x1) || x1 === undefined || !Number.isFinite(x1)) ? 1 : x1;
+            // x0 = (Number.isNaN(x0) || x0 === undefined || !Number.isFinite(x0)) ? -1 : x0;
+            // x1 = (Number.isNaN(x1) || x1 === undefined || !Number.isFinite(x1)) ? 1 : x1;
 
-            const diff = x1 - x0;
+            // const diff = x1 - x0;
 
-            x0 = Math.max(this.xAxis.internalViewBounds[0], x0 - fx * diff);
-            x1 = Math.min(this.xAxis.internalViewBounds[1], x1 + fx * diff);
+            // x0 = Math.max(this.xAxis.internalViewBounds[0], x0 - fx * diff);
+            // x1 = Math.min(this.xAxis.internalViewBounds[1], x1 + fx * diff);
 
-            this.internalRange.x = x0;
-            this.internalRange.w = x1 - x0;
+            // this.internalRange.x = x0;
+            // this.internalRange.w = x1 - x0;
         }
         // console.log(this._range);
     }
@@ -876,44 +879,53 @@ export class Figure extends GraphicObject {
         if (this.linePlots.length < 1) {
             return;
         }
-
+        
+        
         const yIT = this.yAxis.invTransform;
         const xIT = this.xAxis.invTransform;
-
-        e.ctx.save();
-
+        const r = this.scene!.renderer;
+        
+        // e.ctx.save();
+        
+        const uscale: [number, number, number, number] = [0.5, 0, 0, 0.5];
+        const uoffset: [number, number] = [0, 0];
+        
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
+            
+            console.log("painting thin line")
+            r.drawThinLine(plot, uscale, uoffset)
+            
 
-            e.ctx.strokeStyle = plot.color;
-            e.ctx.lineWidth = plot.lw;
-            e.ctx.setLineDash(plot.ld);
+            // e.ctx.strokeStyle = plot.color;
+            // e.ctx.lineWidth = plot.lw;
+            // e.ctx.setLineDash(plot.ld);
 
-            e.ctx.beginPath();
+            // e.ctx.beginPath();
 
-            let xDataScale = false; // in case the scale is determined by data
-            let x0;
-            if (this.xAxis.scale instanceof F32Array && plot.x.length === this.xAxis.scale.length) {
-                xDataScale = true;
-                x0 = 0;
-            } else {
-                x0 = xIT(plot.x[0]);
-            }
+            // let xDataScale = false; // in case the scale is determined by data
+            // let x0;
+            // if (this.xAxis.scale instanceof F32Array && plot.x.length === this.xAxis.scale.length) {
+            //     xDataScale = true;
+            //     x0 = 0;
+            // } else {
+            //     x0 = xIT(plot.x[0]);
+            // }
 
-            const p0 = this.mapRange2Canvas({x: x0, y: yIT(plot.y[0])});
-            e.ctx.moveTo(p0.x, p0.y);
+            // const p0 = this.mapRange2Canvas({x: x0, y: yIT(plot.y[0])});
+            // e.ctx.moveTo(p0.x, p0.y);
 
-            for (let i = 1; i < plot.x.length; i++) {
-                const x = (xDataScale) ? i : xIT(plot.x[i]);
-                const p = this.mapRange2Canvas({x, y: yIT(plot.y[i])});
-                e.ctx.lineTo(p.x, p.y);
-                if (x > this.internalRange.x + this.internalRange.w) break;
-            }
+            // for (let i = 1; i < plot.x.length; i++) {
+            //     const x = (xDataScale) ? i : xIT(plot.x[i]);
+            //     const p = this.mapRange2Canvas({x, y: yIT(plot.y[i])});
+            //     e.ctx.lineTo(p.x, p.y);
+            //     if (x > this.internalRange.x + this.internalRange.w) break;
+            // }
 
-            e.ctx.stroke();
+            // e.ctx.stroke();
         }
 
-        e.ctx.restore();
+        // e.ctx.restore();
         // console.timeEnd('paintPlots');
     }
 
@@ -994,6 +1006,21 @@ export class Figure extends GraphicObject {
 
     paint(e: IPaintEvent): void {
         if (!this.panning && !this.scaling && this.autoscaleOnRepaint) this.autoscale();
+
+        // e.glctx.clearColor(0, 0, 0, 1);
+        // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
+        // e.glctx.clear(e.glctx.COLOR_BUFFER_BIT);
+        
+        e.glctx.viewport(this.canvasRect.x, this.canvasRect.h - this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        e.glctx.clearColor(1, 1, 1, 1);
+        // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
+        e.glctx.clear(e.glctx.COLOR_BUFFER_BIT);
+
+        console.log("canvas rect: ", this.canvasRect, e.glcanvas.height)
+    
+        // Set the view port
+
+        this.paintPlots(e)
 
         // console.log("paint from figure", this.canvasRect)
 

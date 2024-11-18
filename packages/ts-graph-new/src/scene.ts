@@ -1,4 +1,5 @@
 import {  GraphicObject, IMouseEvent, IPaintEvent, ObjectType } from "./objects/object";
+import { GLRenderer } from "./renderer";
 // import { Rect } from "./types";
 
 
@@ -8,6 +9,7 @@ export class Scene extends GraphicObject {
     public canvas2d: HTMLCanvasElement
     public glctx: WebGLRenderingContext
     public ctx: CanvasRenderingContext2D
+    public renderer: GLRenderer
 
     constructor(glcanvas: HTMLCanvasElement, canvas2d: HTMLCanvasElement, glctx: WebGLRenderingContext, ctx: CanvasRenderingContext2D) {
         super();
@@ -19,7 +21,9 @@ export class Scene extends GraphicObject {
 
         this.parent = null
 
-        this.objectType = ObjectType.root;
+        this.renderer = new GLRenderer(glctx)
+
+        // this.objectType = ObjectType.root;
         
         // var mousedown = (e: MouseEvent) => {
         //     const dpr = window.devicePixelRatio;
@@ -82,16 +86,23 @@ export class Scene extends GraphicObject {
     public paint(e: IPaintEvent): void {
         // console.log(this.canvasRect);
 
-        // clear plot
 
-        e.ctx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // clear plot
+        e.glctx.viewport(0, 0, e.glcanvas.width, e.glcanvas.height);
+        e.glctx.clearColor(1, 1, 1, 1);
+        // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
+        e.glctx.clear(e.glctx.COLOR_BUFFER_BIT);
+
+        console.log("intial paint from scene")
+
+        // e.ctx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
         // e.ctx.fillStyle = "blue";
         // e.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
         // e.glctx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
         // e.mainCtx.restore();
         // this.ctx.fillStyle = backgroundColor;
         // e.mainCtx.save();
-        console.log('initial paint from scene');
+        // console.log('initial paint from scene');
 
         super.paint(e);
 
