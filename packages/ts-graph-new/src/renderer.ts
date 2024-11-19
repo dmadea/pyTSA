@@ -1,5 +1,6 @@
 import { F32Array } from "./array"
 import { Color } from "./color"
+import { glMatrix, mat3 } from "gl-matrix"
 
 interface Program {
     program: WebGLProgram,
@@ -13,8 +14,7 @@ interface ThinLineProgram extends Program {
         coordinates: GLint
     },
     uniformLocations: {
-        uscale: WebGLUniformLocation,
-        uoffset: WebGLUniformLocation,
+        umatrix: WebGLUniformLocation,
         ucolor: WebGLUniformLocation
     }
 }
@@ -70,7 +70,7 @@ export class GLRenderer {
         }
     }
 
-    public drawThinLine(line: IThinLinePlot, uscale: [number, number, number, number], uoffset: [number, number]) {
+    public drawThinLine(line: IThinLinePlot, umatrix: number[] | Float32Array) {
 
         if (!this.thinLineProgram)
             throw Error("Thin line program does is not instantiated.")
@@ -92,13 +92,11 @@ export class GLRenderer {
 
         // assign uniforms
 
-        this.glctx.uniformMatrix2fv(this.thinLineProgram.uniformLocations.uscale, false, new Float32Array(uscale));
-        this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.uoffset, new Float32Array(uoffset));
+        this.glctx.uniformMatrix3fv(this.thinLineProgram.uniformLocations.umatrix, false, umatrix);
 
         this.glctx.uniform4fv(
             this.thinLineProgram.uniformLocations.ucolor, 
             new Float32Array([line.color.r, line.color.g, line.color.b, line.color.alpha]))
-
 
         // draw arrays
 
@@ -109,11 +107,10 @@ export class GLRenderer {
     private initThinLineProgram() {
         const vertCode = `
         attribute vec2 coordinates;
-        uniform mat2 uscale;
-        uniform vec2 uoffset;
+        uniform mat3 umatrix;
     
         void main(void) {
-            gl_Position = vec4(uscale*coordinates + uoffset, 0.0, 1.0);
+            gl_Position = vec4(umatrix * vec3(coordinates, 1.0), 1.0);
         }`;
     
         const fragCode = `
@@ -134,8 +131,7 @@ export class GLRenderer {
                 coordinates: this.glctx.getAttribLocation(program, "coordinates")
             },
             uniformLocations: {
-                uscale: this.glctx.getUniformLocation(program, "uscale")!,
-                uoffset: this.glctx.getUniformLocation(program, "uoffset")!,
+                umatrix: this.glctx.getUniformLocation(program, "umatrix")!,
                 ucolor: this.glctx.getUniformLocation(program, "ucolor")!
             }
         }

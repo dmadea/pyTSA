@@ -55,6 +55,8 @@
     }
     )
 
+    
+
     // on resize and inner dimensions change
     $effect(() => {
         // console.log(sceneContext.canvasRect, plotRect)
@@ -94,7 +96,7 @@
         sceneContext.scene.addItem(figure)
     })
 
-    $inspect(fc.plotRect)
+    // $inspect(fc.plotRect)
 
     function onMouseEnter(e: MouseEvent) {
         // console.log("onMouseEnter")

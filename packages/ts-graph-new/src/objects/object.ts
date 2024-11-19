@@ -38,9 +38,12 @@ export abstract class GraphicObject{
     public parent: GraphicObject | null; // = null;
     public scene: Scene | null
 
-    public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1]
+    public canvasRect: Rect;    // rectangle in canvas coordinates where the object in located> [x0, x1, y0, y1], in canvas coordinates
     public margin: Margin;      // margin from canvasRect in absolute values: [left, right, top, bottom] 
-    public plotRect: Rect         // canvas rectangle minus margins
+    public plotRect: Rect         // canvas rectangle minus margins, in canvas coordinates
+
+    public svgPlotRect: Rect         // canvas rectangle minus margins in svg coordinates
+
 
     // public active: boolean = false;
     // public activeCursor: string;
@@ -79,6 +82,8 @@ export abstract class GraphicObject{
         // this.setCanvasRect(canvasRect);
         this.margin = margin ?? {left: 0, right: 0, top: 0, bottom: 0};
         this.plotRect = {x: 0, y: 0, w: 0, h: 0};
+        this.svgPlotRect = {x: 0, y: 0, w: 0, h: 0};
+
         // this.effRect = {...this.canvasRect};
         // this.calcEffectiveRect();
         // assign canvas and ctx to children objects
@@ -121,11 +126,11 @@ export abstract class GraphicObject{
         }
     }
 
-    public isInsidePlotRect(x: number, y: number): boolean
+    public isInsideSvgPlotRect(x: number, y: number): boolean
     {
         // we are outside of figure frame
         // const r = this.getEffectiveRect();
-        const r = this.plotRect;
+        const r = this.svgPlotRect;
         if (x < r.x || x > r.x + r.w || 
             y < r.y || y > r.y + r.h) {
             return false;
@@ -184,42 +189,42 @@ export abstract class GraphicObject{
     //     return this.canvas?.height;
     // }
 
-    public setCanvasRect(cr: Rect) {
-        this.canvasRect = {...cr};
-        for (const item of this.items) {
-            item.setCanvasRect(cr);
-        }
-        // this.calcEffectiveRect();
-    }
+    // public setCanvasRect(cr: Rect) {
+    //     this.canvasRect = {...cr};
+    //     for (const item of this.items) {
+    //         item.setCanvasRect(cr);
+    //     }
+    //     // this.calcEffectiveRect();
+    // }
 
-    public setMargin(m: Margin) {
-        this.margin = {...m};
-        for (const item of this.items) {
-            item.setMargin(m);
-        }
-    }
+    // public setMargin(m: Margin) {
+    //     this.margin = {...m};
+    //     for (const item of this.items) {
+    //         item.setMargin(m);
+    //     }
+    // }
 
-    public resize() {
-        // const r = this.getEffectiveRect();
-        //set new dimensions also for items
-        for (const item of this.items) {
-            item.setCanvasRect(this.canvasRect);
-            // item.canvasRect = r;
-            item.resize();
-        }
-    }
+    // public resize() {
+    //     // const r = this.getEffectiveRect();
+    //     //set new dimensions also for items
+    //     for (const item of this.items) {
+    //         item.setCanvasRect(this.canvasRect);
+    //         // item.canvasRect = r;
+    //         item.resize();
+    //     }
+    // }
 
-    get rootItem(): GraphicObject | null {
-        var item: GraphicObject | null = this;
-        while (true) {
-            if (item) {
-                if (item.objectType === ObjectType.root) return item;
-                item = item.parent;
-            } else {
-                return null;
-            }
-        }
-    }
+    // get rootItem(): GraphicObject | null {
+    //     var item: GraphicObject | null = this;
+    //     while (true) {
+    //         if (item) {
+    //             if (item.objectType === ObjectType.root) return item;
+    //             item = item.parent;
+    //         } else {
+    //             return null;
+    //         }
+    //     }
+    // }
 
     // doubleClick(e: IMouseEvent) {
     //     // e.e.preventDefault();
@@ -278,28 +283,28 @@ export abstract class GraphicObject{
     //     this.visibleItems = [];
     // }
 
-    touchStart(e: TouchEvent) {
-        // const dpr = window.devicePixelRatio;
-        for (const item of this.items) {
-            // if (item.isInsideEffRect(e.touches[0].clientX * dpr, e.touches[0].clientY * dpr)) {
-            item.touchStart(e);
-            // }
-        }
-    }
+    // touchStart(e: TouchEvent) {
+    //     // const dpr = window.devicePixelRatio;
+    //     for (const item of this.items) {
+    //         // if (item.isInsideEffRect(e.touches[0].clientX * dpr, e.touches[0].clientY * dpr)) {
+    //         item.touchStart(e);
+    //         // }
+    //     }
+    // }
 
-    touchMove(e: TouchEvent) {
-        // const dpr = window.devicePixelRatio;
-        for (const item of this.items) {
-            // if (item.isInsideEffRect(e.touches[0].clientX * dpr, e.touches[0].clientY * dpr)) {
-            item.touchMove(e);
-            // }
-        }
-    }
+    // touchMove(e: TouchEvent) {
+    //     // const dpr = window.devicePixelRatio;
+    //     for (const item of this.items) {
+    //         // if (item.isInsideEffRect(e.touches[0].clientX * dpr, e.touches[0].clientY * dpr)) {
+    //         item.touchMove(e);
+    //         // }
+    //     }
+    // }
 
-    touchEnd(e: TouchEvent) {
-        for (const item of this.items) {
-            item.touchEnd(e);
-        }
-    }
+    // touchEnd(e: TouchEvent) {
+    //     for (const item of this.items) {
+    //         item.touchEnd(e);
+    //     }
+    // }
 
 }

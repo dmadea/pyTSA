@@ -51,7 +51,7 @@
 
         plotRect = r
         colorbarRightLabel = colorbar.yAxis.label
-        colorbar.plotRect = r
+        colorbar.svgPlotRect = r
         colormapLut = colorbar.colormap.lut
         // console.log(colorbar.colormap.lut)
         return r

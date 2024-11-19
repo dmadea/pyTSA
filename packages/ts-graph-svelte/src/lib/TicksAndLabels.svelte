@@ -263,7 +263,7 @@
 
         if (!calcPlotRect) {
             fc.plotRect = r
-            figure.plotRect = r
+            figure.svgPlotRect = r
         }
     }
 

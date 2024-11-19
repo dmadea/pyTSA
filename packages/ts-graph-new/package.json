@@ -13,5 +13,8 @@
   "devDependencies": {
     "@types/offscreencanvas": "^2019.7.3",
     "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "gl-matrix": "^3.4.3"
   }
 }

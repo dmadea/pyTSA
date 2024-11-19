@@ -29,7 +29,7 @@
 
   // fig.plotLine(x, y, {r: 0, g: 0, b: 0, alpha: 0})
 
-  console.log(x, y)
+  // console.log(x, y)
 
   function onSceneInit(scene: Scene) {
 

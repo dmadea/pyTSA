@@ -14,6 +14,9 @@ import { Legend } from "../objects/legend";
 import { IThinLinePlot } from "../renderer";
 // import { Colorbar } from "./colorbar";
 
+import { glMatrix, mat3 } from "gl-matrix"
+
+
 
 export interface ILinePlot {
     x: F32Array,
@@ -200,7 +203,7 @@ export class Figure extends GraphicObject {
     }
 
     public mapRange2Canvas(p: Point, plotRect?: Rect): Point{
-        const r = plotRect ?? this.getEffectiveRect();
+        const r = plotRect ?? this.plotRect;
         let xrel = (p.x - this.internalRange.x) / this.internalRange.w;
         let yrel = (p.y - this.internalRange.y) / this.internalRange.h;
 
@@ -369,7 +372,7 @@ export class Figure extends GraphicObject {
     }
 
     public doubleClick(e: IMouseEvent): void {
-        if (!this.isInsidePlotRect(e.x, e.y)) return;
+        if (!this.isInsideSvgPlotRect(e.x, e.y)) return;
         this.viewAll();        
     }
 
@@ -407,7 +410,7 @@ export class Figure extends GraphicObject {
         // this.scaling = e.e.button == 2;
         // this.panning = e.e.button == 0 || e.e.button == 1;
 
-        if (this.isInsidePlotRect(e.x, e.y)) {
+        if (this.isInsideSvgPlotRect(e.x, e.y)) {
             this.scaling = e.e.button == 2;
             this.panning = e.e.button == 0 || e.e.button == 1;
         } else {
@@ -418,7 +421,7 @@ export class Figure extends GraphicObject {
         this.lastMouseDownPos = {x: e.x, y: e.y};
         this.lastRange = {...this.internalRange};
         
-        this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos);
+        this.lastCenterPoint = this.mapCanvas2Range(this.lastMouseDownPos, this.svgPlotRect);
 
         if (this.panning) {
             e.setCursor("grabbing")
@@ -449,7 +452,7 @@ export class Figure extends GraphicObject {
                     // this.canvas.style.cursor = this.cursors.grabbing;
 
                     // const r = this.getEffectiveRect();
-                    const r = this.plotRect
+                    const r = this.svgPlotRect
         
                     let w = r.w;
                     let h = r.h;
@@ -634,7 +637,7 @@ export class Figure extends GraphicObject {
             return;
         }
 
-        if (this.isInsidePlotRect(e.x, e.y)) {
+        if (this.isInsideSvgPlotRect(e.x, e.y)) {
             // TODO set cursor
             // e.glcanvas.style.cursor = this.cursors.crosshair;
             // this.active = false;
@@ -690,7 +693,7 @@ export class Figure extends GraphicObject {
         const plot = this.scene!.renderer.createThinLine(x, y, color, label)
         this.linePlots.push(plot);
         this.repaint();
-        console.log(plot)
+        // console.log(plot)
         return plot;
     }
 
@@ -884,17 +887,36 @@ export class Figure extends GraphicObject {
         const yIT = this.yAxis.invTransform;
         const xIT = this.xAxis.invTransform;
         const r = this.scene!.renderer;
+
+
+        const dpr = window.devicePixelRatio
+
+        const xScale = 2 / this.internalRange.w
+        const yScale = 2 / this.internalRange.h
+
+        const xOffset = this.internalRange.x + 1
+        const yOffset = this.internalRange.y + 1
+
         
-        // e.ctx.save();
-        
-        const uscale: [number, number, number, number] = [0.5, 0, 0, 0.5];
-        const uoffset: [number, number] = [0, 0];
+        const umatrix = mat3.create()
+        mat3.scale(umatrix, umatrix, [xScale, yScale])
+        mat3.translate(umatrix, umatrix, [-xOffset, -yOffset])
+        // mat3.transpose(umatrix, umatrix)
+
+        // const umatrix = [
+        //     xScale, 0, 0,
+        //     0, yScale, 0, 
+        //     -xOffset * xScale, -yOffset * yScale, 1
+        // ]
+
+        console.log(umatrix)
+
         
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
             
-            console.log("painting thin line")
-            r.drawThinLine(plot, uscale, uoffset)
+            // console.log("painting thin line")
+            r.drawThinLine(plot, umatrix)
             
 
             // e.ctx.strokeStyle = plot.color;
@@ -1007,83 +1029,37 @@ export class Figure extends GraphicObject {
     paint(e: IPaintEvent): void {
         if (!this.panning && !this.scaling && this.autoscaleOnRepaint) this.autoscale();
 
-        // e.glctx.clearColor(0, 0, 0, 1);
         // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
         // e.glctx.clear(e.glctx.COLOR_BUFFER_BIT);
+
+        const dpr = window.devicePixelRatio
+
+        this.plotRect = {
+            x: this.canvasRect.x + this.svgPlotRect.x * dpr,
+            y: this.canvasRect.y + this.svgPlotRect.y * dpr,
+            w: this.svgPlotRect.w * dpr,
+            h: this.svgPlotRect.h * dpr
+        }
+
+        const [x, y, w, h] = [this.plotRect.x, e.glcanvas.height - this.plotRect.y - this.plotRect.h, this.plotRect.w, this.plotRect.h];
+        e.glctx.viewport(x, y, w, h);
         
-        e.glctx.viewport(this.canvasRect.x, this.canvasRect.h - this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
+        // turn on the scissor test.
+        e.glctx.enable(e.glctx.SCISSOR_TEST);
+
+        // set the scissor rectangle.
+        e.glctx.scissor(x, y, w, h);
+        
         e.glctx.clearColor(1, 1, 1, 1);
         // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
         e.glctx.clear(e.glctx.COLOR_BUFFER_BIT);
-
-        console.log("canvas rect: ", this.canvasRect, e.glcanvas.height)
-    
-        // Set the view port
-
-        this.paintPlots(e)
-
-        // console.log("paint from figure", this.canvasRect)
-
-        // e.ctx.save();
-
-        // // clip to canvas rectangle
-
-        // e.ctx.fillStyle = backgroundColor;  //"rgb(230, 230, 255)"
-        // e.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-
-        // e.ctx.strokeStyle = frameColor;
-
-        // if (this.plotCanvasRect){
-        //     e.ctx.setLineDash([4, 2]);
-        //     e.ctx.strokeRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        //     e.ctx.setLineDash([]);
-        // }
-
-        // // paint everything inside the plot
-
-        // //plot content
-        // const r = this.getEffectiveRect();
-        // // // https://stackoverflow.com/questions/30094773/html5-canvas-cliprect-is-not-working-properly
-        // // e.bottomCtx.beginPath();
-        // // e.bottomCtx.rect(r.x, r.y, r.w, r.h);
-        // // e.bottomCtx.clip();
-
-        // // this.paintHeatMap(e);
-        // // this.paintPlots(e);
-
-        // // e.bottomCtx.restore();
-
-        // // if (this._cancelPaining) {
-        // //     console.log('painting canceled');
-        // //     return;
-        // // }
-
-        // // this.paintItems(e);
-
-
-        // e.ctx.save();
-
-        // e.ctx.beginPath();
-        // e.ctx.rect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        // e.ctx.clip();
-
-        // const dpr = window.devicePixelRatio;
         
-        // // draw figure rectangle
-        // e.ctx.lineWidth = 1 + Math.round(dpr);
-        // e.ctx.strokeRect(r.x, r.y, r.w, r.h);
-
-        // // var needRepaint = this.drawTicks(e);
-        // // console.log(needRepaint);
-
-        // e.ctx.restore();
-        // e.ctx.restore();
-
-
-        // if (needRepaint) return;
-        // backup the figure so that it can be reused later when repainting items
-
-        // this.paintItems(e);
+        // console.log("canvas rect: ", this.canvasRect, e.glcanvas.height)
+        
+        this.paintPlots(e)
+        
+        // turn off the scissor test so you can render like normal again.
+        e.glctx.disable(e.glctx.SCISSOR_TEST);
 
     }
 
@@ -1509,7 +1485,7 @@ export class Figure extends GraphicObject {
         let fx = f * 2;
         let fy = f * 3; // 2 times more preffered number of ticks on y axis then on x axis because of smaller text
         // const r = this.getEffectiveRect();
-        const r = this.plotRect;
+        const r = this.svgPlotRect;
         let w = r.w; 
         let h = r.h;
         const va = this.axisAlignment == Orientation.Vertical;
@@ -1869,7 +1845,7 @@ export class Colorbar extends Figure {
     // }
 
     public rangeChanged(range: Rect): void {
-        console.log("range changed from colorbar")
+        // console.log("range changed from colorbar")
         super.rangeChanged(range);
 
         // this.repaint()

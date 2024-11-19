@@ -373,7 +373,7 @@ export class DraggableLines extends GraphicObject {
             return;
         }
 
-        if (!this.isInsidePlotRect(e.x, e.y)) return;
+        if (!this.isInsideSvgPlotRect(e.x, e.y)) return;
 
         const f = this.parent as Figure;
 
