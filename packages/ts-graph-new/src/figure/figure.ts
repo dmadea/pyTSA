@@ -598,7 +598,7 @@ export class Figure extends GraphicObject {
             }
             // console.log(this.range, fig.range);
             // fig.updateRangeItems(range);
-            fig.repaint();
+            // fig.repaint();
         }
         for (const fig of this.yRangeLinks) {
             if (this.yAxis.scale === fig.yAxis.scale) {
@@ -607,7 +607,7 @@ export class Figure extends GraphicObject {
                 fig.yAxis.range = this.yAxis.range;
             }
             // fig.updateRangeItems(range);
-            fig.repaint();
+            // fig.repaint();
         }
         for (const fig of this.xyRangeLinks) {
             if (this.xAxis.scale === fig.yAxis.scale) {
@@ -616,7 +616,7 @@ export class Figure extends GraphicObject {
                 fig.yAxis.range = this.xAxis.range;
             }
             // fig.updateRangeItems(range);
-            fig.repaint();
+            // fig.repaint();
         }
         for (const fig of this.yxRangeLinks) {
             if (this.yAxis.scale === fig.xAxis.scale) {
@@ -625,7 +625,7 @@ export class Figure extends GraphicObject {
                 fig.xAxis.range = this.yAxis.range;
             }
             // fig.updateRangeItems(range);
-            fig.repaint();
+            // fig.repaint();
         }
         // console.log(this.range);
         super.rangeChanged(range);
@@ -819,60 +819,60 @@ export class Figure extends GraphicObject {
         const fx = 0.05;  // autoscale margins
 
         if (this.yAxis.autoscale || forceAutoscale) {
-            // const yIT = this.yAxis.invTransform;
-            // const mins = [];
-            // const maxs = [];
-            // for (const plot of this.linePlots) {
-            //     if (plot.y.length === 0) continue;
-            //     const [min, max] = plot.y.minmax();
-            //     mins.push(min);
-            //     maxs.push(max);
-            // }
-            // if (this.heatmap) {
-            //     mins.push(this.heatmap.dataset.y[0]);
-            //     maxs.push(this.heatmap.dataset.y[this.heatmap.dataset.y.length - 1]);
-            // }
-            // let y0 = yIT(Math.min(...mins));
-            // let y1 = yIT(Math.max(...maxs));
+            const yIT = this.yAxis.invTransform;
+            const mins = [];
+            const maxs = [];
+            for (const plot of this.linePlots) {
+                if (plot.y.length === 0) continue;
+                const [min, max] = plot.y.minmax();
+                mins.push(min);
+                maxs.push(max);
+            }
+            if (this.heatmap) {
+                mins.push(this.heatmap.dataset.y[0]);
+                maxs.push(this.heatmap.dataset.y[this.heatmap.dataset.y.length - 1]);
+            }
+            let y0 = yIT(Math.min(...mins));
+            let y1 = yIT(Math.max(...maxs));
 
-            // y0 = (Number.isNaN(y0) || y0 === undefined || !Number.isFinite(y0)) ? -1 : y0;
-            // y1 = (Number.isNaN(y1) || y1 === undefined || !Number.isFinite(y1)) ? 1 : y1;
+            y0 = (Number.isNaN(y0) || y0 === undefined || !Number.isFinite(y0)) ? -1 : y0;
+            y1 = (Number.isNaN(y1) || y1 === undefined || !Number.isFinite(y1)) ? 1 : y1;
 
-            // const diff = y1 - y0;
+            const diff = y1 - y0;
 
-            // y0 = Math.max(this.yAxis.internalViewBounds[0], y0 - fy * diff);
-            // y1 = Math.min(this.yAxis.internalViewBounds[1], y1 + fy * diff);
+            y0 = Math.max(this.yAxis.internalViewBounds[0], y0 - fy * diff);
+            y1 = Math.min(this.yAxis.internalViewBounds[1], y1 + fy * diff);
 
-            // this.internalRange.y = y0;
-            // this.internalRange.h = y1 - y0;
+            this.internalRange.y = y0;
+            this.internalRange.h = y1 - y0;
         }
 
         if (this.xAxis.autoscale || forceAutoscale) {
-            // const xIT = this.xAxis.invTransform;
-            // const mins = [];
-            // const maxs = [];
-            // for (const plot of this.linePlots) {
-            //     if (plot.x.length === 0) continue;
-            //     mins.push(plot.x[0]);
-            //     maxs.push(plot.x[plot.x.length - 1]);
-            // }
-            // if (this.heatmap) {
-            //     mins.push(this.heatmap.dataset.x[0]);
-            //     maxs.push(this.heatmap.dataset.x[this.heatmap.dataset.x.length - 1]);
-            // }
-            // let x0 = xIT(Math.min(...mins));
-            // let x1 = xIT(Math.max(...maxs));
+            const xIT = this.xAxis.invTransform;
+            const mins = [];
+            const maxs = [];
+            for (const plot of this.linePlots) {
+                if (plot.x.length === 0) continue;
+                mins.push(plot.x[0]);
+                maxs.push(plot.x[plot.x.length - 1]);
+            }
+            if (this.heatmap) {
+                mins.push(this.heatmap.dataset.x[0]);
+                maxs.push(this.heatmap.dataset.x[this.heatmap.dataset.x.length - 1]);
+            }
+            let x0 = xIT(Math.min(...mins));
+            let x1 = xIT(Math.max(...maxs));
 
-            // x0 = (Number.isNaN(x0) || x0 === undefined || !Number.isFinite(x0)) ? -1 : x0;
-            // x1 = (Number.isNaN(x1) || x1 === undefined || !Number.isFinite(x1)) ? 1 : x1;
+            x0 = (Number.isNaN(x0) || x0 === undefined || !Number.isFinite(x0)) ? -1 : x0;
+            x1 = (Number.isNaN(x1) || x1 === undefined || !Number.isFinite(x1)) ? 1 : x1;
 
-            // const diff = x1 - x0;
+            const diff = x1 - x0;
 
-            // x0 = Math.max(this.xAxis.internalViewBounds[0], x0 - fx * diff);
-            // x1 = Math.min(this.xAxis.internalViewBounds[1], x1 + fx * diff);
+            x0 = Math.max(this.xAxis.internalViewBounds[0], x0 - fx * diff);
+            x1 = Math.min(this.xAxis.internalViewBounds[1], x1 + fx * diff);
 
-            // this.internalRange.x = x0;
-            // this.internalRange.w = x1 - x0;
+            this.internalRange.x = x0;
+            this.internalRange.w = x1 - x0;
         }
         // console.log(this._range);
     }
@@ -888,29 +888,25 @@ export class Figure extends GraphicObject {
         const xIT = this.xAxis.invTransform;
         const r = this.scene!.renderer;
 
-
-        const dpr = window.devicePixelRatio
+        // transformation of points from internal range to -1, 1 (viewbox)
 
         const xScale = 2 / this.internalRange.w
         const yScale = 2 / this.internalRange.h
 
-        const xOffset = this.internalRange.x + 1
-        const yOffset = this.internalRange.y + 1
+        var xOffset = 1 + this.internalRange.x * xScale
+        var yOffset = 1 + this.internalRange.y * yScale
 
-        
         const umatrix = mat3.create()
-        mat3.scale(umatrix, umatrix, [xScale, yScale])
         mat3.translate(umatrix, umatrix, [-xOffset, -yOffset])
-        // mat3.transpose(umatrix, umatrix)
+        mat3.scale(umatrix, umatrix, [xScale, yScale])
 
         // const umatrix = [
         //     xScale, 0, 0,
         //     0, yScale, 0, 
-        //     -xOffset * xScale, -yOffset * yScale, 1
+        //     xOffset, yOffset, 1
         // ]
 
-        console.log(umatrix)
-
+        // console.log(umatrix)
         
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
@@ -1029,9 +1025,6 @@ export class Figure extends GraphicObject {
     paint(e: IPaintEvent): void {
         if (!this.panning && !this.scaling && this.autoscaleOnRepaint) this.autoscale();
 
-        // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
-        // e.glctx.clear(e.glctx.COLOR_BUFFER_BIT);
-
         const dpr = window.devicePixelRatio
 
         this.plotRect = {
@@ -1042,25 +1035,19 @@ export class Figure extends GraphicObject {
         }
 
         const [x, y, w, h] = [this.plotRect.x, e.glcanvas.height - this.plotRect.y - this.plotRect.h, this.plotRect.w, this.plotRect.h];
+
         e.glctx.viewport(x, y, w, h);
-        
-        // turn on the scissor test.
-        e.glctx.enable(e.glctx.SCISSOR_TEST);
+        e.glctx.scissor(x, y, w, h);
 
         // set the scissor rectangle.
-        e.glctx.scissor(x, y, w, h);
         
         e.glctx.clearColor(1, 1, 1, 1);
-        // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
         e.glctx.clear(e.glctx.COLOR_BUFFER_BIT);
         
-        // console.log("canvas rect: ", this.canvasRect, e.glcanvas.height)
+        // console.log("paint from figure", this)
         
         this.paintPlots(e)
         
-        // turn off the scissor test so you can render like normal again.
-        e.glctx.disable(e.glctx.SCISSOR_TEST);
-
     }
 
 

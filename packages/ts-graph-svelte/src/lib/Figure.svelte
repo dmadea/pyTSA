@@ -175,8 +175,6 @@
         settingsMenu?.openClose(r.x - sceneContext.canvasBoundingRect.x + 24, r.y - sceneContext.canvasBoundingRect.y + 24)
     }
 
-    const colorbar = figure.addColorbar()
-
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -197,6 +195,8 @@
         x: {canvasRect.x.toFixed(1)} y: {canvasRect.y.toFixed(1)}, w: {canvasRect.w.toFixed(1)}, h: {canvasRect.h.toFixed(1)}
     </text> 
     
+
+
     <!-- Settings button -->
     
     <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -210,7 +210,9 @@
 
     <!-- <DraggableLines/> -->
     <TicksAndLabels figure={figure} />
-    <ColorbarComponent colorbar={colorbar} />
+    {#if figure.colorbar}
+        <ColorbarComponent colorbar={figure.colorbar} />
+    {/if}
 
 </svg>
 

@@ -169,7 +169,7 @@ export abstract class GraphicObject{
                 glcanvas: this.scene.glcanvas,
                 glctx: this.scene.glctx
             };
-            this.paint(e);
+            this.scene.paint(e);
         }
     }
 

@@ -86,26 +86,21 @@ export class Scene extends GraphicObject {
     public paint(e: IPaintEvent): void {
         // console.log(this.canvasRect);
 
-
         // clear plot
+        e.glctx.enable(this.glctx.SCISSOR_TEST);
+        e.glctx.enable(this.glctx.CULL_FACE);
+        // e.glctx.enable(this.glctx.DEPTH_TEST);
+
+
         e.glctx.viewport(0, 0, e.glcanvas.width, e.glcanvas.height);
+
         e.glctx.clearColor(1, 1, 1, 1);
-        // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
         e.glctx.clear(e.glctx.COLOR_BUFFER_BIT);
+        // e.glctx.enable(e.glctx.DEPTH_TEST); // Enable depth testing
 
         console.log("intial paint from scene")
 
-        // e.ctx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        // e.ctx.fillStyle = "blue";
-        // e.ctx.fillRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        // e.glctx.clearRect(this.canvasRect.x, this.canvasRect.y, this.canvasRect.w, this.canvasRect.h);
-        // e.mainCtx.restore();
-        // this.ctx.fillStyle = backgroundColor;
-        // e.mainCtx.save();
-        // console.log('initial paint from scene');
-
         super.paint(e);
-
     }
 }
 

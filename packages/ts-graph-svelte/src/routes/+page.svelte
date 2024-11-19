@@ -22,10 +22,14 @@
 
   const fig2 = new Fig()
   const fig3 = new Fig()
+  fig3.addColorbar()
 
 
-  const x = F32Array.linspace(-1, 1, 1000)
+  const x = F32Array.linspace(-10, 5, 1000)
   const y = F32Array.random(-1, 1, x.length)
+
+  // const x = [-1, -1, 1, 1, -1]
+  // const y = [1, -1, -1, 1, 1]
 
   // fig.plotLine(x, y, {r: 0, g: 0, b: 0, alpha: 0})
 
@@ -36,7 +40,10 @@
     setTimeout(() => {
       fig.plotLine(x, y, {r: 1.0, g: 0.0, b: 0.0, alpha: 1.0})
       fig2.plotLine(x, y, {r: 0.0, g: 1, b: 0.0, alpha: 1.0})
-      fig3.plotLine(x, y, {r: 0.0, g: 0, b: 1.0, alpha: 1.0})
+
+      fig3.plotLine(x, F32Array.random(-Math.random(), Math.random(), x.length), {r: 1.0, g: 0, b: 0.0, alpha: 1.0})
+      fig3.plotLine(x, F32Array.random(-Math.random(), Math.random(), x.length), {r: 0.0, g: 1, b: 0.0, alpha: 1.0})
+      fig3.plotLine(x, F32Array.random(-Math.random(), Math.random(), x.length), {r: 0.0, g: 0, b: 1.0, alpha: 1.0})
 
 
     }, 10)

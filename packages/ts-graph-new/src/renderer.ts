@@ -21,7 +21,8 @@ interface ThinLineProgram extends Program {
 
 export interface IThinLinePlot {
     buffer: WebGLBuffer,
-    xyData: F32Array,
+    x: F32Array,
+    y: F32Array,
     color: Color,
     label: string | null,
 }
@@ -40,19 +41,13 @@ export class GLRenderer {
 
     private initWebGL () {
 
-        // this.glctx.clearColor(1, 1, 1, 1);
-        // this.glctx.clear(this.glctx.COLOR_BUFFER_BIT);
-    
-        // Set the view port
-        // ctx.viewport(crop, crop, canvas.width - 2 * crop, canvas.height  - 2 * crop);
-    
         this.initThinLineProgram();
     
         // this.glctx.enable(this.glctx.BLEND);
         // this.glctx.blendFunc(this.glctx.SRC_ALPHA, this.glctx.ONE_MINUS_SRC_ALPHA);
     }
 
-    public createThinLine(x: F32Array | number[],  y: F32Array | number[], color: Color, label: string | null = null): IThinLinePlot {
+    public createThinLine(x: F32Array,  y: F32Array, color: Color, label: string | null = null): IThinLinePlot {
         // x.length === y.length
 
         const xyData = new F32Array(x.length * 2)
@@ -66,7 +61,7 @@ export class GLRenderer {
 		this.glctx.bufferData(this.glctx.ARRAY_BUFFER, xyData as ArrayBuffer, this.glctx.STREAM_DRAW);
 
         return {
-            buffer, xyData, color, label
+            buffer, x, y, color, label
         }
     }
 
@@ -96,11 +91,13 @@ export class GLRenderer {
 
         this.glctx.uniform4fv(
             this.thinLineProgram.uniformLocations.ucolor, 
-            new Float32Array([line.color.r, line.color.g, line.color.b, line.color.alpha]))
+            [line.color.r, line.color.g, line.color.b, line.color.alpha])
 
         // draw arrays
 
-        this.glctx.drawArrays(this.glctx.LINE_STRIP, 0, line.xyData.length / 2);
+        this.glctx.drawArrays(this.glctx.LINE_STRIP, 0, line.x.length);
+
+        // console.log("draw arrays called")
 
     }
 

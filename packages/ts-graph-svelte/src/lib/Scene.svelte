@@ -52,7 +52,7 @@
                 if (sceneContext.scene) {
                     sceneContext.scene.replot()
                 }
-                console.log("resized, redraw")
+                // console.log("resized, redraw")
         }, timeout)
     }
 
