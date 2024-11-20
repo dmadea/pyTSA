@@ -61,7 +61,7 @@ class Datasets(object):
             ds._datasets = deepcopy(self._datasets[key])
             return ds
 
-        elif isinstance(key, int):
+        elif isinstance(key, (int, np.int64, np.int32, np.int16, np.int8)):
             return self._datasets[key]['dataset']
         else:
             raise TypeError("Invalid input")
@@ -259,7 +259,7 @@ class Datasets(object):
 
         for dataset in iter(self):
             assert dataset.model is not None
-            params = dataset.model.fit_result.params
+            params = dataset.model.fit_result.params if dataset.model.fit_result is not None else  dataset.model.params
             values = [dataset.name]
             for pn in param_names:
                 values.append(params[pn].value)

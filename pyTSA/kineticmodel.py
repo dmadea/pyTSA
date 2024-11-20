@@ -1060,8 +1060,8 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
     name = "Delayed fluorescence kinetic model"
 
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
-        super(DelayedFluorescenceModel, self).__init__(dataset, 2)
         self.add_quenching_rates = False
+        super(DelayedFluorescenceModel, self).__init__(dataset, 2)
 
 
     def init_params(self) -> Parameters:
@@ -1072,8 +1072,8 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         params.add('k_risc', value=0.05, min=0, max=np.inf, vary=True)
 
         if self.add_quenching_rates:
-            params.add('Kq_singlet', value=0.05, min=0, max=np.inf, vary=True)
-            params.add('Kq_triplet', value=0.05, min=0, max=np.inf, vary=True)
+            params.add('Kq_singlet', value=0.05, min=-np.inf, max=np.inf, vary=True)
+            params.add('Kq_triplet', value=0.05, min=-np.inf, max=np.inf, vary=True)
 
         return params
     
