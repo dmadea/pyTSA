@@ -740,7 +740,7 @@ class FirstOrderModel(KineticModel):
             self.C_EAS = self.C_opt.dot(A)
             self.ST_EAS = np.linalg.inv(A).dot(self.ST_opt)
 
-    def get_C_profiles_args(self, params: Parameters | None = None):
+    def get_C_profiles_args(self, params: Parameters | None = None, times: np.ndarray | None = None):
         params = self.params if params is None else params
         self.C_opt = None
         self.C_artifacts = None
@@ -754,7 +754,8 @@ class FirstOrderModel(KineticModel):
 
         _tau = width[:, None, None] if isinstance(width, np.ndarray) else width
         _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
-        _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
+        times = self.dataset.times if times is None else times
+        _t = times[None, :, None] if tensor else times[:, None]
         tt = _t - _mu
 
         _ks = ks[None, None, :] if tensor else ks[None, :]
@@ -768,10 +769,14 @@ class FirstOrderModel(KineticModel):
         return fold_exp if self.irf_type == self.irf_types[0] else square_conv_exp
 
         
-    def calculate_C_profiles(self, params: Parameters | None = None):
-        """Simulates concentration profiles, including coherent artifacts if setup in a model."""
+    def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
+        """Simulates concentration profiles, including coherent artifacts if setup in a model.
+        
+        if times arg is not None, these values will be used to simulate C profiles from
+        
+        """
 
-        tt, _ks, _tau = self.get_C_profiles_args(params)
+        tt, _ks, _tau = self.get_C_profiles_args(params, times)
 
         if self.n_species == 0:
             return
@@ -1010,9 +1015,9 @@ class TargetFirstOrderModel(FirstOrderModel):
         raise NotImplementedError()
 
 
-    def calculate_C_profiles(self, params: Parameters | None = None):
+    def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         params = self.params if params is None else params
-        tt, _ks, _tau = self.get_C_profiles_args(params)
+        tt, _ks, _tau = self.get_C_profiles_args(params, times)
 
         if self.n_species == 0:
             return
@@ -1072,8 +1077,13 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         params.add('k_risc', value=0.05, min=0, max=np.inf, vary=True)
 
         if self.add_quenching_rates:
-            params.add('Kq_singlet', value=0.05, min=-np.inf, max=np.inf, vary=True)
-            params.add('Kq_triplet', value=0.05, min=-np.inf, max=np.inf, vary=True)
+            params.add('Kq_singlet', value=0.0, min=0, max=np.inf, vary=True)
+            params.add('Kq_triplet', value=0.0, min=0, max=np.inf, vary=True)
+            params.add('f_spin', value=0, min=0, max=np.inf, vary=True)
+
+            # params.add('Kq_isc', value=0.0, min=0, max=np.inf, vary=True)
+            # params.add('Kq_risc', value=0.0, min=0, max=np.inf, vary=True)
+
 
         return params
     
@@ -1084,13 +1094,26 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
 
         kq_s = 0
         kq_t = 0
+        ki_isc = 0
+        ki_risc = 0
 
         if self.add_quenching_rates:
             kq_s = params['Kq_singlet'].value
             kq_t = params['Kq_triplet'].value
+            # kq_isc = params['Kq_isc'].value
+            # kq_risc = params['Kq_risc'].value
+            f_spin = params['f_spin'].value
+            ki_isc = k_isc * f_spin
+            ki_risc = k_risc * f_spin
         
-        K = np.asarray([[-k_rnr - k_isc - kq_s, k_risc],
-                        [k_isc,         -k_risc - kq_t]])
+        # K = np.asarray([[-k_rnr - k_isc - kq_s, k_risc],
+        #                 [k_isc,         -k_risc - kq_t]])
+        
+        # K = np.asarray([[-k_rnr - k_isc - kq_isc - kq_s, k_risc + kq_risc],
+        #         [k_isc + kq_isc,         -k_risc - kq_risc - kq_t]])
+        
+        K = np.asarray([[-k_rnr - k_isc - ki_isc - kq_s, k_risc + ki_risc],
+                [k_isc + ki_isc,         -k_risc - ki_risc - kq_t]])
     
         j = np.asarray([1, 0])
 
