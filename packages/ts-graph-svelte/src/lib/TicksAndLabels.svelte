@@ -60,6 +60,8 @@
 
     function repaint() {
 
+        console.log("Repaint from UI")
+
         // let svgRect = fc.svgRect
 
         let [xticks, xticksVals, xMinors] = figure.getTicks(figure.xAxis);

@@ -1,7 +1,7 @@
 
 import { GraphicObject, IMouseEvent, IPaintEvent} from "../objects/object";
 import { Rect, Point, Margin } from "../types";
-import { F32Array } from "../array";
+import { F32Array, NumberArray } from "../array";
 import { backgroundColor,  frameColor, textColor } from "../settings";
 import { Dataset, determineSigFigures, drawTextWithGlow, formatNumber2String } from "../utils";
 import { Color, Colormap, Colormaps, ILut } from "../color";
@@ -883,22 +883,28 @@ export class Figure extends GraphicObject {
             return;
         }
         
-        
         const yIT = this.yAxis.invTransform;
         const xIT = this.xAxis.invTransform;
         const r = this.scene!.renderer;
 
         // transformation of points from internal range to -1, 1 (viewbox)
 
-        const xScale = 2 / this.internalRange.w
-        const yScale = 2 / this.internalRange.h
+        var xInv = this.xAxis.inverted ? -1 : 1;
+        var yInv = this.yAxis.inverted ? -1 : 1;
 
-        var xOffset = 1 + this.internalRange.x * xScale
-        var yOffset = 1 + this.internalRange.y * yScale
+        var xScale = xInv * 2 / this.internalRange.w
+        var yScale = yInv * 2 / this.internalRange.h
+
+        var xOffset = xInv + this.internalRange.x * xScale
+        var yOffset = yInv + this.internalRange.y * yScale
 
         const umatrix = mat3.create()
         mat3.translate(umatrix, umatrix, [-xOffset, -yOffset])
         mat3.scale(umatrix, umatrix, [xScale, yScale])
+
+        if (this.axisAlignment === Orientation.Vertical) {
+            mat3.rotate(umatrix, umatrix, Math.PI / 2)
+        }
 
         // const umatrix = [
         //     xScale, 0, 0,
@@ -912,7 +918,8 @@ export class Figure extends GraphicObject {
         for (const plot of this.linePlots) {
             
             // console.log("painting thin line")
-            r.drawThinLine(plot, umatrix)
+            r.drawThinLine(plot, umatrix, this.xAxis.scale, this.yAxis.scale, 
+                this.xAxis.symlogLinthresh, this.yAxis.symlogLinthresh, this.xAxis.symlogLinscale, this.yAxis.symlogLinscale)
             
 
             // e.ctx.strokeStyle = plot.color;
@@ -1408,14 +1415,14 @@ export class Figure extends GraphicObject {
         return [ticks, ticks, minorTicks];
     }
 
-    private genLogTicks(coor: number, size: number, prefMajorBins: number): [F32Array, F32Array, F32Array] {
+    private genLogTicks(coor: number, size: number, prefMajorBins: number): [NumberArray, NumberArray, NumberArray] {
         const step = Math.max(1, Math.round(size / prefMajorBins));
 
         // make major ticks
         const bestMin = Math.ceil(coor / step) * step;
         const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
-        let majorTicks = new F32Array(nticks);
-        let majorTicksValues = new F32Array(nticks);
+        let majorTicks = new NumberArray(nticks);
+        let majorTicksValues = new NumberArray(nticks);
     
         // generate ticks
         for (let i = 0; i < nticks; i++) {
@@ -1423,7 +1430,7 @@ export class Figure extends GraphicObject {
             majorTicksValues[i] = 10 ** majorTicks[i];
         }
 
-        let minorTicks = new F32Array();
+        let minorTicks = new NumberArray();
         const minorTicksPositions = [2, 3, 4, 5, 6, 7, 8, 9];
 
         if (step === 1) {
@@ -1451,7 +1458,7 @@ export class Figure extends GraphicObject {
 
             if (majorTicksValues.length === 0) {
                 majorTicks = minorTicks.copy();
-                majorTicksValues = F32Array.fromArray(majorTicks.map(num => 10 ** num));
+                majorTicksValues = NumberArray.fromArray(majorTicks.map(num => 10 ** num));
                 minorTicks.clear();
             }
         }
@@ -1504,9 +1511,9 @@ export class Figure extends GraphicObject {
             case 'symlog': {
                 const linScale = !(coor > axis.symlogLinthresh || coor + size < -axis.symlogLinthresh);
                 const logScale = !(coor > -axis.symlogLinthresh && coor + size < axis.symlogLinthresh);
-                const ticks = new F32Array();
-                const ticksValues = new F32Array();
-                const minorTicks = new F32Array();
+                const ticks = new NumberArray();
+                const ticksValues = new NumberArray();
+                const minorTicks = new NumberArray();
 
                 if (linScale) {
                     const start = (coor < -axis.symlogLinthresh) ? -axis.symlogLinthresh : coor;
@@ -1538,7 +1545,7 @@ export class Figure extends GraphicObject {
                 if (logScale) {
                     const axT = axis.transform;
 
-                    var getTransformedTicks = (startValue: number, endValue: number): [F32Array, F32Array, F32Array] => {
+                    var getTransformedTicks = (startValue: number, endValue: number): [NumberArray, NumberArray, NumberArray] => {
 
                         const start = Math.log10(axis.symlogLinthresh);
                         // const realStart = Math.max(ax.symlogLinthresh, coor);
@@ -1610,8 +1617,8 @@ export class Figure extends GraphicObject {
                 const nticks = 1 + (coor + size - bestMin) / step >> 0; // integer division
                 const nticksMinors = 1 + (coor + size - bestMinMinor) / minorStep >> 0; // integer division
 
-                const ticks = new F32Array(nticks);
-                const ticksValues = new F32Array(nticks);
+                const ticks = new NumberArray(nticks);
+                const ticksValues = new NumberArray(nticks);
                 
                 // generate ticks
                 for (let i = 0; i < nticks; i++) {
@@ -1619,7 +1626,7 @@ export class Figure extends GraphicObject {
                     ticksValues[i] = axis.scale[ticks[i]] ?? Number.NaN;
                 }
                 
-                const minorTicks = new F32Array();
+                const minorTicks = new NumberArray();
                 
                 for (let i = 0; i < nticksMinors; i++) {
                     const val = bestMinMinor + minorStep * i;

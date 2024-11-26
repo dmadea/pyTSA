@@ -1,4 +1,75 @@
+// interface IArray {
+//     [key: number]: any
+// }
 
+
+export class NumberArray extends Array<number> {
+
+    constructor(...args: ConstructorParameters<typeof Array<number>>) {
+        super(...args)
+     }
+
+    public copy(): NumberArray {
+        let arr = new NumberArray(this.length);
+        for (let i = 0; i < arr.length; i++) {
+            arr[i] = this[i];
+        }
+        return arr;
+    }
+
+    public clear() {
+        this.length = 0
+    }
+
+    static fromArray(array: Float32Array | Float64Array | number[] | Array<number>): NumberArray {
+        if (Array.isArray(array)) {
+            const arr = new NumberArray()
+            Object.assign(arr, array)
+            return arr
+        }
+
+        const arr = new NumberArray(array.length);
+        for (let i = 0; i < array.length; i++) {
+            arr[i] = array[i];
+        }
+        return arr;
+    }
+
+    public nearestIndex(value: number): number {
+        let minIndex = 0;
+        let minval = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < this.length; i++) {
+            let diff = Math.abs(this[i] - value);
+            if (diff < minval) {
+                minval = diff;
+                minIndex = i;
+            }
+        }
+        return minIndex;
+    }
+
+    public nearestValue(value: number): number {
+        return this[this.nearestIndex(value)];
+    }
+
+    public apply(fn: (num: number) => number): NumberArray {
+        for (let i = 0; i < this.length; i++) {
+            this[i] = fn(this[i]);
+        }
+        return this;
+    }
+
+    public slice(start?: number | undefined, end?: number | undefined): NumberArray {
+        return NumberArray.fromArray(super.slice(start, end));
+    }
+
+    public mul(value: number): NumberArray {
+        for (let i = 0; i < this.length; i++) {
+            this[i] *= value;
+        }
+        return this;
+    }
+}
 
 export class F32Array extends Float32Array {
 
@@ -63,18 +134,18 @@ export class F32Array extends Float32Array {
         return arr;
     }
 
-    constructor(arrayLength?: number) {
-        if (arrayLength) {
-            super(arrayLength);
-        } else {
-            super();
-        }
-    }
+    // constructor(arrayLength?: number) {
+    //     if (arrayLength) {
+    //         super(arrayLength);
+    //     } else {
+    //         super();
+    //     }
+    // }
 
-    public toFloat64Array() {
-        const arr = new Float64Array(this);
-        return arr;
-    }
+    // public toFloat64Array() {
+    //     const arr = new Float64Array(this);
+    //     return arr;
+    // }
 
 
     // handcrafted function, combination of argmin and abs. value calculation

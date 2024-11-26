@@ -1,6 +1,7 @@
 import { F32Array } from "./array"
 import { Color } from "./color"
 import { glMatrix, mat3 } from "gl-matrix"
+import { Scale } from "./figure/axis"
 
 interface Program {
     program: WebGLProgram,
@@ -15,7 +16,10 @@ interface ThinLineProgram extends Program {
     },
     uniformLocations: {
         umatrix: WebGLUniformLocation,
-        ucolor: WebGLUniformLocation
+        ucolor: WebGLUniformLocation,
+        scale: WebGLUniformLocation,
+        linscale: WebGLUniformLocation,
+        linthresh: WebGLUniformLocation,
     }
 }
 
@@ -47,7 +51,7 @@ export class GLRenderer {
         // this.glctx.blendFunc(this.glctx.SRC_ALPHA, this.glctx.ONE_MINUS_SRC_ALPHA);
     }
 
-    public createThinLine(x: F32Array,  y: F32Array, color: Color, label: string | null = null): IThinLinePlot {
+    public createThinLine(x: F32Array | number[],  y: F32Array | number[], color: Color, label: string | null = null): IThinLinePlot {
         // x.length === y.length
 
         const xyData = new F32Array(x.length * 2)
@@ -65,10 +69,11 @@ export class GLRenderer {
         }
     }
 
-    public drawThinLine(line: IThinLinePlot, umatrix: number[] | Float32Array) {
+    public drawThinLine(line: IThinLinePlot, umatrix: number[] | Float32Array, xscale: Scale, yscale: Scale,
+         xlinthresh: number = 1, ylinthresh: number = 1, xlinscale: number = 1, ylinscale: number = 1) {
 
         if (!this.thinLineProgram)
-            throw Error("Thin line program does is not instantiated.")
+            throw Error("Thin line program is not instantiated.")
 
 		this.glctx.useProgram(this.thinLineProgram.program);
 
@@ -93,6 +98,30 @@ export class GLRenderer {
             this.thinLineProgram.uniformLocations.ucolor, 
             [line.color.r, line.color.g, line.color.b, line.color.alpha])
 
+        const getIntScale = (scale: Scale): number => {
+            switch (scale) {
+                case 'lin': {
+                    return 0
+                }
+                case 'log': {
+                    return 1
+                }
+                case 'symlog': {
+                    return 2
+                }
+                default: {
+                    if (!(scale instanceof F32Array)) {
+                        throw new Error(`${scale}: Not implemented`);
+                    }
+                    return 3
+                }
+            }
+        }
+
+        this.glctx.uniform2iv(this.thinLineProgram.uniformLocations.scale, [getIntScale(xscale), getIntScale(yscale)]);
+        this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.linscale, [xlinscale, ylinscale]);
+        this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.linthresh, [xlinthresh, ylinthresh]);
+
         // draw arrays
 
         this.glctx.drawArrays(this.glctx.LINE_STRIP, 0, line.x.length);
@@ -105,9 +134,38 @@ export class GLRenderer {
         const vertCode = `
         attribute vec2 coordinates;
         uniform mat3 umatrix;
-    
+        uniform ivec2 u_scale; // [xscale, yscale]
+        uniform vec2 u_linscale;  // [x, y]
+        uniform vec2 u_linthresh;  // [x, y]
+
+        const float log10 = 2.302585;
+
+        // transformation function
+        float tr(int scale, float value, float linscale, float linthresh) {
+            if (scale == 0) {    // linear
+                return value;
+            } else if (scale == 1) {  // log
+                return (value <= 0.0) ? -5.0 : log(value) / log10;
+            } else if (scale == 2) {  // symlog
+
+                // float linthresh = 1.0;
+                // float linscale = 1.0;
+
+                if (abs(value) <= linthresh) {
+                    return value;
+                } else {
+                    float sign = (value >= 0.0) ? 1.0 : -1.0;
+                    return sign * linthresh * (1.0 + log(abs(value) / linthresh) / (linscale * log10));
+                }
+            } else {    // data bound
+                return 0.0; // TOOD
+            }
+        }
+        
         void main(void) {
-            gl_Position = vec4(umatrix * vec3(coordinates, 1.0), 1.0);
+            vec3 coor = vec3(tr(u_scale.x, coordinates.x, u_linscale.x, u_linthresh.x), tr(u_scale.y, coordinates.y, u_linscale.y, u_linthresh.y), 1.0);
+
+            gl_Position = vec4(umatrix * coor, 1.0);
         }`;
     
         const fragCode = `
@@ -129,7 +187,10 @@ export class GLRenderer {
             },
             uniformLocations: {
                 umatrix: this.glctx.getUniformLocation(program, "umatrix")!,
-                ucolor: this.glctx.getUniformLocation(program, "ucolor")!
+                ucolor: this.glctx.getUniformLocation(program, "ucolor")!,
+                scale: this.glctx.getUniformLocation(program, "u_scale")!,
+                linscale: this.glctx.getUniformLocation(program, "u_linscale")!,
+                linthresh: this.glctx.getUniformLocation(program, "u_linthresh")!,
             }
         }
     }
