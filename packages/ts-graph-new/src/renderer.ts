@@ -1,7 +1,8 @@
 import { F32Array } from "./array"
-import { Color } from "./color"
+import { Color, Colormap } from "./color"
 import { glMatrix, mat3 } from "gl-matrix"
 import { Scale } from "./figure/axis"
+import { Dataset } from "./utils"
 
 interface Program {
     program: WebGLProgram,
@@ -12,14 +13,14 @@ interface Program {
 
 interface ThinLineProgram extends Program {
     attribLocations: {
-        coordinates: GLint
+        a_coordinates: GLint
     },
     uniformLocations: {
-        umatrix: WebGLUniformLocation,
-        ucolor: WebGLUniformLocation,
-        scale: WebGLUniformLocation,
-        linscale: WebGLUniformLocation,
-        linthresh: WebGLUniformLocation,
+        u_matrix: WebGLUniformLocation,
+        u_color: WebGLUniformLocation,
+        u_scale: WebGLUniformLocation,
+        u_linscale: WebGLUniformLocation,
+        u_linthresh: WebGLUniformLocation,
     }
 }
 
@@ -30,6 +31,38 @@ export interface IThinLinePlot {
     color: Color,
     label: string | null,
 }
+
+export interface IHeatmapPlot {
+    textureCoorBuffer: WebGLBuffer, // rectangle of the plotted image
+    texture: WebGLTexture,
+    dataset: Dataset,
+}
+
+const tranformFunction: string = `
+    const float log10 = 2.302585;
+
+    // transformation function
+    float tr(int scale, float value, float linscale, float linthresh) {
+        if (scale == 0) {    // linear
+            return value;
+        } else if (scale == 1) {  // log
+            return (value <= 0.0) ? -5.0 : log(value) / log10;
+        } else if (scale == 2) {  // symlog
+
+            // float linthresh = 1.0;
+            // float linscale = 1.0;
+
+            if (abs(value) <= linthresh) {
+                return value;
+            } else {
+                float sign = (value >= 0.0) ? 1.0 : -1.0;
+                return sign * linthresh * (1.0 + log(abs(value) / linthresh) / (linscale * log10));
+            }
+        } else {    // data bound
+            return 0.0; // TOOD
+        }
+    }
+`
 
 
 export class GLRenderer {
@@ -49,6 +82,44 @@ export class GLRenderer {
     
         // this.glctx.enable(this.glctx.BLEND);
         // this.glctx.blendFunc(this.glctx.SRC_ALPHA, this.glctx.ONE_MINUS_SRC_ALPHA);
+    }
+
+    public createHeatMap(dataset: Dataset): IHeatmapPlot {
+
+        const x0 = dataset.x[0]
+        const x1 = dataset.x[dataset.x.length - 1]
+        const y0 = dataset.y[0]
+        const y1 = dataset.y[dataset.y.length - 1]
+
+        const xy = new Float32Array([
+            x0, y0,
+            x1, y0,
+            x0, y1,
+            x1, y1
+        ])
+        
+        var textureCoorBuffer = this.glctx.createBuffer() as WebGLBuffer;
+        this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, textureCoorBuffer);
+		this.glctx.bufferData(this.glctx.ARRAY_BUFFER, xy as ArrayBuffer, this.glctx.STATIC_DRAW);
+        
+        var texture = this.glctx.createTexture() as WebGLTexture
+        this.glctx.bindTexture(this.glctx.TEXTURE_2D, texture);
+
+        this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_WRAP_S, this.glctx.CLAMP_TO_EDGE);
+        this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_WRAP_T, this.glctx.CLAMP_TO_EDGE);
+        this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_MIN_FILTER, this.glctx.NEAREST);
+        this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_MAG_FILTER, this.glctx.NEAREST);
+
+        this.glctx.getExtension('OES_texture_float')
+
+        this.glctx.texImage2D(this.glctx.TEXTURE_2D, 0, this.glctx.LUMINANCE, dataset.x.length, dataset.y.length, 
+            0, this.glctx.LUMINANCE, this.glctx.FLOAT, dataset.data)
+
+        return {
+            textureCoorBuffer,
+            texture,
+            dataset
+        }
     }
 
     public createThinLine(x: F32Array | number[],  y: F32Array | number[], color: Color, label: string | null = null): IThinLinePlot {
@@ -87,15 +158,15 @@ export class GLRenderer {
         // link buffer to plot the data from it
 
         this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, line.buffer);
-        this.glctx.vertexAttribPointer(this.thinLineProgram.attribLocations.coordinates, numComponents, type, normalize, stride, offset);
-		this.glctx.enableVertexAttribArray(this.thinLineProgram.attribLocations.coordinates);
+        this.glctx.vertexAttribPointer(this.thinLineProgram.attribLocations.a_coordinates, numComponents, type, normalize, stride, offset);
+		this.glctx.enableVertexAttribArray(this.thinLineProgram.attribLocations.a_coordinates);
 
         // assign uniforms
 
-        this.glctx.uniformMatrix3fv(this.thinLineProgram.uniformLocations.umatrix, false, umatrix);
+        this.glctx.uniformMatrix3fv(this.thinLineProgram.uniformLocations.u_matrix, false, umatrix);
 
         this.glctx.uniform4fv(
-            this.thinLineProgram.uniformLocations.ucolor, 
+            this.thinLineProgram.uniformLocations.u_color, 
             [line.color.r, line.color.g, line.color.b, line.color.alpha])
 
         const getIntScale = (scale: Scale): number => {
@@ -118,9 +189,9 @@ export class GLRenderer {
             }
         }
 
-        this.glctx.uniform2iv(this.thinLineProgram.uniformLocations.scale, [getIntScale(xscale), getIntScale(yscale)]);
-        this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.linscale, [xlinscale, ylinscale]);
-        this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.linthresh, [xlinthresh, ylinthresh]);
+        this.glctx.uniform2iv(this.thinLineProgram.uniformLocations.u_scale, [getIntScale(xscale), getIntScale(yscale)]);
+        this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.u_linscale, [xlinscale, ylinscale]);
+        this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.u_linthresh, [xlinthresh, ylinthresh]);
 
         // draw arrays
 
@@ -132,47 +203,25 @@ export class GLRenderer {
 
     private initThinLineProgram() {
         const vertCode = `
-        attribute vec2 coordinates;
-        uniform mat3 umatrix;
+        attribute vec2 a_coordinates;
+        uniform mat3 u_matrix;
         uniform ivec2 u_scale; // [xscale, yscale]
         uniform vec2 u_linscale;  // [x, y]
         uniform vec2 u_linthresh;  // [x, y]
 
-        const float log10 = 2.302585;
-
-        // transformation function
-        float tr(int scale, float value, float linscale, float linthresh) {
-            if (scale == 0) {    // linear
-                return value;
-            } else if (scale == 1) {  // log
-                return (value <= 0.0) ? -5.0 : log(value) / log10;
-            } else if (scale == 2) {  // symlog
-
-                // float linthresh = 1.0;
-                // float linscale = 1.0;
-
-                if (abs(value) <= linthresh) {
-                    return value;
-                } else {
-                    float sign = (value >= 0.0) ? 1.0 : -1.0;
-                    return sign * linthresh * (1.0 + log(abs(value) / linthresh) / (linscale * log10));
-                }
-            } else {    // data bound
-                return 0.0; // TOOD
-            }
-        }
+        ${tranformFunction} // tr
         
         void main(void) {
-            vec3 coor = vec3(tr(u_scale.x, coordinates.x, u_linscale.x, u_linthresh.x), tr(u_scale.y, coordinates.y, u_linscale.y, u_linthresh.y), 1.0);
+            vec3 coor = vec3(tr(u_scale.x, a_coordinates.x, u_linscale.x, u_linthresh.x), tr(u_scale.y, a_coordinates.y, u_linscale.y, u_linthresh.y), 1.0);
 
-            gl_Position = vec4(umatrix * coor, 1.0);
+            gl_Position = vec4(u_matrix * coor, 1.0);
         }`;
     
         const fragCode = `
         precision mediump float;
-        uniform highp vec4 ucolor;
+        uniform highp vec4 u_color;
         void main(void) {
-            gl_FragColor =  ucolor;
+            gl_FragColor =  u_color;
         }`;
 
         const program = this.initProgram(vertCode, fragCode)
@@ -183,14 +232,14 @@ export class GLRenderer {
         this.thinLineProgram = {
             program: program,
             attribLocations: {
-                coordinates: this.glctx.getAttribLocation(program, "coordinates")
+                a_coordinates: this.glctx.getAttribLocation(program, "a_coordinates")
             },
             uniformLocations: {
-                umatrix: this.glctx.getUniformLocation(program, "umatrix")!,
-                ucolor: this.glctx.getUniformLocation(program, "ucolor")!,
-                scale: this.glctx.getUniformLocation(program, "u_scale")!,
-                linscale: this.glctx.getUniformLocation(program, "u_linscale")!,
-                linthresh: this.glctx.getUniformLocation(program, "u_linthresh")!,
+                u_matrix: this.glctx.getUniformLocation(program, "u_matrix")!,
+                u_color: this.glctx.getUniformLocation(program, "u_color")!,
+                u_scale: this.glctx.getUniformLocation(program, "u_scale")!,
+                u_linscale: this.glctx.getUniformLocation(program, "u_linscale")!,
+                u_linthresh: this.glctx.getUniformLocation(program, "u_linthresh")!,
             }
         }
     }
