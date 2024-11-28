@@ -24,6 +24,16 @@ interface ThinLineProgram extends Program {
     }
 }
 
+interface HeatMapProgram extends Program {
+    attribLocations: {
+        a_texCoord: GLint
+    },
+    uniformLocations: {
+        u_matrix: WebGLUniformLocation,
+        u_image: WebGLUniformLocation,
+    }
+}
+
 export interface IThinLinePlot {
     buffer: WebGLBuffer,
     x: F32Array,
@@ -69,6 +79,7 @@ export class GLRenderer {
 
     public glctx: WebGLRenderingContext
     public thinLineProgram: ThinLineProgram | null = null
+    public heatMapProgram: HeatMapProgram | null = null
 
     constructor(glctx: WebGLRenderingContext) {
         this.glctx = glctx
@@ -79,6 +90,7 @@ export class GLRenderer {
     private initWebGL () {
 
         this.initThinLineProgram();
+        this.initHeatmapProgram();
     
         // this.glctx.enable(this.glctx.BLEND);
         // this.glctx.blendFunc(this.glctx.SRC_ALPHA, this.glctx.ONE_MINUS_SRC_ALPHA);
@@ -97,7 +109,7 @@ export class GLRenderer {
             x0, y1,
             x1, y1
         ])
-        
+
         var textureCoorBuffer = this.glctx.createBuffer() as WebGLBuffer;
         this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, textureCoorBuffer);
 		this.glctx.bufferData(this.glctx.ARRAY_BUFFER, xy as ArrayBuffer, this.glctx.STATIC_DRAW);
@@ -112,7 +124,7 @@ export class GLRenderer {
 
         this.glctx.getExtension('OES_texture_float')
 
-        this.glctx.texImage2D(this.glctx.TEXTURE_2D, 0, this.glctx.LUMINANCE, dataset.x.length, dataset.y.length, 
+        this.glctx.texImage2D(this.glctx.TEXTURE_2D, 0, this.glctx.RGBA, dataset.x.length, dataset.y.length, 
             0, this.glctx.LUMINANCE, this.glctx.FLOAT, dataset.data)
 
         return {
@@ -121,6 +133,38 @@ export class GLRenderer {
             dataset
         }
     }
+
+    public drawHeatMap(heatmap: IHeatmapPlot, umatrix: number[] | Float32Array) {
+
+       if (!this.heatMapProgram)
+           throw Error("HeatMap program is not instantiated.")
+
+       this.glctx.useProgram(this.heatMapProgram.program);
+
+       const numComponents = 2; // pull out 2 values per iteration
+       const type = this.glctx.FLOAT; // the data in the buffer is 32bit floats
+       const normalize = false; // don't normalize
+       const stride = 0; // how many bytes to get from one set of values to the next
+       // 0 = use type and numComponents above
+       const offset = 0; // how many bytes inside the buffer to start from
+
+       // link buffer to plot the data from it
+
+       this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, heatmap.textureCoorBuffer);
+       this.glctx.vertexAttribPointer(this.heatMapProgram.attribLocations.a_texCoord, numComponents, type, normalize, stride, offset);
+       this.glctx.enableVertexAttribArray(this.heatMapProgram.attribLocations.a_texCoord);
+
+       // assign uniforms
+
+       this.glctx.uniformMatrix3fv(this.heatMapProgram.uniformLocations.u_matrix, false, umatrix);
+
+       this.glctx.bindTexture(this.glctx.TEXTURE_2D, heatmap.texture);
+
+       // draw arrays
+
+       this.glctx.drawArrays(this.glctx.TRIANGLE_STRIP, 0, 4);
+
+   }
 
     public createThinLine(x: F32Array | number[],  y: F32Array | number[], color: Color, label: string | null = null): IThinLinePlot {
         // x.length === y.length
@@ -199,6 +243,48 @@ export class GLRenderer {
 
         // console.log("draw arrays called")
 
+    }
+
+    private initHeatmapProgram() {
+        const vertCode = `
+        attribute vec2 a_texCoord;
+        uniform mat3 u_matrix;
+        varying vec2 v_texCoord;
+        
+        void main(void) {
+            gl_Position = vec4(u_matrix * vec3(a_texCoord, 1.0), 1.0);
+        }`;
+    
+        const fragCode = `
+        precision mediump float;
+        uniform sampler2D u_image;
+        varying vec2 v_texCoord;
+
+        void main(void) {
+            // float lum = texture2D(u_image, v_texCoord);
+            // gl_FragColor = vec4(lum, lum, lum, 1.0);
+
+            // gl_FragColor = texture2D(u_image, v_texCoord);
+            gl_FragColor = vec4(0.3, 0.3, 0.3, 1.0);
+
+
+        }`;
+
+        const program = this.initProgram(vertCode, fragCode)
+
+        if (!program)
+            return
+
+        this.heatMapProgram = {
+            program: program,
+            attribLocations: {
+                a_texCoord: this.glctx.getAttribLocation(program, "a_texCoord")
+            },
+            uniformLocations: {
+                u_matrix: this.glctx.getUniformLocation(program, "u_matrix")!,
+                u_image: this.glctx.getUniformLocation(program, "u_image")!,
+            }
+        }
     }
 
     private initThinLineProgram() {

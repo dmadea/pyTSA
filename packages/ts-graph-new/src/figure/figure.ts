@@ -11,7 +11,7 @@ import { Axis, AxisType } from "./axis";
 import { ContextMenu } from "../contextmenu";
 import { ColorbarContextMenu, FigureContextMenu } from "./figurecontextmenu";
 import { Legend } from "../objects/legend";
-import { IThinLinePlot } from "../renderer";
+import { IHeatmapPlot, IThinLinePlot } from "../renderer";
 // import { Colorbar } from "./colorbar";
 
 import { glMatrix, mat3 } from "gl-matrix"
@@ -61,7 +61,7 @@ export class Figure extends GraphicObject {
     public yAxis: Axis;
     
     public steps: F32Array; 
-    public heatmap: HeatMap | null = null;
+    public heatmap: IHeatmapPlot | null = null;
     public colorbar: Colorbar | null = null;
     // public contextMenu: FigureContextMenu;
     
@@ -697,46 +697,49 @@ export class Figure extends GraphicObject {
         return plot;
     }
 
-    public plotHeatmap(dataset: Dataset, colormap: Colormap): HeatMap {
+    public plotHeatmap(dataset: Dataset, colormap?: Colormap)  {
 
-        if (!this.heatmap) {
-            this.heatmap = new HeatMap(this, dataset, colormap);
-        } else {
-            this.heatmap.updateData(dataset);
-        }
+        this.heatmap = this.scene!.renderer.createHeatMap(dataset)
+        this.repaint()
 
-        let x, y, h, w;
+        // if (!this.heatmap) {
+        //     this.heatmap = new HeatMap(this, dataset, colormap);
+        // } else {
+        //     this.heatmap.updateData(dataset);
+        // }
 
-        // let xdiff, ydiff, xOffset, yOffset;
+        // let x, y, h, w;
 
-        // x axis
+        // // let xdiff, ydiff, xOffset, yOffset;
 
-        if (!this.heatmap.isXRegular) {
-            this.xAxis.scale = dataset.x;
-            x = 0;
-            w = dataset.x.length - 1;
-        } else {
-            x = dataset.x[0];
-            w = dataset.x[dataset.x.length - 1] - x;
-            this.xAxis.scale = 'lin';
-        }
+        // // x axis
 
-        // y axis
+        // if (!this.heatmap.isXRegular) {
+        //     this.xAxis.scale = dataset.x;
+        //     x = 0;
+        //     w = dataset.x.length - 1;
+        // } else {
+        //     x = dataset.x[0];
+        //     w = dataset.x[dataset.x.length - 1] - x;
+        //     this.xAxis.scale = 'lin';
+        // }
 
-        if (!this.heatmap.isYRegular) {
-            this.yAxis.scale = dataset.y;
-            y = 0;
-            h = dataset.y.length - 1;
-        } else {
-            y = dataset.y[0];
-            h = dataset.y[dataset.y.length - 1] - y;
-            this.yAxis.scale = 'lin';
-        }
+        // // y axis
 
-        this.internalRange = {x, y, w, h};
+        // if (!this.heatmap.isYRegular) {
+        //     this.yAxis.scale = dataset.y;
+        //     y = 0;
+        //     h = dataset.y.length - 1;
+        // } else {
+        //     y = dataset.y[0];
+        //     h = dataset.y[dataset.y.length - 1] - y;
+        //     this.yAxis.scale = 'lin';
+        // }
 
-        this.repaint();
-        return this.heatmap;
+        // this.internalRange = {x, y, w, h};
+
+        // this.repaint();
+        // return this.heatmap;
     }
 
     // private setColorbarCR() {
@@ -879,7 +882,7 @@ export class Figure extends GraphicObject {
 
 
     private paintPlots(e: IPaintEvent) {
-        if (this.linePlots.length < 1) {
+        if (this.linePlots.length < 1 && this.heatmap === null) {
             return;
         }
         
@@ -913,6 +916,10 @@ export class Figure extends GraphicObject {
         // ]
 
         // console.log(umatrix)
+
+        if (this.heatmap) {
+            r.drawHeatMap(this.heatmap, umatrix);
+        }
         
         // the speed was almost the same as for the above case
         for (const plot of this.linePlots) {
@@ -920,7 +927,6 @@ export class Figure extends GraphicObject {
             // console.log("painting thin line")
             r.drawThinLine(plot, umatrix, this.xAxis.scale, this.yAxis.scale, 
                 this.xAxis.symlogLinthresh, this.yAxis.symlogLinthresh, this.xAxis.symlogLinscale, this.yAxis.symlogLinscale)
-            
 
             // e.ctx.strokeStyle = plot.color;
             // e.ctx.lineWidth = plot.lw;
