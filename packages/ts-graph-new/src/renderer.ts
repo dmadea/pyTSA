@@ -26,11 +26,13 @@ interface ThinLineProgram extends Program {
 
 interface HeatMapProgram extends Program {
     attribLocations: {
-        a_texCoord: GLint
+        a_vertCoord: GLint
     },
     uniformLocations: {
         u_matrix: WebGLUniformLocation,
-        u_image: WebGLUniformLocation,
+        // u_image: WebGLUniformLocation,
+        // u_xvals: WebGLUniformLocation,
+        // u_yvals: WebGLUniformLocation,
     }
 }
 
@@ -43,8 +45,9 @@ export interface IThinLinePlot {
 }
 
 export interface IHeatmapPlot {
-    textureCoorBuffer: WebGLBuffer, // rectangle of the plotted image
-    texture: WebGLTexture,
+    vertBuffer: WebGLBuffer, // rectangle of the plotted image
+    // texture: WebGLTexture,
+    vertices: Float32Array
     dataset: Dataset,
 }
 
@@ -74,6 +77,31 @@ const tranformFunction: string = `
     }
 `
 
+const jetColorMap = `
+vec4 jet(float x) {
+    vec3 a, b;
+    float c;
+    if (x < 0.34) {
+        a = vec3(0, 0, 0.5);
+        b = vec3(0, 0.8, 0.95);
+        c = (x - 0.0) / (0.34 - 0.0);
+    } else if (x < 0.64) {
+        a = vec3(0, 0.8, 0.95);
+        b = vec3(0.85, 1, 0.04);
+        c = (x - 0.34) / (0.64 - 0.34);
+    } else if (x < 0.89) {
+        a = vec3(0.85, 1, 0.04);
+        b = vec3(0.96, 0.7, 0);
+        c = (x - 0.64) / (0.89 - 0.64);
+    } else {
+        a = vec3(0.96, 0.7, 0);
+        b = vec3(0.5, 0, 0);
+        c = (x - 0.89) / (1.0 - 0.89);
+    }
+    return vec4(mix(a, b, c), 1.0);
+}
+`
+
 
 export class GLRenderer {
 
@@ -98,38 +126,96 @@ export class GLRenderer {
 
     public createHeatMap(dataset: Dataset): IHeatmapPlot {
 
-        const x0 = dataset.x[0]
-        const x1 = dataset.x[dataset.x.length - 1]
-        const y0 = dataset.y[0]
-        const y1 = dataset.y[dataset.y.length - 1]
+        // const x0 = dataset.x[0]
+        // const x1 = dataset.x[dataset.x.length - 1]
+        // const y0 = dataset.y[0]
+        // const y1 = dataset.y[dataset.y.length - 1]
 
-        const xy = new Float32Array([
-            x0, y0,
-            x1, y0,
-            x0, y1,
-            x1, y1
-        ])
+        // const xy = new Float32Array([
+        //     x0, y0,
+        //     x1, y0,
+        //     x0, y1,
+        //     x1, y1
+        // ])
 
-        var textureCoorBuffer = this.glctx.createBuffer() as WebGLBuffer;
-        this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, textureCoorBuffer);
-		this.glctx.bufferData(this.glctx.ARRAY_BUFFER, xy as ArrayBuffer, this.glctx.STATIC_DRAW);
+
+        const vertices = new Float32Array(dataset.x.length * dataset.y.length * 3 * 6)
+
+        const zmin = dataset.data.min()
+        const zmax = dataset.data.max()
+
+
+        for (let i = 0; i < dataset.data.nrows; i++) {
+            for (let j = 0; j < dataset.data.ncols; j++) {
+                const idx = 18 * (dataset.data.ncols * i + j)
+
+                const x0diff = (j === 0) ? dataset.x[j + 1] - dataset.x[j] : dataset.x[j] - dataset.x[j - 1]
+                const x1diff = (j + 1 === dataset.data.ncols) ? dataset.x[j] - dataset.x[j - 1] : dataset.x[j + 1] - dataset.x[j]
+
+                const y0diff = (i === 0) ? dataset.y[i + 1] - dataset.y[i] : dataset.y[i] - dataset.y[i - 1]
+                const y1diff = (i + 1 === dataset.data.nrows) ? dataset.y[i] - dataset.y[i - 1] : dataset.y[i + 1] - dataset.y[i]
+
+                const x0 = dataset.x[j] - x0diff / 2
+                const x1 = dataset.x[j] + x1diff / 2
+                const y0 = dataset.y[i] - y0diff / 2
+                const y1 = dataset.y[i] + y1diff / 2
+                const z = (dataset.data.get(i, j) - zmin) / (zmax - zmin)
+
+                // first triangle
+
+                vertices[idx] = x0
+                vertices[idx + 1] = y0
+                vertices[idx + 2] = z
+
+                vertices[idx + 3] = x1
+                vertices[idx + 4] = y0
+                vertices[idx + 5] = z
+
+                vertices[idx + 6] = x0
+                vertices[idx + 7] = y1
+                vertices[idx + 8] = z
+
+                // second triangle
+
+                vertices[idx + 9] = x1
+                vertices[idx + 10] = y0
+                vertices[idx + 11] = z
+
+                vertices[idx + 12] = x0
+                vertices[idx + 13] = y1
+                vertices[idx + 14] = z
+
+                vertices[idx + 15] = x1
+                vertices[idx + 16] = y1
+                vertices[idx + 17] = z
+            }
+        }
+
+        var vertBuffer = this.glctx.createBuffer() as WebGLBuffer;
+        this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, vertBuffer);
+		this.glctx.bufferData(this.glctx.ARRAY_BUFFER, vertices as ArrayBuffer, this.glctx.STATIC_DRAW);
+
+        // var texture = this.glctx.createTexture() as WebGLTexture
+        // this.glctx.bindTexture(this.glctx.TEXTURE_2D, texture);
+
+        // this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_WRAP_S, this.glctx.CLAMP_TO_EDGE);
+        // this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_WRAP_T, this.glctx.CLAMP_TO_EDGE);
+        // this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_MIN_FILTER, this.glctx.NEAREST);
+        // this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_MAG_FILTER, this.glctx.NEAREST);
+
+        // this.glctx.getExtension('OES_texture_float')
+
+        // // this.glctx.pixelStorei(this.glctx.UNPACK_ALIGNMENT, 4);
+
+        // this.glctx.texImage2D(this.glctx.TEXTURE_2D, 0, this.glctx.LUMINANCE, dataset.x.length, dataset.y.length, 
+        //     0, this.glctx.LUMINANCE, this.glctx.FLOAT, dataset.data)
+
+        console.log(vertices)
         
-        var texture = this.glctx.createTexture() as WebGLTexture
-        this.glctx.bindTexture(this.glctx.TEXTURE_2D, texture);
-
-        this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_WRAP_S, this.glctx.CLAMP_TO_EDGE);
-        this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_WRAP_T, this.glctx.CLAMP_TO_EDGE);
-        this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_MIN_FILTER, this.glctx.NEAREST);
-        this.glctx.texParameteri(this.glctx.TEXTURE_2D, this.glctx.TEXTURE_MAG_FILTER, this.glctx.NEAREST);
-
-        this.glctx.getExtension('OES_texture_float')
-
-        this.glctx.texImage2D(this.glctx.TEXTURE_2D, 0, this.glctx.RGBA, dataset.x.length, dataset.y.length, 
-            0, this.glctx.LUMINANCE, this.glctx.FLOAT, dataset.data)
 
         return {
-            textureCoorBuffer,
-            texture,
+            vertBuffer,
+            vertices,
             dataset
         }
     }
@@ -141,7 +227,7 @@ export class GLRenderer {
 
        this.glctx.useProgram(this.heatMapProgram.program);
 
-       const numComponents = 2; // pull out 2 values per iteration
+       const numComponents = 3; // pull out 2 values per iteration
        const type = this.glctx.FLOAT; // the data in the buffer is 32bit floats
        const normalize = false; // don't normalize
        const stride = 0; // how many bytes to get from one set of values to the next
@@ -150,20 +236,24 @@ export class GLRenderer {
 
        // link buffer to plot the data from it
 
-       this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, heatmap.textureCoorBuffer);
-       this.glctx.vertexAttribPointer(this.heatMapProgram.attribLocations.a_texCoord, numComponents, type, normalize, stride, offset);
-       this.glctx.enableVertexAttribArray(this.heatMapProgram.attribLocations.a_texCoord);
+       this.glctx.bindBuffer(this.glctx.ARRAY_BUFFER, heatmap.vertBuffer);
+       this.glctx.vertexAttribPointer(this.heatMapProgram.attribLocations.a_vertCoord, numComponents, type, normalize, stride, offset);
+       this.glctx.enableVertexAttribArray(this.heatMapProgram.attribLocations.a_vertCoord);
 
        // assign uniforms
 
        this.glctx.uniformMatrix3fv(this.heatMapProgram.uniformLocations.u_matrix, false, umatrix);
 
-       this.glctx.bindTexture(this.glctx.TEXTURE_2D, heatmap.texture);
+
+    //    this.glctx.uniform2f(this.heatMapProgram.uniformLocations.u_xrange, heatmap.dataset.x[0], heatmap.dataset.x[heatmap.dataset.x.length - 1]); // width, height
+    //    this.glctx.uniform2f(this.heatMapProgram.uniformLocations.u_yrange, heatmap.dataset.y[0], heatmap.dataset.y[heatmap.dataset.y.length - 1]); // width, height
+
+    //    this.glctx.bindTexture(this.glctx.TEXTURE_2D, heatmap.texture);
 
        // draw arrays
 
-       this.glctx.drawArrays(this.glctx.TRIANGLE_STRIP, 0, 4);
-
+       this.glctx.disable(this.glctx.CULL_FACE); // front and back sides will be visible
+       this.glctx.drawArrays(this.glctx.TRIANGLES, 0, heatmap.vertices.length / 3);
    }
 
     public createThinLine(x: F32Array | number[],  y: F32Array | number[], color: Color, label: string | null = null): IThinLinePlot {
@@ -247,25 +337,39 @@ export class GLRenderer {
 
     private initHeatmapProgram() {
         const vertCode = `
-        attribute vec2 a_texCoord;
+        attribute vec3 a_vertCoord;
         uniform mat3 u_matrix;
-        varying vec2 v_texCoord;
+        varying vec3 v_vertCoord;
         
         void main(void) {
-            gl_Position = vec4(u_matrix * vec3(a_texCoord, 1.0), 1.0);
+            v_vertCoord = a_vertCoord;
+            gl_Position = vec4(u_matrix * vec3(a_vertCoord.xy, 1.0), 1.0);
         }`;
     
         const fragCode = `
         precision mediump float;
-        uniform sampler2D u_image;
-        varying vec2 v_texCoord;
+        // uniform sampler2D u_image;
+        varying vec3 v_vertCoord;
+
+        ${jetColorMap}
+
+        // float range(float vmin, float vmax, float value) {
+        //     return (value - vmin) / (vmax - vmin);
+        // }
+
+        // vec2 range(vec2 xrange, vec2 yrange, vec2 value) {
+        //     vec2 vmin = vec2(xrange[0], yrange[0]);
+        //     vec2 vmax = vec2(xrange[1], yrange[1]);
+
+        //     return (value - vmin) / (vmax - vmin);
+        // }
 
         void main(void) {
-            // float lum = texture2D(u_image, v_texCoord);
-            // gl_FragColor = vec4(lum, lum, lum, 1.0);
+            // float x = texture2D(u_image, range(u_xrange, u_yrange, v_texCoord)).x;
 
-            // gl_FragColor = texture2D(u_image, v_texCoord);
-            gl_FragColor = vec4(0.3, 0.3, 0.3, 1.0);
+            gl_FragColor = jet(v_vertCoord.z);
+
+            // gl_FragColor = vec4(0.3, 0.3, 0.3, 1.0);
 
 
         }`;
@@ -278,11 +382,13 @@ export class GLRenderer {
         this.heatMapProgram = {
             program: program,
             attribLocations: {
-                a_texCoord: this.glctx.getAttribLocation(program, "a_texCoord")
+                a_vertCoord: this.glctx.getAttribLocation(program, "a_vertCoord")
             },
             uniformLocations: {
                 u_matrix: this.glctx.getUniformLocation(program, "u_matrix")!,
-                u_image: this.glctx.getUniformLocation(program, "u_image")!,
+                // u_image: this.glctx.getUniformLocation(program, "u_image")!,
+                // u_xvals: this.glctx.getUniformLocation(program, "u_xvals")!,
+                // u_yvals: this.glctx.getUniformLocation(program, "u_yvals")!,
             }
         }
     }

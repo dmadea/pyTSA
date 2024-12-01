@@ -339,7 +339,7 @@ export class Matrix extends F32Array {
             if (arr.length !== nrows * ncols) {
                 throw TypeError("Number of entries in array does not match the dimension");
             }
-            super();
+            super(nrows * ncols);
             this._nrows = nrows;
             this._ncols = ncols;
             Object.assign(this, arr);
