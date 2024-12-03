@@ -112,23 +112,13 @@
 
 </script>
 
-<defs>
+<!-- <defs>
     <linearGradient id={gradientID} x1="0" x2="0" y1="0" y2="1">
         {#each colormapLut as entry}
             <stop offset="{entry.pos * 100}%" stop-color="rgb({entry.r}, {entry.g}, {entry.b})" />
       {/each}
     </linearGradient>
-  </defs>
-
-
-  <!-- <foreignObject  
-    x={plotRect.x.toFixed(2)}
-    y={plotRect.y.toFixed(2)}
-    width={plotRect.w}
-    height={plotRect.h}>
-    <ContextMenu bind:this={contextMenu} items={contextMenuItems}/>
-</foreignObject> -->
-
+  </defs> -->
 
  <!-- svelte-ignore a11y_no_static_element_interactions -->
  <rect class="colorbar" onmousedown={onMouseDown} onmouseup={onMouseUp} ondblclick={onDblClick}
@@ -136,7 +126,7 @@
   y={plotRect.y.toFixed(2)}
   width={plotRect.w}
   height={plotRect.h}
-  fill="url(#{gradientID})" /> 
+  fill="transparent" />   <!-- fill="url(#{gradientID})"-->
 
 
 <TicksAndLabels figure={colorbar} calcPlotRect={calcPlotRect} rightAxisLabel={colorbarRightLabel}  />

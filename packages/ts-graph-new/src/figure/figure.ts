@@ -881,13 +881,11 @@ export class Figure extends GraphicObject {
     }
 
 
-    private paintPlots(e: IPaintEvent) {
+    protected paintPlots(e: IPaintEvent) {
         if (this.linePlots.length < 1 && this.heatmap === null) {
             return;
         }
         
-        const yIT = this.yAxis.invTransform;
-        const xIT = this.xAxis.invTransform;
         const r = this.scene!.renderer;
 
         // transformation of points from internal range to -1, 1 (viewbox)
@@ -918,11 +916,10 @@ export class Figure extends GraphicObject {
         // console.log(umatrix)
 
         if (this.heatmap) {
-
-            const vlim = this.colorbar!.yAxis.range
-
+            const range = this.colorbar!.yAxis.range
             r.drawHeatMap(this.heatmap, umatrix, this.xAxis.scale, this.yAxis.scale, 
-                this.xAxis.symlogLinthresh, this.yAxis.symlogLinthresh, this.xAxis.symlogLinscale, this.yAxis.symlogLinscale, vlim);
+                this.xAxis.symlogLinthresh, this.yAxis.symlogLinthresh, this.xAxis.symlogLinscale, this.yAxis.symlogLinscale,
+                 [range[0], range[0] + range[1]]);
         }
         
         // the speed was almost the same as for the above case
@@ -1042,6 +1039,10 @@ export class Figure extends GraphicObject {
     paint(e: IPaintEvent): void {
         if (!this.panning && !this.scaling && this.autoscaleOnRepaint) this.autoscale();
 
+        if (this.colorbar) {
+            this.colorbar.canvasRect = this.canvasRect
+        }
+
         const dpr = window.devicePixelRatio
 
         this.plotRect = {
@@ -1064,7 +1065,8 @@ export class Figure extends GraphicObject {
         // console.log("paint from figure", this)
         
         this.paintPlots(e)
-        
+
+        super.paint(e)
     }
 
 
@@ -1667,7 +1669,7 @@ export class Colorbar extends Figure {
         // if (this.offScreenCanvasCtx === null) {
         //     throw new Error('this.offScreenCanvasCtx === null');
         // }
-        
+
         this.yAxis.inverted = false;
         this.xAxis.inverted = false;
         this.showTicks = ['right'];
@@ -1700,9 +1702,22 @@ export class Colorbar extends Figure {
         // this.repaintFigure();
     }
 
-    // public addColorbar(colormap?: Colormap | undefined): Colorbar {
-    //     // do nothing
-    // }
+    paint(e: IPaintEvent): void {
+        super.paint(e)
+    }
+
+    protected paintPlots(e: IPaintEvent) {
+        const scene = (this.parent as Figure).scene
+
+        if (scene) {
+            scene.renderer.drawColorBar(3);
+        }
+        // const r = this.scene!.renderer;
+    }
+
+    public addColorbar(colormap?: Colormap): Colorbar {
+        // do nothing
+    }
 
     // public setHeatmapTransform() {
     //     if (!this.heatmap) return;
