@@ -30,6 +30,10 @@ interface HeatMapProgram extends Program {
     },
     uniformLocations: {
         u_matrix: WebGLUniformLocation,
+        u_scale: WebGLUniformLocation,
+        u_linscale: WebGLUniformLocation,
+        u_linthresh: WebGLUniformLocation,
+        u_vlim: WebGLUniformLocation,
         // u_image: WebGLUniformLocation,
         // u_xvals: WebGLUniformLocation,
         // u_yvals: WebGLUniformLocation,
@@ -102,6 +106,40 @@ vec4 jet(float x) {
 }
 `
 
+// {pos: 0, r: 75, g: 0, b: 130, a: 255},
+//         {pos: 0.333, r: 0, g: 0, b: 255, a: 255},
+//         {pos: 0.5, r: 255, g: 255, b: 255, a: 255},
+//         {pos: 0.625, r: 255, g: 255, b: 0, a: 255},
+//         {pos: 0.75, r: 255, g: 165, b: 0, a: 255},
+//         {pos: 0.875, r: 255, g: 0, b: 0, a: 255},
+//         {pos: 1, r: 150, g: 0, b: 0, a: 255}
+
+
+const symgradColorMap = `
+vec4 symgrad(float x) {
+    vec3 a, b;
+    float c;
+    if (x < 0.34) {
+        a = vec3(0, 0, 0.5);
+        b = vec3(0, 0.8, 0.95);
+        c = (x - 0.0) / (0.34 - 0.0);
+    } else if (x < 0.64) {
+        a = vec3(0, 0.8, 0.95);
+        b = vec3(1.0, 1.0, 1.0);
+        c = (x - 0.34) / (0.64 - 0.34);
+    } else if (x < 0.89) {
+        a = vec3(1.0, 1.0, 1.0);
+        b = vec3(0.96, 0.7, 0);
+        c = (x - 0.64) / (0.89 - 0.64);
+    } else {
+        a = vec3(0.96, 0.7, 0);
+        b = vec3(0.5, 0, 0);
+        c = (x - 0.89) / (1.0 - 0.89);
+    }
+    return vec4(mix(a, b, c), 1.0);
+}
+`
+
 
 export class GLRenderer {
 
@@ -159,7 +197,8 @@ export class GLRenderer {
                 const x1 = dataset.x[j] + x1diff / 2
                 const y0 = dataset.y[i] - y0diff / 2
                 const y1 = dataset.y[i] + y1diff / 2
-                const z = (dataset.data.get(i, j) - zmin) / (zmax - zmin)
+                // const z = (dataset.data.get(i, j) - zmin) / (zmax - zmin)
+                const z = dataset.data.get(i, j)
 
                 // first triangle
 
@@ -220,7 +259,8 @@ export class GLRenderer {
         }
     }
 
-    public drawHeatMap(heatmap: IHeatmapPlot, umatrix: number[] | Float32Array) {
+    public drawHeatMap(heatmap: IHeatmapPlot, umatrix: number[] | Float32Array, xscale: Scale, yscale: Scale,
+        xlinthresh: number = 1, ylinthresh: number = 1, xlinscale: number = 1, ylinscale: number = 1, vlim: [number, number]) {
 
        if (!this.heatMapProgram)
            throw Error("HeatMap program is not instantiated.")
@@ -244,6 +284,10 @@ export class GLRenderer {
 
        this.glctx.uniformMatrix3fv(this.heatMapProgram.uniformLocations.u_matrix, false, umatrix);
 
+       this.glctx.uniform2iv(this.heatMapProgram.uniformLocations.u_scale, [GLRenderer.getIntScale(xscale), GLRenderer.getIntScale(yscale)]);
+       this.glctx.uniform2fv(this.heatMapProgram.uniformLocations.u_linscale, [xlinscale, ylinscale]);
+       this.glctx.uniform2fv(this.heatMapProgram.uniformLocations.u_linthresh, [xlinthresh, ylinthresh]);
+       this.glctx.uniform2fv(this.heatMapProgram.uniformLocations.u_vlim, vlim);
 
     //    this.glctx.uniform2f(this.heatMapProgram.uniformLocations.u_xrange, heatmap.dataset.x[0], heatmap.dataset.x[heatmap.dataset.x.length - 1]); // width, height
     //    this.glctx.uniform2f(this.heatMapProgram.uniformLocations.u_yrange, heatmap.dataset.y[0], heatmap.dataset.y[heatmap.dataset.y.length - 1]); // width, height
@@ -274,6 +318,29 @@ export class GLRenderer {
         }
     }
 
+    private static getIntScale(scale: Scale): number
+    {
+        switch (scale) {
+            case 'lin': {
+                return 0
+            }
+            case 'log': {
+                return 1
+            }
+            case 'symlog': {
+                return 2
+            }
+            default: {
+                if (!(scale instanceof F32Array)) {
+                    throw new Error(`${scale}: Not implemented`);
+                }
+                return 3
+            }
+        }
+
+    }
+
+
     public drawThinLine(line: IThinLinePlot, umatrix: number[] | Float32Array, xscale: Scale, yscale: Scale,
          xlinthresh: number = 1, ylinthresh: number = 1, xlinscale: number = 1, ylinscale: number = 1) {
 
@@ -303,27 +370,7 @@ export class GLRenderer {
             this.thinLineProgram.uniformLocations.u_color, 
             [line.color.r, line.color.g, line.color.b, line.color.alpha])
 
-        const getIntScale = (scale: Scale): number => {
-            switch (scale) {
-                case 'lin': {
-                    return 0
-                }
-                case 'log': {
-                    return 1
-                }
-                case 'symlog': {
-                    return 2
-                }
-                default: {
-                    if (!(scale instanceof F32Array)) {
-                        throw new Error(`${scale}: Not implemented`);
-                    }
-                    return 3
-                }
-            }
-        }
-
-        this.glctx.uniform2iv(this.thinLineProgram.uniformLocations.u_scale, [getIntScale(xscale), getIntScale(yscale)]);
+        this.glctx.uniform2iv(this.thinLineProgram.uniformLocations.u_scale, [GLRenderer.getIntScale(xscale), GLRenderer.getIntScale(yscale)]);
         this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.u_linscale, [xlinscale, ylinscale]);
         this.glctx.uniform2fv(this.thinLineProgram.uniformLocations.u_linthresh, [xlinthresh, ylinthresh]);
 
@@ -338,24 +385,38 @@ export class GLRenderer {
     private initHeatmapProgram() {
         const vertCode = `
         attribute vec3 a_vertCoord;
+        
         uniform mat3 u_matrix;
+        uniform ivec2 u_scale; // [xscale, yscale]
+        uniform vec2 u_linscale;  // [x, y]
+        uniform vec2 u_linthresh;  // [x, y]
+
         varying vec3 v_vertCoord;
+
+        ${tranformFunction} // tr
         
         void main(void) {
             v_vertCoord = a_vertCoord;
-            gl_Position = vec4(u_matrix * vec3(a_vertCoord.xy, 1.0), 1.0);
+
+            vec3 coor = vec3(tr(u_scale.x, a_vertCoord.x, u_linscale.x, u_linthresh.x), tr(u_scale.y, a_vertCoord.y, u_linscale.y, u_linthresh.y), 1.0);
+
+            // gl_Position = vec4(u_matrix * vec3(a_vertCoord.xy, 1.0), 1.0);
+            gl_Position = vec4(u_matrix * coor, 1.0);
+
         }`;
     
         const fragCode = `
         precision mediump float;
         // uniform sampler2D u_image;
         varying vec3 v_vertCoord;
+        uniform vec2 u_vlim;  // [min, max]
 
         ${jetColorMap}
+        ${symgradColorMap}
 
-        // float range(float vmin, float vmax, float value) {
-        //     return (value - vmin) / (vmax - vmin);
-        // }
+        float range(float vmin, float vmax, float value) {
+            return (value - vmin) / (vmax - vmin);
+        }
 
         // vec2 range(vec2 xrange, vec2 yrange, vec2 value) {
         //     vec2 vmin = vec2(xrange[0], yrange[0]);
@@ -367,7 +428,11 @@ export class GLRenderer {
         void main(void) {
             // float x = texture2D(u_image, range(u_xrange, u_yrange, v_texCoord)).x;
 
-            gl_FragColor = jet(v_vertCoord.z);
+            float x = clamp(range(u_vlim[0], u_vlim[1], v_vertCoord.z), 0.0, 1.0);
+
+            // gl_FragColor = jet(x);
+            gl_FragColor = symgrad(x);
+
 
             // gl_FragColor = vec4(0.3, 0.3, 0.3, 1.0);
 
@@ -386,6 +451,11 @@ export class GLRenderer {
             },
             uniformLocations: {
                 u_matrix: this.glctx.getUniformLocation(program, "u_matrix")!,
+                u_scale: this.glctx.getUniformLocation(program, "u_scale")!,
+                u_linscale: this.glctx.getUniformLocation(program, "u_linscale")!,
+                u_linthresh: this.glctx.getUniformLocation(program, "u_linthresh")!,
+                u_vlim: this.glctx.getUniformLocation(program, "u_vlim")!,
+
                 // u_image: this.glctx.getUniformLocation(program, "u_image")!,
                 // u_xvals: this.glctx.getUniformLocation(program, "u_xvals")!,
                 // u_yvals: this.glctx.getUniformLocation(program, "u_yvals")!,

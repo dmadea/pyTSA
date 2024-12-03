@@ -918,7 +918,11 @@ export class Figure extends GraphicObject {
         // console.log(umatrix)
 
         if (this.heatmap) {
-            r.drawHeatMap(this.heatmap, umatrix);
+
+            const vlim = this.colorbar!.yAxis.range
+
+            r.drawHeatMap(this.heatmap, umatrix, this.xAxis.scale, this.yAxis.scale, 
+                this.xAxis.symlogLinthresh, this.yAxis.symlogLinthresh, this.xAxis.symlogLinscale, this.yAxis.symlogLinscale, vlim);
         }
         
         // the speed was almost the same as for the above case
@@ -1847,6 +1851,9 @@ export class Colorbar extends Figure {
     public rangeChanged(range: Rect): void {
         // console.log("range changed from colorbar")
         super.rangeChanged(range);
+
+        var f = this.parent as Figure;
+        f.replot()
 
         // this.repaint()
 
