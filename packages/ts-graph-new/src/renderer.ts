@@ -34,6 +34,8 @@ interface HeatMapProgram extends Program {
         u_linscale: WebGLUniformLocation,
         u_linthresh: WebGLUniformLocation,
         u_vlim: WebGLUniformLocation,
+        u_colormap: WebGLUniformLocation,
+
         // u_image: WebGLUniformLocation,
         // u_xvals: WebGLUniformLocation,
         // u_yvals: WebGLUniformLocation,
@@ -296,6 +298,16 @@ vec4 symgrad(float x) {
 }
 `
 
+const symgradUniformColorMap = `
+vec4 symgradUniform(float x) {
+    if (x <= 0.5) {
+        return fusion(1.0 - x);
+    } else {
+        return fire(1.0 - (x - 0.5) * 1.8); 
+    }
+}
+`
+
 
 const colormap = `
 
@@ -304,6 +316,7 @@ ${fireColorMap}
 ${fusionColorMap}
 ${viridisColorMap}
 ${symgradColorMap}
+${symgradUniformColorMap}
 
 vec4 colormap(float x, int colormap) {
 
@@ -317,6 +330,8 @@ vec4 colormap(float x, int colormap) {
         return fusion(x);
     } else if (colormap == 4) {  
         return viridis(x);
+    } else if (colormap == 5) {  
+        return symgradUniform(x);
     }
 }
 `
@@ -474,8 +489,8 @@ export class GLRenderer {
         }
     }
 
-    public drawHeatMap(heatmap: IHeatmapPlot, umatrix: number[] | Float32Array, xscale: Scale, yscale: Scale,
-        xlinthresh: number = 1, ylinthresh: number = 1, xlinscale: number = 1, ylinscale: number = 1, vlim: [number, number]) {
+    public drawHeatMap(heatmap: IHeatmapPlot, umatrix: number[] | Float32Array, scale: [Scale, Scale, Scale],
+        linthresh: [number, number, number], linscale: [number, number, number], vlim: [number, number], colormap: number) {
 
        if (!this.heatMapProgram)
            throw Error("HeatMap program is not instantiated.")
@@ -499,10 +514,14 @@ export class GLRenderer {
 
        this.glctx.uniformMatrix3fv(this.heatMapProgram.uniformLocations.u_matrix, false, umatrix);
 
-       this.glctx.uniform2iv(this.heatMapProgram.uniformLocations.u_scale, [GLRenderer.getIntScale(xscale), GLRenderer.getIntScale(yscale)]);
-       this.glctx.uniform2fv(this.heatMapProgram.uniformLocations.u_linscale, [xlinscale, ylinscale]);
-       this.glctx.uniform2fv(this.heatMapProgram.uniformLocations.u_linthresh, [xlinthresh, ylinthresh]);
+       scale.map(s => GLRenderer.getIntScale(s))
+
+       this.glctx.uniform3iv(this.heatMapProgram.uniformLocations.u_scale, scale.map(s => GLRenderer.getIntScale(s)));
+       this.glctx.uniform3fv(this.heatMapProgram.uniformLocations.u_linscale, linscale);
+       this.glctx.uniform3fv(this.heatMapProgram.uniformLocations.u_linthresh, linthresh);
        this.glctx.uniform2fv(this.heatMapProgram.uniformLocations.u_vlim, vlim);
+       this.glctx.uniform1i(this.heatMapProgram.uniformLocations.u_colormap, colormap);
+
 
     //    this.glctx.uniform2f(this.heatMapProgram.uniformLocations.u_xrange, heatmap.dataset.x[0], heatmap.dataset.x[heatmap.dataset.x.length - 1]); // width, height
     //    this.glctx.uniform2f(this.heatMapProgram.uniformLocations.u_yrange, heatmap.dataset.y[0], heatmap.dataset.y[heatmap.dataset.y.length - 1]); // width, height
@@ -640,9 +659,9 @@ export class GLRenderer {
         attribute vec3 a_vertCoord;
         
         uniform mat3 u_matrix;
-        uniform ivec2 u_scale; // [xscale, yscale]
-        uniform vec2 u_linscale;  // [x, y]
-        uniform vec2 u_linthresh;  // [x, y]
+        uniform ivec3 u_scale; // [xscale, yscale, zscale]
+        uniform vec3 u_linscale;  // [x, y, z]
+        uniform vec3 u_linthresh;  // [x, y, z]
 
         varying vec3 v_vertCoord;
 
@@ -662,9 +681,16 @@ export class GLRenderer {
         precision mediump float;
         // uniform sampler2D u_image;
         varying vec3 v_vertCoord;
+
         uniform vec2 u_vlim;  // [min, max]
+        uniform int u_colormap;  // index of colormap to use
+
+        uniform highp ivec3 u_scale; // [xscale, yscale, zscale]
+        uniform highp vec3 u_linscale;  // [x, y, z]
+        uniform highp vec3 u_linthresh;  // [x, y, z]
 
         ${colormap}
+        ${tranformFunction} // tr
 
         float range(float vmin, float vmax, float value) {
             return (value - vmin) / (vmax - vmin);
@@ -680,10 +706,11 @@ export class GLRenderer {
         void main(void) {
             // float x = texture2D(u_image, range(u_xrange, u_yrange, v_texCoord)).x;
 
-            float x = clamp(range(u_vlim[0], u_vlim[1], v_vertCoord.z), 0.0, 1.0);
+            float trz = tr(u_scale.z, v_vertCoord.z, u_linscale.z, u_linthresh.z);
 
-            gl_FragColor = colormap(x, 2);
+            float x = clamp(range(u_vlim[0], u_vlim[1], trz), 0.0, 1.0);
 
+            gl_FragColor = colormap(x, u_colormap);
 
             // gl_FragColor = vec4(0.3, 0.3, 0.3, 1.0);
 
@@ -706,6 +733,8 @@ export class GLRenderer {
                 u_linscale: this.glctx.getUniformLocation(program, "u_linscale")!,
                 u_linthresh: this.glctx.getUniformLocation(program, "u_linthresh")!,
                 u_vlim: this.glctx.getUniformLocation(program, "u_vlim")!,
+                u_colormap: this.glctx.getUniformLocation(program, "u_colormap")!,
+
 
                 // u_image: this.glctx.getUniformLocation(program, "u_image")!,
                 // u_xvals: this.glctx.getUniformLocation(program, "u_xvals")!,
