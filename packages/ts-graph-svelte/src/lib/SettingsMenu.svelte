@@ -1,5 +1,5 @@
 <script module>
-    import { Colormap, Colormaps, type Figure } from "@pytsa/ts-graph-new";
+    import { Colormaps, type Figure } from "@pytsa/ts-graph-new";
 
     export interface SettingsMenuProps {
         fig: Figure
@@ -48,8 +48,11 @@
     let title = $state<string>(fig.title)
     let axisAlignment = $state<Orientation>(fig.axisAlignment)
 
-    const colormapNames = Colormaps.getColormapsNames();
-    let colormapSelect = $state<string>(fig.colorbar ? fig.colorbar.colormap.name : "symgrad")
+    const colormapNames = Colormaps.map(cmap => cmap.name)  // ['asd', 'asd'] //
+    let colormapSelect = $state<string>(fig.colorbar ? fig.colorbar.colormap.name : Colormaps[5].name) // Colormaps[5].name
+    // let colormapSelect = $state<string>("asd") // Colormaps[5].name
+
+
 
     let xAxis = $state<AxisSettings>({
         label: fig.xAxis.label,
@@ -113,7 +116,7 @@
             fig.colorbar.yAxis.symlogLinthresh = zAxis.linthresh
             fig.colorbar.yAxis.inverted = zAxis.inverted
             fig.colorbar.yAxis.keepCentered = zAxis.keepCentered
-            fig.colorbar.colormap = Colormap.fromName(colormapSelect)
+            fig.colorbar.colormap = Colormaps.filter(cmap => colormapSelect === cmap.name)[0]
         }
 
         fig.replot()

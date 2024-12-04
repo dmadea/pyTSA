@@ -9,7 +9,6 @@
     import type { Margin } from "@pytsa/ts-graph-new/src/types.js";
     import type { SceneContext } from "./Scene.svelte";
     import type { IMouseEvent,  Cursor } from "@pytsa/ts-graph-new/src/objects/object.js";
-    import { Colormaps, type ILut } from "@pytsa/ts-graph-new/src/color.js";
     import type { ContextMenuItem } from "./ContextMenu.svelte";
     import ContextMenu from "./ContextMenu.svelte";
 
@@ -20,8 +19,6 @@
     let fc: FigureContext = getContext('FigureContext')
     let sceneContext: SceneContext = getContext('SceneContext')
     let colorbarRightLabel = $state<string>(colorbar.yAxis.label)
-    let colormapLut = $state<ILut>(colorbar.colormap.lut)
-    const gradientID = crypto.randomUUID()
 
     let contextMenu = $state<ReturnType<typeof ContextMenu>>()
 
@@ -52,8 +49,6 @@
         plotRect = r
         colorbarRightLabel = colorbar.yAxis.label
         colorbar.svgPlotRect = r
-        colormapLut = colorbar.colormap.lut
-        // console.log(colorbar.colormap.lut)
         return r
     }
 

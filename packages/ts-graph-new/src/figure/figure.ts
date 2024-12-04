@@ -758,7 +758,7 @@ export class Figure extends GraphicObject {
     public addColorbar(colormap?: Colormap): Colorbar {
         if (this.colorbar) return this.colorbar;
 
-        this.colorbar = new Colorbar(this, undefined, colormap);
+        this.colorbar = new Colorbar(this, this.canvasRect, colormap);
         this.items.push(this.colorbar);
         // this.colorbar.setCanvasRect(this.canvasRect);
         // this.linkMargin(this.colorbar, Orientation.Vertical);
@@ -916,12 +916,12 @@ export class Figure extends GraphicObject {
         // console.log(umatrix)
 
         if (this.heatmap) {
-            const range = this.colorbar!.yAxis.range
+            const range = this.colorbar!.yAxis.internalRange
             r.drawHeatMap(this.heatmap, umatrix, 
                 [this.xAxis.scale, this.yAxis.scale, this.colorbar!.yAxis.scale], 
                 [this.xAxis.symlogLinthresh, this.yAxis.symlogLinthresh, this.colorbar!.yAxis.symlogLinthresh],
                 [this.xAxis.symlogLinscale, this.yAxis.symlogLinscale, this.colorbar!.yAxis.symlogLinscale],
-                [range[0], range[0] + range[1]], 5);
+                [range[0], range[0] + range[1]], this.colorbar!.colormap);
         }
         
         // the speed was almost the same as for the above case
@@ -1658,13 +1658,14 @@ export class Figure extends GraphicObject {
 
 export class Colorbar extends Figure {
 
-    private _colormap: Colormap;
+    public colormap: Colormap;
     // private readonly _width: number = 20;  // with of the colorbar (effective rectagle) in px
     private figure: Figure;
 
     constructor(figure: Figure, canvasRect?: Rect, colormap?: Colormap) {
         super(figure, {x:0, y:0, w:0, h:0});
-        this._colormap = (colormap === undefined) ? new Colormap(Colormaps.symgrad, false, 'symgrad') : colormap;
+        // this._colormap = (colormap === undefined) ? new Colormap(Colormaps.symgrad, false, 'symgrad') : colormap;
+        this.colormap = colormap ?? Colormaps[5]
         // this.parentCanvasRect = {...figure.canvasRect};
 
         // this.offScreenCanvas = new OffscreenCanvas(this.cWidth, this.cHeight);
@@ -1693,19 +1694,19 @@ export class Colorbar extends Figure {
     //     return this._width * window.devicePixelRatio;
     // }
 
-    get colormap() {
-        return this._colormap;
-    }
+    // get colormap() {
+    //     return this._colormap;
+    // }
 
-    // TODO include transform
-    set colormap(colormap: Colormap) {
-        var inv = this._colormap.inverted;
-        this._colormap = colormap;
-        this._colormap.inverted = inv;
-        // this.renderColorbar();
-        // this.renderHeatmap();
-        // this.repaintFigure();
-    }
+    // // TODO include transform
+    // set colormap(colormap: Colormap) {
+    //     var inv = this._colormap.inverted;
+    //     this._colormap = colormap;
+    //     this._colormap.inverted = inv;
+    //     // this.renderColorbar();
+    //     // this.renderHeatmap();
+    //     // this.repaintFigure();
+    // }
 
     paint(e: IPaintEvent): void {
         super.paint(e)
@@ -1715,7 +1716,7 @@ export class Colorbar extends Figure {
         const scene = (this.parent as Figure).scene
 
         if (scene) {
-            scene.renderer.drawColorBar(5);
+            scene.renderer.drawColorBar(this.colormap);
         }
         // const r = this.scene!.renderer;
     }

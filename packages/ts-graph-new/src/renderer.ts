@@ -1,5 +1,5 @@
 import { F32Array } from "./array"
-import { Color, Colormap } from "./color"
+import { Color, Colormap, WEBGLColormaps } from "./color"
 import { glMatrix, mat3 } from "gl-matrix"
 import { Scale } from "./figure/axis"
 import { Dataset } from "./utils"
@@ -93,250 +93,6 @@ const tranformFunction: string = `
     }
 `
 
-const jetColorMap = `
-vec4 jet(float x) {
-    vec3 a, b;
-    float c;
-    if (x < 0.34) {
-        a = vec3(0, 0, 0.5);
-        b = vec3(0, 0.8, 0.95);
-        c = (x - 0.0) / (0.34 - 0.0);
-    } else if (x < 0.64) {
-        a = vec3(0, 0.8, 0.95);
-        b = vec3(0.85, 1, 0.04);
-        c = (x - 0.34) / (0.64 - 0.34);
-    } else if (x < 0.89) {
-        a = vec3(0.85, 1, 0.04);
-        b = vec3(0.96, 0.7, 0);
-        c = (x - 0.64) / (0.89 - 0.64);
-    } else {
-        a = vec3(0.96, 0.7, 0);
-        b = vec3(0.5, 0, 0);
-        c = (x - 0.89) / (1.0 - 0.89);
-    }
-    return vec4(mix(a, b, c), 1.0);
-}
-`
-
-const fireColorMap = `
-vec4 fire(float x) {
-    vec3 a, b;
-    float c;
-    if (x < 0.040) {
-        a = vec3(0.000, 0.000, 0.000);
-        b = vec3(0.153, 0.001, 0.000);
-        c = (x - 0.000) / (0.040 - 0.000);
-    } else if (x < 0.400) {
-        a = vec3(0.153, 0.001, 0.000);
-        b = vec3(0.750, 0.028, 0.000);
-        c = (x - 0.040) / (0.400 - 0.040);
-    } else if (x < 0.450) {
-        a = vec3(0.750, 0.028, 0.000);
-        b = vec3(0.841, 0.043, 0.000);
-        c = (x - 0.400) / (0.450 - 0.400);
-    } else if (x < 0.510) {
-        a = vec3(0.841, 0.043, 0.000);
-        b = vec3(0.942, 0.097, 0.000);
-        c = (x - 0.450) / (0.510 - 0.450);
-    } else if (x < 0.600) {
-        a = vec3(0.942, 0.097, 0.000);
-        b = vec3(0.996, 0.347, 0.000);
-        c = (x - 0.510) / (0.600 - 0.510);
-    } else if (x < 0.750) {
-        a = vec3(0.996, 0.347, 0.000);
-        b = vec3(1.000, 0.653, 0.004);
-        c = (x - 0.600) / (0.750 - 0.600);
-    } else if (x < 0.850) {
-        a = vec3(1.000, 0.653, 0.004);
-        b = vec3(1.000, 0.814, 0.025);
-        c = (x - 0.750) / (0.850 - 0.750);
-    } else if (x < 0.920) {
-        a = vec3(1.000, 0.814, 0.025);
-        b = vec3(1.000, 0.924, 0.074);
-        c = (x - 0.850) / (0.920 - 0.850);
-    } else if (x < 0.945) {
-        a = vec3(1.000, 0.924, 0.074);
-        b = vec3(1.000, 0.959, 0.167);
-        c = (x - 0.920) / (0.945 - 0.920);
-    } else {
-        a = vec3(1.000, 0.959, 0.167);
-        b = vec3(1.000, 1.000, 1.000);
-        c = (x - 0.945) / (1.000 - 0.945);
-    } 
-    return vec4(mix(a, b, c), 1.0);
-}
-`
-
-const fusionColorMap = `
-vec4 fusion(float x) {
-    vec3 a, b;
-    float c;
-    if (x < 0.060) {
-        a = vec3(0.153, 0.016, 0.070);
-        b = vec3(0.327, 0.024, 0.183);
-        c = (x - 0.000) / (0.060 - 0.000);
-    } else if (x < 0.130) {
-        a = vec3(0.327, 0.024, 0.183);
-        b = vec3(0.528, 0.071, 0.189);
-        c = (x - 0.060) / (0.130 - 0.060);
-    } else if (x < 0.200) {
-        a = vec3(0.528, 0.071, 0.189);
-        b = vec3(0.678, 0.228, 0.142);
-        c = (x - 0.130) / (0.200 - 0.130);
-    } else if (x < 0.280) {
-        a = vec3(0.678, 0.228, 0.142);
-        b = vec3(0.785, 0.437, 0.151);
-        c = (x - 0.200) / (0.280 - 0.200);
-    } else if (x < 0.400) {
-        a = vec3(0.785, 0.437, 0.151);
-        b = vec3(0.845, 0.763, 0.572);
-        c = (x - 0.280) / (0.400 - 0.280);
-    } else if (x < 0.500) {
-        a = vec3(0.845, 0.763, 0.572);
-        b = vec3(1.000, 1.000, 1.000);
-        c = (x - 0.400) / (0.500 - 0.400);
-    } else if (x < 0.600) {
-        a = vec3(1.000, 1.000, 1.000);
-        b = vec3(0.606, 0.819, 0.869);
-        c = (x - 0.500) / (0.600 - 0.500);
-    } else if (x < 0.710) {
-        a = vec3(0.606, 0.819, 0.869);
-        b = vec3(0.277, 0.597, 0.870);
-        c = (x - 0.600) / (0.710 - 0.600);
-    } else if (x < 0.850) {
-        a = vec3(0.277, 0.597, 0.870);
-        b = vec3(0.360, 0.193, 0.770);
-        c = (x - 0.710) / (0.850 - 0.710);
-    } else if (x < 0.900) {
-        a = vec3(0.360, 0.193, 0.770);
-        b = vec3(0.337, 0.045, 0.606);
-        c = (x - 0.850) / (0.900 - 0.850);
-    } else if (x < 0.950) {
-        a = vec3(0.337, 0.045, 0.606);
-        b = vec3(0.221, 0.068, 0.368);
-        c = (x - 0.900) / (0.950 - 0.900);
-    } else {
-        a = vec3(0.221, 0.068, 0.368);
-        b = vec3(0.095, 0.038, 0.195);
-        c = (x - 0.950) / (1.000 - 0.950);
-    }  
-    return vec4(mix(a, b, c), 1.0);
-}
-`
-
-const viridisColorMap = `
-vec4 viridis(float x) {
-    vec3 a, b;
-    float c;
-    if (x < 0.100) {
-        a = vec3(0.267, 0.005, 0.329);
-        b = vec3(0.283, 0.141, 0.458);
-        c = (x - 0.000) / (0.100 - 0.000);
-    } else if (x < 0.200) {
-        a = vec3(0.283, 0.141, 0.458);
-        b = vec3(0.254, 0.265, 0.530);
-        c = (x - 0.100) / (0.200 - 0.100);
-    } else if (x < 0.400) {
-        a = vec3(0.254, 0.265, 0.530);
-        b = vec3(0.164, 0.471, 0.558);
-        c = (x - 0.200) / (0.400 - 0.200);
-    } else if (x < 0.550) {
-        a = vec3(0.164, 0.471, 0.558);
-        b = vec3(0.119, 0.611, 0.539);
-        c = (x - 0.400) / (0.550 - 0.400);
-    } else if (x < 0.600) {
-        a = vec3(0.119, 0.611, 0.539);
-        b = vec3(0.135, 0.659, 0.518);
-        c = (x - 0.550) / (0.600 - 0.550);
-    } else if (x < 0.650) {
-        a = vec3(0.135, 0.659, 0.518);
-        b = vec3(0.186, 0.705, 0.485);
-        c = (x - 0.600) / (0.650 - 0.600);
-    } else if (x < 0.750) {
-        a = vec3(0.186, 0.705, 0.485);
-        b = vec3(0.369, 0.789, 0.383);
-        c = (x - 0.650) / (0.750 - 0.650);
-    } else if (x < 0.900) {
-        a = vec3(0.369, 0.789, 0.383);
-        b = vec3(0.741, 0.873, 0.150);
-        c = (x - 0.750) / (0.900 - 0.750);
-    } else if (x < 0.950) {
-        a = vec3(0.741, 0.873, 0.150);
-        b = vec3(0.876, 0.891, 0.095);
-        c = (x - 0.900) / (0.950 - 0.900);
-    } else {
-        a = vec3(0.876, 0.891, 0.095);
-        b = vec3(0.993, 0.906, 0.144);
-        c = (x - 0.950) / (1.000 - 0.950);
-    } 
-    return vec4(mix(a, b, c), 1.0);
-}
-`
-
-const symgradColorMap = `
-vec4 symgrad(float x) {
-    vec3 a, b;
-    float c;
-    if (x < 0.34) {
-        a = vec3(0, 0, 0.5);
-        b = vec3(0, 0.8, 0.95);
-        c = (x - 0.0) / (0.34 - 0.0);
-    } else if (x < 0.64) {
-        a = vec3(0, 0.8, 0.95);
-        b = vec3(1.0, 1.0, 1.0);
-        c = (x - 0.34) / (0.64 - 0.34);
-    } else if (x < 0.89) {
-        a = vec3(1.0, 1.0, 1.0);
-        b = vec3(0.96, 0.7, 0);
-        c = (x - 0.64) / (0.89 - 0.64);
-    } else {
-        a = vec3(0.96, 0.7, 0);
-        b = vec3(0.5, 0, 0);
-        c = (x - 0.89) / (1.0 - 0.89);
-    }
-    return vec4(mix(a, b, c), 1.0);
-}
-`
-
-const symgradUniformColorMap = `
-vec4 symgradUniform(float x) {
-    if (x <= 0.5) {
-        return fusion(1.0 - x);
-    } else {
-        return fire(1.0 - (x - 0.5) * 1.8); 
-    }
-}
-`
-
-
-const colormap = `
-
-${jetColorMap}
-${fireColorMap}
-${fusionColorMap}
-${viridisColorMap}
-${symgradColorMap}
-${symgradUniformColorMap}
-
-vec4 colormap(float x, int colormap) {
-
-    if (colormap == 0) { 
-        return jet(x);
-    } else if (colormap == 1) {  
-        return symgrad(x);
-    } else if (colormap == 2) {  
-        return fire(x);
-    } else if (colormap == 3) {  
-        return fusion(x);
-    } else if (colormap == 4) {  
-        return viridis(x);
-    } else if (colormap == 5) {  
-        return symgradUniform(x);
-    }
-}
-`
-
-
 export class GLRenderer {
 
     public glctx: WebGLRenderingContext
@@ -376,7 +132,7 @@ export class GLRenderer {
 		this.glctx.bufferData(this.glctx.ARRAY_BUFFER, xy as ArrayBuffer, this.glctx.STATIC_DRAW);
     }
 
-    public drawColorBar(colormap: number) {
+    public drawColorBar(colormap: Colormap) {
         if (!this.colorbarProgram)
             throw Error("Colorbar program is not instantiated.")
  
@@ -388,7 +144,7 @@ export class GLRenderer {
  
         // assign uniforms
  
-        this.glctx.uniform1i(this.colorbarProgram.uniformLocations.u_colormap, colormap);
+        this.glctx.uniform1i(this.colorbarProgram.uniformLocations.u_colormap, colormap.index);
  
         // draw arrays
  
@@ -490,7 +246,7 @@ export class GLRenderer {
     }
 
     public drawHeatMap(heatmap: IHeatmapPlot, umatrix: number[] | Float32Array, scale: [Scale, Scale, Scale],
-        linthresh: [number, number, number], linscale: [number, number, number], vlim: [number, number], colormap: number) {
+        linthresh: [number, number, number], linscale: [number, number, number], vlim: [number, number], colormap: Colormap) {
 
        if (!this.heatMapProgram)
            throw Error("HeatMap program is not instantiated.")
@@ -520,7 +276,7 @@ export class GLRenderer {
        this.glctx.uniform3fv(this.heatMapProgram.uniformLocations.u_linscale, linscale);
        this.glctx.uniform3fv(this.heatMapProgram.uniformLocations.u_linthresh, linthresh);
        this.glctx.uniform2fv(this.heatMapProgram.uniformLocations.u_vlim, vlim);
-       this.glctx.uniform1i(this.heatMapProgram.uniformLocations.u_colormap, colormap);
+       this.glctx.uniform1i(this.heatMapProgram.uniformLocations.u_colormap, colormap.index);
 
 
     //    this.glctx.uniform2f(this.heatMapProgram.uniformLocations.u_xrange, heatmap.dataset.x[0], heatmap.dataset.x[heatmap.dataset.x.length - 1]); // width, height
@@ -631,7 +387,7 @@ export class GLRenderer {
         varying vec2 v_vertCoord;
         uniform int u_colormap;  // index of colormap to use
 
-        ${colormap}
+        ${WEBGLColormaps}
 
         void main(void) {
             float x = (v_vertCoord.y + 1.0) / 2.0;
@@ -689,7 +445,7 @@ export class GLRenderer {
         uniform highp vec3 u_linscale;  // [x, y, z]
         uniform highp vec3 u_linthresh;  // [x, y, z]
 
-        ${colormap}
+        ${WEBGLColormaps}
         ${tranformFunction} // tr
 
         float range(float vmin, float vmax, float value) {
