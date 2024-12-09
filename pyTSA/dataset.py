@@ -237,6 +237,11 @@ class Dataset(object):
 
         self.mask.append([t0_idx, t1_idx, w0_idx, w1_idx])
 
+    def add_masked_scan(self, t: float):
+        t0_idx = fi(self.times, t)
+
+        self.mask.append([t0_idx, t0_idx + 1, 0, self.wavelengths.shape[0]])
+
     def clear_mask(self):
         self.mask.clear()
 

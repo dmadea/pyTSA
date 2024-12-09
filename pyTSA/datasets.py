@@ -139,15 +139,26 @@ class Datasets(object):
         for d in self:
             d.times -= d.times[0] + t0
 
-    def get_averaged_dataset(self) -> Dataset:
+    def get_averaged_dataset(self, apply_mask: bool = True) -> Dataset:
         if len(self._datasets) == 0:
             raise ValueError("No datasets.")
         
         if len(self._datasets) == 1:
             return self[0]
+        
+        mats2avrg = []
+        
+        for d in self:
+            if d is None:
+                continue
+            m = d.matrix_fac.copy()
+            if apply_mask:
+                d.apply_mask(m)
+            mats2avrg.append(m)
 
-        mats = np.stack([d.matrix for d in self], axis=2)
-        m_avrg = mats.mean(axis=2)
+        m_stacked = np.stack(mats2avrg, axis=2)
+        m_avrg = np.nanmean(m_stacked, axis=2, keepdims=False)
+        # m_avrg = mats.mean(axis=2)
 
         return Dataset(m_avrg, self[0].times, self[0].wavelengths, name=f"{self[0].name}-avrg")
 
