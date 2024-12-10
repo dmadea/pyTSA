@@ -11,6 +11,9 @@ import matplotlib as mpl
 import matplotlib.colors as c
 from numpy import ma
 
+import cmasher as cmr
+import colorcet as cc
+
 from matplotlib.ticker import AutoLocator, SymmetricalLogLocator, ScalarFormatter, AutoMinorLocator, MultipleLocator, Locator, FixedLocator
 
 WL_LABEL = 'Wavelength / nm'
@@ -592,11 +595,11 @@ def plot_kinetics_ax(ax, D, times, wavelengths,   lw=0.5,  time_unit='ps',
 
 
 def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_unit='ps',
-                 z_unit=dA_unit, cmap='diverging', z_lim=(None, None),
+                 z_unit=dA_unit, cmap='diverging_uniform', z_lim=(None, None),
                  t_lim=(None, None), w_lim=(None, None), linthresh=1, linscale=1, D_mul_factor=1,
                  n_lin_bins=10, n_log_bins=10, plot_tilts=True, squeeze_z_range_factor=1,
                  y_major_formatter=ScalarFormatter(), y_label='Time delay',
-                 x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels=30, plot_countours=True,
+                 x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels: int | None = 30, plot_countours=True,
                  colorbar_locator=AutoLocator(), colorbarpad=0.04, title='', log_z=False,
                  diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=False,
                  x_label="Wavelength / nm", plot_chirp_corrected=False, mu=None, draw_chirp=True, **kwargs):
@@ -631,6 +634,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
     D[D > zmax] = zmax
 
     register_div_cmap(zmin, zmax)
+    register_div_cmap_uniform(zmin, zmax)
     register_div_white_cmap(zmin, zmax, diverging_white_cmap_tr)
 
     x, y = np.meshgrid(wavelengths, times)  # needed for pcolormesh to correctly scale the image
@@ -652,17 +656,21 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
                         hatch=hatch, edgecolor="k", linewidth=0.0)
 
     #     mappable = ax.pcolormesh(x, y, D, cmap=cmap, vmin=zmin, vmax=zmax)
-    levels = get_sym_space(zmin, zmax, n_levels)
+    if n_levels is not None:
+        levels = get_sym_space(zmin, zmax, n_levels)
 
     # mappable = ax.contourf(x, y, D, cmap=cmap, vmin=zmin, vmax=zmax, levels=levels, antialiased=True)
     if log_z:
         norm = mpl.colors.LogNorm(vmin=np.max(np.asarray([1e-9, zmin])), vmax=zmax, clip=True)
-        mappable = ax.pcolormesh(x, y, D, cmap=cmap, norm=norm)
     else:
         norm = mpl.colors.Normalize(vmin=zmin,vmax=zmax, clip=True)
+
+    if n_levels is None:
+        mappable = ax.pcolormesh(x, y, D, cmap=cmap, norm=norm)
+    else:
         mappable = ax.contourf(x, y, D, cmap=cmap, norm=norm, levels=levels, antialiased=True)
 
-    if plot_countours:
+    if plot_countours and n_levels is not None:
         cmap_colors = cm.get_cmap(cmap)
         colors = cmap_colors(np.linspace(0, 1, n_levels + 1))
         colors *= 0.45  # plot contours as darkens colors of colormap, blue -> darkblue, white -> gray ...
@@ -678,8 +686,8 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
     ax.set_axisbelow(False)
     ax.set_title(title)
 
-    fig.colorbar(mappable, ax=ax, label=z_unit, orientation='vertical', aspect=colorbar_aspect, pad=colorbarpad,
-                 ticks=None if log_z else colorbar_locator)  # , format=ScalarFormatter()  ticks=colorbar_locator
+    plt.colorbar(mappable, ax=ax, label=z_unit, orientation='vertical', aspect=colorbar_aspect, pad=colorbarpad,
+                 )  # , format=ScalarFormatter()  ticks=colorbar_locator  ticks=None if log_z else colorbar_locator
     
     if symlog:
         ax.set_yscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=linscale, linthresh=linthresh)
@@ -939,7 +947,44 @@ def register_div_cmap(zmin, zmax):  # colors for femto TA heat maps: dark blue, 
     custom_cmap = LinearSegmentedColormap('diverging', _cdict)
     cmaps.unregister('diverging')
     cmaps.register(custom_cmap, name='diverging')
-    # colormaps.register(custom_cmap, 'diverging', force=True)
 
+
+def register_div_cmap_uniform(zmin, zmax):  # colors for femto TA heat maps: dark blue, blue, white, yellow, red, dark red
+    """c map suited for the data so that zero will be always in white color."""
+
+    diff = zmax - zmin
+    w = np.abs(zmin / diff)  # white color point set to zero z value
+
+    cmap_fire = plt.get_cmap('cet_fire')
+    cmap_fusion = plt.get_cmap('cmr.fusion') 
+
+    def fusion_fire(x):
+        if (x <= 0.5):
+            return cmap_fusion(1.0 - x)
+        else:
+            return cmap_fire(1.0 - (x - 0.5) * 1.8)
+    
+    x1 = np.linspace(0, w, 50, endpoint=False)
+    x2 = np.linspace(w, 1, 50, endpoint=True)
+
+    def x1p(x):
+        return x * 0.5 / w
+    
+    def x2p(x):
+        return (x * 0.5 + 0.5 - w) / (1 - w)
+
+    _cdict = {'red': [(x, fusion_fire(x1p(x))[0], fusion_fire(x1p(x))[0]) for x in x1] + 
+                     [(x, fusion_fire(x2p(x))[0], fusion_fire(x2p(x))[0]) for x in x2],
+
+              'green': [(x, fusion_fire(x1p(x))[1], fusion_fire(x1p(x))[1]) for x in x1] + 
+                       [(x, fusion_fire(x2p(x))[1], fusion_fire(x2p(x))[1]) for x in x2],
+
+              'blue': [(x, fusion_fire(x1p(x))[2], fusion_fire(x1p(x))[2]) for x in x1] + 
+                      [(x, fusion_fire(x2p(x))[2], fusion_fire(x2p(x))[2]) for x in x2],
+              }
+
+    custom_cmap = LinearSegmentedColormap('diverging_uniform', _cdict)
+    cmaps.unregister('diverging_uniform')
+    cmaps.register(custom_cmap, name='diverging_uniform')
 
 

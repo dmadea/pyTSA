@@ -930,7 +930,7 @@ class FirstOrderModel(KineticModel):
                     update_kwargs("das-norm", kws)  # change to data-specific kwargs
                     plot_SADS_ax(ax, self.dataset.wavelengths, (self.ST_opt / self.ST_opt.max(axis=1, keepdims=True)).T, **kws)
                 case "ldm":
-                    kws.update(dict(title=f"LDM [{self.dataset.name}]", plot_tilts=False, y_major_formatter=None, cmap='diverging',
+                    kws.update(dict(title=f"LDM [{self.dataset.name}]", plot_tilts=False, y_major_formatter=None, cmap='diverging_uniform',
                                      z_unit="Amplitude", y_label='Lifetime', mu=None, log_z=False))
                     update_kwargs("ldm", kws)  # change to specific kwargs
                     kws.update(dict(plot_chirp_corrected=False, symlog=False, log=True))
