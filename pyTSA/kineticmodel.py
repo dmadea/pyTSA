@@ -933,7 +933,7 @@ class FirstOrderModel(KineticModel):
                     kws.update(dict(title=f"LDM [{self.dataset.name}]", plot_tilts=False, y_major_formatter=None, cmap='diverging_uniform',
                                      z_unit="Amplitude", y_label='Lifetime', mu=None, log_z=False))
                     update_kwargs("ldm", kws)  # change to specific kwargs
-                    kws.update(dict(plot_chirp_corrected=False, symlog=False, log=True))
+                    kws.update(dict(plot_chirp_corrected=False, symlog=False, log=True, t_lim=(None, None)))
                     plot_data_ax(fig, ax, self.LDM, self.LDM_lifetimes, self.dataset.wavelengths, **kws)
                 case "ldmfit":
                     kws.update(dict(title=f"LDM-fit", log=False, mu=mu))

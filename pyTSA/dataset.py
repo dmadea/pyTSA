@@ -242,6 +242,11 @@ class Dataset(object):
 
         self.mask.append([t0_idx, t0_idx + 1, 0, self.wavelengths.shape[0]])
 
+    def remove_scan(self, t: float):
+        idx = fi(self.times, t)
+        self.matrix = np.delete(self.matrix, idx, 0)
+        self.times = np.delete(self.times, idx, 0)
+
     def clear_mask(self):
         self.mask.clear()
 
