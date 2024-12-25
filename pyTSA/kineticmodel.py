@@ -525,6 +525,9 @@ class FirstOrderModel(KineticModel):
         vals = np.asarray([params[f"tau_{i+1}"].value for i in range(self.n_species)])
         return 1 / vals
     
+    def get_labels(self, t_unit='ps'):
+        return [f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]
+    
     def get_width(self, params: Parameters | None = None) -> float:
         params = self.params if params is None else params
 
@@ -913,20 +916,19 @@ class FirstOrderModel(KineticModel):
                     # ax.legend(frameon=False)
 
                 case "eas":
-                    kws.update(dict(title="EAS", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
+                    kws.update(dict(title="EAS", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("eas", kws)  # change to data-specific kwargs
                     plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_EAS.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
                 case "eas-norm":
-                    kws.update(dict(title="EAS-norm", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
+                    kws.update(dict(title="EAS-norm", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("eas-norm", kws)  # change to data-specific kwargs
                     plot_SADS_ax(ax, self.dataset.wavelengths, (self.ST_EAS / self.ST_EAS.max(axis=1, keepdims=True)).T, **kws)
                 case "das":
-                    # TODO include artifacts
-                    kws.update(dict(title="DAS", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
+                    kws.update(dict(title="DAS", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("das", kws)  # change to data-specific kwargs
                     plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
                 case "das-norm":
-                    kws.update(dict(title="DAS-norm", colors=COLORS, labels=[f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]))
+                    kws.update(dict(title="DAS-norm", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("das-norm", kws)  # change to data-specific kwargs
                     plot_SADS_ax(ax, self.dataset.wavelengths, (self.ST_opt / self.ST_opt.max(axis=1, keepdims=True)).T, **kws)
                 case "ldm":
@@ -981,7 +983,12 @@ class FirstOrderLPLModel(FirstOrderModel):
             params.add('LPL_slope', value=1, min=0.1, max=10, vary=True)
 
         return params
+    
+    def get_labels(self, t_unit='ps'):
+        labels = super().get_labels(t_unit)
+        return labels + ['LPL'] if self.include_LPL else labels
         
+
     def calculate_C_profiles(self, params: Parameters | None = None):
         super(FirstOrderLPLModel, self).calculate_C_profiles(params)
 
@@ -1013,7 +1020,9 @@ class TargetFirstOrderModel(FirstOrderModel):
     def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
         raise NotImplementedError()
-
+    
+    def get_labels(self, t_unit='ps'):
+        raise NotImplementedError()
 
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         params = self.params if params is None else params
@@ -1047,6 +1056,9 @@ class SensitizationModel(TargetFirstOrderModel):
 
         return params
     
+    def get_labels(self, t_unit='ps'):
+        raise NotImplementedError()
+    
     def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
         
@@ -1068,6 +1080,8 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         self.add_quenching_rates = False
         super(DelayedFluorescenceModel, self).__init__(dataset, 2)
 
+        self.used_compartments = [0, 1]
+
 
     def init_params(self) -> Parameters:
         params = super(DelayedFluorescenceModel, self).init_params()
@@ -1086,6 +1100,10 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
 
 
         return params
+    
+    def get_labels(self, t_unit='ps'):
+        labels = np.asarray(['S1', 'T1'])
+        return list(labels[self.used_compartments])
     
     def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Return a tuple with the first argument as initial j vector and second argument is K matrix"""

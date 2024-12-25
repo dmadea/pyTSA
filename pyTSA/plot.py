@@ -313,9 +313,11 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
         
         if is_iterable(wls[i]):
             k, l = fi(wavelengths, wls[i])
-            trace = np.trapz(D[:, k:l+1], wavelengths[k:l+1], axis=1)
-            trace_fit = np.trapz(D_fit[:, k:l+1], wavelengths[k:l+1], axis=1)
-            tt = t - (mu[k] + mu[l+1]) / 2
+            if l < wavelengths.shape[0] - 1:
+                l += 1
+            trace = np.trapz(D[:, k:l], wavelengths[k:l], axis=1)
+            trace_fit = np.trapz(D_fit[:, k:l], wavelengths[k:l], axis=1)
+            tt = t - (mu[k] + mu[l]) / 2
             label=f'({wls[i][0]}$-${wls[i][1]}) {wl_unit}'
             
             ## save the traces to csv
@@ -854,7 +856,7 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
         else:
             color = colors[i]
 
-        ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=labels[i] if i < len(labels) else "LPL")
+        ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=labels[i])
 
     if Artifacts is not None:
         colorsArt = ['black', 'grey', 'navy', 'pink']
