@@ -236,7 +236,8 @@ class Datasets(object):
                 break
 
             assert self[i].model is not None
-            self[i].model._plot_gs(fig, gs, what, inner_nrows, inner_ncols, inner_hspace, inner_wspace, **kwargs)
+            fig_labels_offset = i*n_inner
+            self[i].model._plot_gs(fig, gs, what, inner_nrows, inner_ncols, inner_hspace, inner_wspace, fig_labels_offset=fig_labels_offset, **kwargs)
 
         if filepath:
             ext = os.path.splitext(filepath)[1].lower()[1:]

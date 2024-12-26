@@ -90,9 +90,11 @@ class KineticModel(object):
     # description = "..."
     # _class = '-class-'
 
-    def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
     
         self.dataset: Dataset = dataset
+        if set_model:
+            self.dataset.model = self
         self._weights: list[tuple[float, float, float]] = []  # (wl_start, wl_end, weight) default weight 1, # additional weights
         self.n_species: int = n_species
         self.species_names = np.array(list('ABCDEFGHIJKLMNOPQRSTUV'), dtype=str)
@@ -432,7 +434,7 @@ class FirstOrderModel(KineticModel):
 
     name = "First order kinetic model"
 
-    def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
         # more settings
         self.central_wave = 500  # lambda_c, wavelength at central wave, it is necessary for calculation of chirp parameters
         self.include_chirp: bool = True  # if True, model will be fitted with more complex tensor method
@@ -475,7 +477,7 @@ class FirstOrderModel(KineticModel):
         self._calculate_EAS = True
         self._include_rates_params = True
 
-        super(FirstOrderModel, self).__init__(dataset, n_species)
+        super(FirstOrderModel, self).__init__(dataset, n_species, set_model)
 
         # self.update_n()
         # self.ridge_alpha = 0.0001
@@ -971,9 +973,9 @@ class FirstOrderLPLModel(FirstOrderModel):
 
     name = "First order kinetic model with optional LPL profile"
 
-    def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
         self.include_LPL = True
-        super(FirstOrderLPLModel, self).__init__(dataset, n_species)
+        super(FirstOrderLPLModel, self).__init__(dataset, n_species, set_model)
         self._calculate_EAS = False
 
     def init_params(self) -> Parameters:
@@ -1007,8 +1009,8 @@ class TargetFirstOrderModel(FirstOrderModel):
 
     name = "General abstract class for creating target models"
 
-    def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
-        super(TargetFirstOrderModel, self).__init__(dataset, n_species)
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
+        super(TargetFirstOrderModel, self).__init__(dataset, n_species, set_model)
         self._calculate_EAS = False
         self._include_rates_params = False
         self.C_opt_full = None
@@ -1076,11 +1078,12 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
 
     name = "Delayed fluorescence kinetic model"
 
-    def __init__(self, dataset: Dataset | None = None, n_species: int = 1):
+    def __init__(self, dataset: Dataset | None = None, set_model: bool = False):
         self.add_quenching_rates = False
-        super(DelayedFluorescenceModel, self).__init__(dataset, 2)
+        self.add_inf_compartment = False
+        super(DelayedFluorescenceModel, self).__init__(dataset, 3, set_model)
 
-        self.used_compartments = [0, 1]
+        self.used_compartments = [0]
 
 
     def init_params(self) -> Parameters:
@@ -1102,7 +1105,7 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         return params
     
     def get_labels(self, t_unit='ps'):
-        labels = np.asarray(['S1', 'T1'])
+        labels = np.asarray(['S1', 'T1', 'inf'])
         return list(labels[self.used_compartments])
     
     def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
@@ -1129,11 +1132,23 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         
         # K = np.asarray([[-k_rnr - k_isc - kq_isc - kq_s, k_risc + kq_risc],
         #         [k_isc + kq_isc,         -k_risc - kq_risc - kq_t]])
+
+        if self.add_inf_compartment:
         
-        K = np.asarray([[-k_rnr - k_isc - ki_isc - kq_s, k_risc + ki_risc],
-                [k_isc + ki_isc,         -k_risc - ki_risc - kq_t]])
-    
-        j = np.asarray([1, 0])
+            K = np.asarray([[-k_rnr - k_isc - ki_isc - kq_s, k_risc + ki_risc, 0],
+                    [k_isc + ki_isc,         -k_risc - ki_risc - kq_t, 0],
+                    [k_rnr, 0, 0]])
+        
+            j = np.asarray([1, 0, 0])
+
+        else:
+                    
+            K = np.asarray([[-k_rnr - k_isc - ki_isc - kq_s, k_risc + ki_risc],
+                    [k_isc + ki_isc,         -k_risc - ki_risc - kq_t]])
+        
+            j = np.asarray([1, 0])
+
+
 
         return j, K
         
