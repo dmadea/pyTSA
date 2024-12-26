@@ -287,7 +287,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
                           marker_facecolor='white', alpha=0.8, y_lim=(None, None), plot_tilts=True, wl_unit='nm', t_unit='ps',
                           linthresh=1, linscale=1, colors=None, D_mul_factor=1, legend_spacing=0.2, lw=1.5,
                           legend_loc='best', z_unit=dA_unit, x_label='Time', symlog=True,
-                          t_lim=(None, None), plot_zero_line=True, **kwargs):
+                          t_lim=(None, None), plot_zero_line=True, norm_traces=False, **kwargs):
     
     """wls can contain a range of wavelengths, in this case, the integrated intensity will be calculated in this range and plotted"""
 
@@ -297,7 +297,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
     if not isinstance(mu, np.ndarray):
         mu = np.ones_like(wavelengths) * mu
 
-    t_lim = ((times - mu.min())[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
+    t_lim = ((times - mu.min())[0] if t_lim[0] is None else t_lim[0], (times - mu.min())[-1] if t_lim[1] is None else t_lim[1])
 
     set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=z_unit, x_label=f"{x_label} / {t_unit}",
                   y_minor_locator=None, x_minor_locator=None)
@@ -318,7 +318,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
             trace = np.trapz(D[:, k:l], wavelengths[k:l], axis=1)
             trace_fit = np.trapz(D_fit[:, k:l], wavelengths[k:l], axis=1)
             tt = t - (mu[k] + mu[l]) / 2
-            label=f'({wls[i][0]}$-${wls[i][1]}) {wl_unit}'
+            label=f'$\\int$({wls[i][0]}$-${wls[i][1]}) {wl_unit}'
             
             ## save the traces to csv
             # fpath = "/Users/dominikmadea/Library/CloudStorage/OneDrive-OIST/Projects/Heptazines + femto/Python/fits/Ryoko"
@@ -330,6 +330,11 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
             trace_fit = D_fit[:, idx]
             tt = t - mu[idx]
             label=f'{wls[i]} {wl_unit}'
+
+        if norm_traces:
+            _max = trace_fit.max()
+            trace_fit /= _max
+            trace /= _max
 
         ax.scatter(tt, trace * D_mul_factor, edgecolor=color_points, facecolor=marker_facecolor,
                    alpha=alpha, marker='o', s=marker_size, linewidths=marker_linewidth)

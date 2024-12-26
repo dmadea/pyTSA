@@ -956,7 +956,7 @@ class FirstOrderModel(KineticModel):
 
 
             if add_figure_labels:
-                ax.text(-0.1, 1.10, f_labels[i + fig_labels_offset], color='black', transform=ax.transAxes,
+                ax.text(-0.05, 1.05, f_labels[i + fig_labels_offset], color='black', transform=ax.transAxes,
                         fontstyle='normal', fontweight='bold', fontsize=figure_labels_font_size)        
         # plt.tight_layout()
 
