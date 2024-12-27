@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from .mathfuncs import chirp_correction, fi, is_iterable
 
 from matplotlib.colors import LinearSegmentedColormap
-from matplotlib import cm
+# from matplotlib import cm
 from matplotlib import colormaps as cmaps
 import matplotlib as mpl
 import matplotlib.colors as c
@@ -431,33 +431,41 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
 #     ax.set_axisbelow(False)
 
 
-def plot_spectra_ax(ax, D, times, wavelengths, selected_times=(0, 100), zero_reg=None, z_unit=dA_unit, D_mul_factor=1,
-                    legend_spacing=0.05, colors=None, lw=1.5, darkens_factor_cmap=1, cmap='jet', columnspacing=2,
-                    legend_loc='lower right', legend_ncol=2, ylim=None, label_prefix='t = ', time_unit='ps'):
+def plot_spectra_ax(ax, D, times, wavelengths, selected_times=[0, 50, 100], mu=None, zero_reg=None, z_unit=dA_unit, D_mul_factor=1.0,
+                    legend_spacing=0.05, colors=None, lw=1.5, darkens_factor_cmap=1, cmap='cet_rainbow4', columnspacing=2, x_minor_locator=AutoMinorLocator(10), x_major_locator=None,
+                    legend_loc='lower right', legend_ncol=2, ylim=None, label_prefix='', t_unit='ps', plot_chirp_corrected=True, **kwargs):
 
     _D = D * D_mul_factor
 
-    if zero_reg[0] is not None:
+    if plot_chirp_corrected:
+        assert mu is not None, "chirp is None"
+        _D, times = chirp_correction(_D, times, mu)
+
+    if zero_reg is not None and zero_reg[0] is not None:
         cut_idxs = fi(wavelengths, zero_reg)
         _D[:, cut_idxs[0]:cut_idxs[1]] = np.nan
 
-    set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]),
-                  x_minor_locator=AutoMinorLocator(10), x_major_locator=MultipleLocator(100), y_minor_locator=None)
-    _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
+    set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]), x_minor_locator=x_minor_locator, x_major_locator=x_major_locator)  #,
+    # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
     t_idxs = fi(times, selected_times)
 
-    _cmap = cm.get_cmap(cmap, t_idxs.shape[0])
+    _cmap = plt.get_cmap(cmap, t_idxs.shape[0])
     ax.axhline(0, wavelengths[0], wavelengths[-1], ls='--', color='black', lw=1)
 
     for i in range(t_idxs.shape[0]):
-        if colors is None:
-            color = np.asarray(c.to_rgb(_cmap(i))) * darkens_factor_cmap
-            color[color > 1] = 1
-        else:
-            color = colors[i]
+        idx = t_idxs[i]
+        # if colors is None:
+        #     color = np.asarray(c.to_rgb(_cmap(i))) * darkens_factor_cmap
+        #     color[color > 1] = 1
+        # else:
+        #     color = colors[i]
 
-        ax.plot(wavelengths, _D[t_idxs[i]], color=color, lw=lw, label=f'{label_prefix}${selected_times[i]:.3g}$ {time_unit}')
+        color = _cmap(i)
+
+        _t = times[idx]
+
+        ax.plot(wavelengths, _D[idx], color=color, lw=lw, label=f"{label_prefix}${_t:.3g}$ {t_unit}")
 
     l = ax.legend(loc=legend_loc, frameon=False, labelspacing=legend_spacing, ncol=legend_ncol,
                   # handlelength=0, handletextpad=0,
@@ -508,7 +516,7 @@ def plot_kinetics_ax(ax, D, times, wavelengths,   lw=0.5,  time_unit='ps',
     if add_wavenumber_axis:
         setup_wavenumber_axis(ax)
 
-    cmap = cm.get_cmap(cmap)
+    cmap = plt.get_cmap(cmap)
     norm = mpl.colors.SymLogNorm(vmin=t[0], vmax=t[-1], linscale=linscale, linthresh=linthresh, base=10, clip=True)
 
     tsb_idxs = fi(t, emph_t)
@@ -678,7 +686,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
         mappable = ax.contourf(x, y, D, cmap=cmap, norm=norm, levels=levels, antialiased=True)
 
     if plot_countours and n_levels is not None:
-        cmap_colors = cm.get_cmap(cmap)
+        cmap_colors = cmaps.get_cmap(cmap)
         colors = cmap_colors(np.linspace(0, 1, n_levels + 1))
         colors *= 0.45  # plot contours as darkens colors of colormap, blue -> darkblue, white -> gray ...
         ax.contour(x, y, D, colors=colors, levels=levels, antialiased=True, linewidths=0.1,
@@ -849,7 +857,7 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
                   x_minor_locator=AutoMinorLocator(), x_major_locator=None, y_minor_locator=None)
     # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
-    cmap = cm.get_cmap('gist_rainbow', _SADS.shape[1] / 0.75)
+    cmap = plt.get_cmap('gist_rainbow', _SADS.shape[1] / 0.75)
 
     ax.axhline(0, ls='--', color='black', lw=1)
     labels = list('ABCDEFGHIJ') if labels is None else labels

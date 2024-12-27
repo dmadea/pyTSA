@@ -18,7 +18,7 @@ from abc import abstractmethod
 # from numba import njit
 
 from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq, simulate_target_model, square_conv_exp
-from .plot import MinorSymLogLocator, plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_traces_onefig_ax, set_main_axis
+from .plot import MinorSymLogLocator, plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_traces_onefig_ax, set_main_axis
 if TYPE_CHECKING:
     from .dataset import Dataset
 
@@ -933,6 +933,11 @@ class FirstOrderModel(KineticModel):
                     kws.update(dict(title="DAS-norm", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("das-norm", kws)  # change to data-specific kwargs
                     plot_SADS_ax(ax, self.dataset.wavelengths, (self.ST_opt / self.ST_opt.max(axis=1, keepdims=True)).T, **kws)
+
+                case "spectra":
+                    kws.update(dict(title="", mu=mu))
+                    update_kwargs("spectra", kws)  # change to data-specific kwargs
+                    plot_spectra_ax(ax, self.dataset.matrix_fac, self.dataset.times, self.dataset.wavelengths, **kws)
                 case "ldm":
                     kws.update(dict(title=f"LDM [{self.dataset.name}]", plot_tilts=False, y_major_formatter=None, cmap='diverging_uniform',
                                      z_unit="Amplitude", y_label='Lifetime', mu=None, log_z=False))
