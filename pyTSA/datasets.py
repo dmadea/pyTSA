@@ -119,6 +119,10 @@ class Datasets(object):
         for d in self:
             d.crop(t0, t1, w0, w1)
 
+    def crop_idxs(self, t0=None, t1=None, w0=None, w1=None):
+        for d in self:
+            d.crop_idxs(t0, t1, w0, w1)
+
     def baseline_correct(self, t0=0, t1=200):
         for d in self:
             d.baseline_correct(t0, t1)

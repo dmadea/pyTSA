@@ -13,7 +13,7 @@ from numpy import ma
 
 
 from .kineticmodel import FirstOrderModel, KineticModel
-from .mathfuncs import crop_data, fi, chirp_correction
+from .mathfuncs import crop_data, crop_data_idx, fi, chirp_correction
 from .plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
 
 
@@ -529,6 +529,14 @@ class Dataset(object):
     def crop(self, t0=None, t1=None, w0=None, w1=None):
 
         self.matrix, self.times, self.wavelengths = crop_data(self.matrix, self.times, self.wavelengths,
+                                                               t0, t1, w0, w1)
+        self.SVD()
+        self._set_D()
+
+        return self
+    
+    def crop_idxs(self, t0=None, t1=None, w0=None, w1=None):
+        self.matrix, self.times, self.wavelengths = crop_data_idx(self.matrix, self.times, self.wavelengths,
                                                                t0, t1, w0, w1)
         self.SVD()
         self._set_D()

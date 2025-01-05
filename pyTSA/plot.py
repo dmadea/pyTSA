@@ -286,7 +286,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
                           marker_linewidth=1, n_lin_bins=10, n_log_bins=10, t_axis_formatter=ScalarFormatter(), log_y=False,
                           marker_facecolor='white', alpha=0.8, y_lim=(None, None), plot_tilts=True, wl_unit='nm', t_unit='ps',
                           linthresh=1, linscale=1, colors=None, D_mul_factor=1, legend_spacing=0.2, lw=1.5,
-                          legend_loc='best', z_unit=dA_unit, x_label='Time', symlog=True,
+                          legend_loc='best', z_unit=dA_unit, x_label='Time', symlog=True, x_minor_locator=None, y_minor_locator=None,
                           t_lim=(None, None), plot_zero_line=True, norm_traces=False, **kwargs):
     
     """wls can contain a range of wavelengths, in this case, the integrated intensity will be calculated in this range and plotted"""
@@ -300,7 +300,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
     t_lim = ((times - mu.min())[0] if t_lim[0] is None else t_lim[0], (times - mu.min())[-1] if t_lim[1] is None else t_lim[1])
 
     set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=z_unit, x_label=f"{x_label} / {t_unit}",
-                  y_minor_locator=None, x_minor_locator=None)
+                  y_minor_locator=y_minor_locator, x_minor_locator=x_minor_locator)
 
     if plot_zero_line:
         ax.plot(t - mu[0].mean(), np.zeros_like(t), ls='--', color='black', lw=1)
@@ -838,7 +838,7 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1,
                  legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True,
                  area_plot_data=(None, None), area_plot_color='violet', area_plot_data2=(None, None),
-                 area_plot_color2='blue', title="",
+                 area_plot_color2='blue', title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None,
                  area_plot_alpha=0.2, area_plot_alpha2=0.1, w_lim=(None, None), **kwargs):
     _SADS = SADS.copy() * D_mul_factor
     if zero_reg[0] is not None:
@@ -854,7 +854,7 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
     # _min, _max = abs(np.nanmin(_SADS)) * fctr * np.sign(np.nanmin(_SADS)), abs(np.nanmax(_SADS)) * fctr * np.sign(np.nanmax(_SADS))
 
     set_main_axis(ax, y_label=z_unit, xlim=w_lim, #, ylim=(_min, _max),
-                  x_minor_locator=AutoMinorLocator(), x_major_locator=None, y_minor_locator=None)
+                  x_minor_locator=x_minor_locator, x_major_locator=x_major_locator, y_minor_locator=None)
     # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
     cmap = plt.get_cmap('gist_rainbow', _SADS.shape[1] / 0.75)

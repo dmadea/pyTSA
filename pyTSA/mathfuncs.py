@@ -446,6 +446,21 @@ def crop_data(matrix: np.ndarray, axis0_data: np.ndarray, axis1_data: np.ndarray
 
     return mat_crop, axis0_data_crop, axis1_data_crop
 
+def crop_data_idx(matrix: np.ndarray, axis0_data: np.ndarray, axis1_data: np.ndarray,
+              ax0_0=None, ax0_1=None, ax1_0=None, ax1_1=None):
+    ax0_start = ax0_0 if ax0_0 is not None else 0
+    ax0_end = ax0_1 if ax0_1 is not None else matrix.shape[0]
+
+    ax1_start = ax1_0 if ax1_0 is not None else 0
+    ax1_end = ax1_1 if ax1_1 is not None else matrix.shape[1]
+
+    mat_crop = matrix[ax0_start:ax0_end, ax1_start:ax1_end]
+    axis0_data_crop = axis0_data[ax0_start:ax0_end]
+    axis1_data_crop = axis1_data[ax1_start:ax1_end]
+
+    return mat_crop, axis0_data_crop, axis1_data_crop
+
+
 
 def is_iterable(obj):
     try:
