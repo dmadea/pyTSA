@@ -1141,8 +1141,8 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         if self.add_inf_compartment:
         
             K = np.asarray([[-k_rnr - k_isc - ki_isc - kq_s, k_risc + ki_risc, 0],
-                    [k_isc + ki_isc,         -k_risc - ki_risc - kq_t, 0],
-                    [k_rnr, 0, 0]])
+                        [k_isc + ki_isc,         -k_risc - ki_risc - kq_t, 0],
+                        [k_rnr, 0, 0]])
         
             j = np.asarray([1, 0, 0])
 
