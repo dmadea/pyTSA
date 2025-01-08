@@ -1101,10 +1101,10 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         if self.add_quenching_rates:
             params.add('Kq_singlet', value=0.0, min=0, max=np.inf, vary=True)
             params.add('Kq_triplet', value=0.0, min=0, max=np.inf, vary=True)
-            params.add('f_spin', value=0, min=0, max=np.inf, vary=True)
+            # params.add('f_spin', value=0, min=0, max=np.inf, vary=True)
 
-            # params.add('Kq_isc', value=0.0, min=0, max=np.inf, vary=True)
-            # params.add('Kq_risc', value=0.0, min=0, max=np.inf, vary=True)
+            params.add('K_iisc', value=0.0, min=0, max=np.inf, vary=True)
+            params.add('K_irisc', value=0.0, min=0, max=np.inf, vary=True)
 
 
         return params
@@ -1126,11 +1126,11 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         if self.add_quenching_rates:
             kq_s = params['Kq_singlet'].value
             kq_t = params['Kq_triplet'].value
-            # kq_isc = params['Kq_isc'].value
-            # kq_risc = params['Kq_risc'].value
-            f_spin = params['f_spin'].value
-            ki_isc = k_isc * f_spin
-            ki_risc = k_risc * f_spin
+            ki_isc = params['K_iisc'].value
+            ki_risc = params['K_irisc'].value
+            # f_spin = params['f_spin'].value
+            # ki_isc = k_isc * f_spin
+            # ki_risc = k_risc * f_spin
         
         # K = np.asarray([[-k_rnr - k_isc - kq_s, k_risc],
         #                 [k_isc,         -k_risc - kq_t]])
