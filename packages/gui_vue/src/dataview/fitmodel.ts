@@ -302,18 +302,24 @@ public setOptions(): IOption[] {
       step: 0.0001
     },
     {
-      name: "Use noise standard deviation weighting (weight[i, :] = 1 / std[i])",
-      backendName: "std_noise_weighting",
+      name: "Use noise floor estimation from data",
+      backendName: "noise_floor_estimation_from_data",
       type: "checkbox",
-      value: false,
+      value: true,
     },
     {
       name: "Noise range",
       backendName: "noise_range",
       type: "range",
-      value: [400, 600],
+      value: [173, 300],
       rangeNames: ["Start wavelength", "End wavelength"],
       step: 1
+    },
+    {
+      name: "Use proportional weighting with noise floor",
+      backendName: "prop_weighting_with_noise_floor",
+      type: "checkbox",
+      value: false,
     },
     
   ]
