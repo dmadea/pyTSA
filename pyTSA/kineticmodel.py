@@ -114,7 +114,7 @@ class KineticModel(object):
         self.noise_range: tuple[float, float] = []   # wavelengths range from which the noise will be taken
 
         self.prop_weighting_with_noise_floor = False
-        self.prop_weighting_params: dict[float, float | np.ndarray, float] = dict(k=0.005, noise_floor=0.005, exponent=1)
+        self.prop_weighting_params: dict[float, float | np.ndarray, float] = dict(k=0.000, noise_floor=0.005, exponent=1)
 
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
         self.calc_weights_from_fit_matrix = True
