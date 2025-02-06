@@ -874,7 +874,7 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
     if Artifacts is not None:
         colorsArt = ['black', 'grey', 'navy', 'pink']
         for i in range(Artifacts.shape[1]):
-            ax.plot(wls, Artifacts[:, i], color=colorsArt[i], lw=1, ls='--', label=f"Artifact {i + 1}")
+            ax.plot(wls, Artifacts[:, i] * D_mul_factor, color=colorsArt[i], lw=1, ls='--', label=f"Artifact {i + 1}")
 
     if area_plot_data[0] is not None:
         ax.fill_between(area_plot_data[0], area_plot_data[1], color=area_plot_color, alpha=area_plot_alpha, zorder=0)
