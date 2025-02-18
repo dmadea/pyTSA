@@ -1003,3 +1003,83 @@ def register_div_cmap_uniform(zmin, zmax):  # colors for femto TA heat maps: dar
     cmaps.register(custom_cmap, name='diverging_uniform')
 
 
+
+def plot_EEM_ax(ax, em_wls: np.ndarray, ex_wls: np.ndarray, matrix: np.ndarray, log_z: bool = False, transform2wavenumber=True,
+              x_lim=(None, None), y_lim=(None, None), z_lim=(1, None), 
+              title="", cmap='cet_fire_r', z_label='Counts', x_major_locators=(None, None), x_minor_locators=(None, None),
+              y_major_locators=(None, None), y_minor_locators=(None, None)):
+
+    """This will assume that excitation wavelengths are used as names for individual spectra
+    x a y lims are in given wavelengths, despite the possible recalculation to wavenumber."""
+
+    t2w = lambda x: 1e3 / x  # function that transforms wavelength into 10^4 cm-1
+
+    x, y = em_wls, ex_wls
+
+    # emission wavelengths limits
+    xlim0 = x_lim[0] if x_lim[0] is not None else x[0]
+    xlim1 = x_lim[1] if x_lim[1] is not None else x[-1]
+
+    # excitation wavelengths limits
+    ylim0 = y_lim[0] if y_lim[0] is not None else y[0]
+    ylim1 = y_lim[1] if y_lim[1] is not None else y[-1]
+
+    x_label_down, x_label_top = 'Em. wavelength / nm', 'Em. wavenumber / $10^4$ cm$^{-1}$'
+    y_label_left, y_label_right = 'Ex. wavelength / nm', 'Ex. wavenumber / $10^4$ cm$^{-1}$'
+
+    if transform2wavenumber:
+        x, y = t2w(x), t2w(y)
+        xlim0, xlim1 = t2w(xlim0), t2w(xlim1)
+        ylim0, ylim1 = t2w(ylim0), t2w(ylim1)
+
+        # switch the labels
+        x_label_down, x_label_top = x_label_top, x_label_down
+        y_label_left, y_label_right = y_label_right, y_label_left
+
+    set_main_axis(ax, xlim=(xlim0, xlim1), ylim=(ylim0, ylim1),
+                    y_label=y_label_left,
+                    x_label=x_label_down,
+                    x_major_locator=x_major_locators[0],
+                    y_major_locator=y_major_locators[0],
+                    x_minor_locator=x_minor_locators[0],
+                    y_minor_locator=y_minor_locators[0])
+
+    if log_z:  # use log of z axis
+        # mat[mat < 0] = 0
+        zmin = matrix.max() * 1e-3 if z_lim[0] is None else z_lim[0]  # 3 orders lower than max as default value
+    else:
+        zmin = matrix.min() if z_lim[0] is None else z_lim[0]  # for linear plot, min as default value
+
+    zmax = matrix.max() if z_lim[1] is None else z_lim[1]
+
+    # add left axis
+    lambda_ax = ax.secondary_xaxis('top', functions=(t2w, t2w))
+    lambda_ax.tick_params(which='both', direction='out', zorder=1000)
+    if x_major_locators[1] is not None:
+        lambda_ax.xaxis.set_major_locator(x_major_locators[1])  # FixedLocator([500, 600, ...])
+    if x_minor_locators[1] is not None:
+        lambda_ax.xaxis.set_minor_locator(x_minor_locators[1])
+    lambda_ax.set_xlabel(x_label_top)
+
+    # add right axis
+    lambda_ax2 = ax.secondary_yaxis('right', functions=(t2w, t2w))
+    lambda_ax2.tick_params(which='both', direction='out', zorder=1000)
+    if y_major_locators[1] is not None:
+        lambda_ax2.yaxis.set_major_locator(y_major_locators[1])  # MultipleLocator(20)
+    if y_minor_locators[1] is not None:
+        lambda_ax2.yaxis.set_minor_locator(y_minor_locators[1])  # AutoMinorLocator(2)
+    lambda_ax2.set_ylabel(y_label_right)
+
+    # norm for z values
+    norm = mpl.colors.LogNorm(vmin=zmin, vmax=zmax, clip=True) if log_z else mpl.colors.Normalize(vmin=zmin,
+                                                                                                    vmax=zmax,
+                                                                                                    clip=True)
+    _x, _y = np.meshgrid(x, y)
+    mappable = ax.pcolormesh(_x, _y, matrix.T, norm=norm, cmap=cmap, shading='auto')
+    plt.colorbar(mappable, ax=ax, label=z_label, pad=0.17, format=None if log_z else '%.0e')
+
+    ax.set_title(title)
+
+    # if x_major_formatter:
+    #     ax_data.xaxis.set_major_formatter(x_major_formatter)
+    #     ax_res.xaxis.set_major_formatter(x_major_formatter)

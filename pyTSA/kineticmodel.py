@@ -31,6 +31,14 @@ from matplotlib import cm
 import scipy.constants as sc
 from copy import deepcopy
 
+def save_matrix(dim0: np.iterable, dim1: np.iterable, matrix: np.ndarray, fname='output.txt', delimiter='\t', encoding='utf8', transpose=False):
+    mat = np.vstack((dim0, matrix.T)) if transpose else np.vstack((dim1, matrix))
+    buffer = delimiter + delimiter.join(f"{num}" for num in (dim1 if transpose else dim0)) + '\n'
+    buffer += '\n'.join(delimiter.join(f"{num}" for num in row) for row in mat.T)
+
+    with open(fname, 'w', encoding=encoding) as f:
+        f.write(buffer)
+
 
 
 # from scipy.linalg import lstsq
@@ -410,14 +418,6 @@ class KineticModel(object):
         plt.ylabel(y_name)
         plt.show()
 
-    def _save_matrix(self, dim0: np.iterable, dim1: np.iterable, matrix: np.ndarray, fname='output.txt', delimiter='\t', encoding='utf8', transpose=False):
-        mat = np.vstack((dim0, matrix.T)) if transpose else np.vstack((dim1, matrix))
-        buffer = delimiter + delimiter.join(f"{num}" for num in (dim1 if transpose else dim0)) + '\n'
-        buffer += '\n'.join(delimiter.join(f"{num}" for num in row) for row in mat.T)
-
-        with open(fname, 'w', encoding=encoding) as f:
-            f.write(buffer)
-
     def copy(self) -> KineticModel:
         c = deepcopy(self)
         c.dataset = None
@@ -497,21 +497,21 @@ class FirstOrderModel(KineticModel):
 
     def export_DAS(self, fname='output.txt', delimiter='\t', encoding='utf8'):
         names = [f'DAS {i+1}' for i in range(self.ST_opt.shape[0])]
-        self._save_matrix(names, self.dataset.wavelengths, self.ST_opt, fname=fname, delimiter=delimiter, encoding=encoding, transpose=False)
+        save_matrix(names, self.dataset.wavelengths, self.ST_opt, fname=fname, delimiter=delimiter, encoding=encoding, transpose=False)
 
     def export_EAS(self, fname='output.txt', delimiter='\t', encoding='utf8'):
         assert self.ST_EAS is not None
         names = [f'EAS {i+1}' for i in range(self.ST_EAS.shape[0])]
-        self._save_matrix(names, self.dataset.wavelengths, self.ST_EAS, fname=fname, delimiter=delimiter, encoding=encoding, transpose=False)
+        save_matrix(names, self.dataset.wavelengths, self.ST_EAS, fname=fname, delimiter=delimiter, encoding=encoding, transpose=False)
 
     def export_DAS_Cprofiles(self, fname='output.txt', delimiter='\t', encoding='utf8'):
         names = [f'DAS profile {i+1}' for i in range(self.ST_opt.shape[0])]
-        self._save_matrix(self.dataset.times, names, self.C_opt, fname=fname, delimiter=delimiter, encoding=encoding, transpose=True)
+        save_matrix(self.dataset.times, names, self.C_opt, fname=fname, delimiter=delimiter, encoding=encoding, transpose=True)
 
     def export_EAS_Cprofiles(self, fname='output.txt', delimiter='\t', encoding='utf8'):
         assert self.C_EAS is not None
         names = [f'EAS profile {i+1}' for i in range(self.ST_opt.shape[0])]
-        self._save_matrix(self.dataset.times, names, self.C_EAS, fname=fname, delimiter=delimiter, encoding=encoding, transpose=True)
+        save_matrix(self.dataset.times, names, self.C_EAS, fname=fname, delimiter=delimiter, encoding=encoding, transpose=True)
 
 
     def init_params(self) -> Parameters:
