@@ -837,9 +837,9 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 
 def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1,
                  legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True,
-                 area_plot_data=(None, None), area_plot_color='violet', area_plot_data2=(None, None),
-                 area_plot_color2='blue', title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None,
-                 area_plot_alpha=0.2, area_plot_alpha2=0.1, w_lim=(None, None), **kwargs):
+                 area_plot_datas: list[tuple] = [], area_plot_colors=('violet', 'blue', 'green'), 
+                 title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None,
+                 area_plot_alpha=0.2, w_lim=(None, None), **kwargs):
     _SADS = SADS.copy() * D_mul_factor
     if zero_reg[0] is not None:
         cut_idxs = fi(wls, zero_reg)
@@ -876,12 +876,15 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
         for i in range(Artifacts.shape[1]):
             ax.plot(wls, Artifacts[:, i] * D_mul_factor, color=colorsArt[i], lw=1, ls='--', label=f"Artifact {i + 1}")
 
-    if area_plot_data[0] is not None:
-        ax.fill_between(area_plot_data[0], area_plot_data[1], color=area_plot_color, alpha=area_plot_alpha, zorder=0)
-    if area_plot_data2[0] is not None:
-        ax.fill_between(area_plot_data2[0], area_plot_data2[1], color=area_plot_color2, alpha=area_plot_alpha2,
-                        zorder=-10)
-    
+    zorder = 0
+    for tup, color in zip(area_plot_datas, area_plot_colors):
+        if tup is None:
+            continue
+
+        x, y = tup
+        ax.fill_between(x, y, color=color, alpha=area_plot_alpha, zorder=zorder)
+        zorder -= 1
+
     ax.set_title(title)
 
     if show_legend:
