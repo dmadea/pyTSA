@@ -431,9 +431,10 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
 #     ax.set_axisbelow(False)
 
 
-def plot_spectra_ax(ax, D, times, wavelengths, selected_times=[0, 50, 100], mu=None, zero_reg=None, z_unit=dA_unit, D_mul_factor=1.0,
+def plot_spectra_ax(ax, D, times, wavelengths, selected_times=[0, 50, 100], mu=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1.0,
                     legend_spacing=0.05, colors=None, lw=1.5, darkens_factor_cmap=1, cmap='cet_rainbow4', columnspacing=2, x_minor_locator=AutoMinorLocator(10), x_major_locator=None,
-                    legend_loc='lower right', legend_ncol=2, ylim=None, label_prefix='', t_unit='ps', plot_chirp_corrected=True, **kwargs):
+                    legend_loc='lower right', legend_ncol=2, ylim=None, label_prefix='', t_unit='ps', t_unit1e3='ns',
+                      plot_chirp_corrected=True, legend_fontsize=12, **kwargs):
 
     _D = D * D_mul_factor
 
@@ -441,8 +442,8 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times=[0, 50, 100], mu=N
         assert mu is not None, "chirp is None"
         _D, times = chirp_correction(_D, times, mu)
 
-    if zero_reg is not None and zero_reg[0] is not None:
-        cut_idxs = fi(wavelengths, zero_reg)
+    if hatched_wls is not None and hatched_wls[0] is not None:
+        cut_idxs = fi(wavelengths, hatched_wls)
         _D[:, cut_idxs[0]:cut_idxs[1]] = np.nan
 
     set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]), x_minor_locator=x_minor_locator, x_major_locator=x_major_locator)  #,
@@ -465,9 +466,14 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times=[0, 50, 100], mu=N
 
         _t = times[idx]
 
-        ax.plot(wavelengths, _D[idx], color=color, lw=lw, label=f"{label_prefix}${_t:.3g}$ {t_unit}")
+        _unit = t_unit
+        if _t >= 1000:
+            _t *= 1e-3
+            _unit = t_unit1e3
 
-    l = ax.legend(loc=legend_loc, frameon=False, labelspacing=legend_spacing, ncol=legend_ncol,
+        ax.plot(wavelengths, _D[idx], color=color, lw=lw, label=f"{label_prefix}${_t:.3g}$ {_unit}")
+
+    l = ax.legend(loc=legend_loc, frameon=False, labelspacing=legend_spacing, ncol=legend_ncol, fontsize=legend_fontsize,
                   # handlelength=0, handletextpad=0,
                   columnspacing=columnspacing)
     for i, text in enumerate(l.get_texts()):
@@ -610,7 +616,7 @@ def plot_kinetics_ax(ax, D, times, wavelengths,   lw=0.5,  time_unit='ps',
 
 
 def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_unit='ps',
-                 z_unit=dA_unit, cmap='diverging_uniform', z_lim=(None, None),
+                 z_unit=dA_unit, cmap='diverging_uniform', z_lim=(None, None), hatched_wls=(None, None),
                  t_lim=(None, None), w_lim=(None, None), linthresh=1, linscale=1, D_mul_factor=1,
                  n_lin_bins=10, n_log_bins=10, plot_tilts=True, squeeze_z_range_factor=1,
                  y_major_formatter=ScalarFormatter(), y_label='Time delay',
@@ -627,6 +633,14 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
     if plot_chirp_corrected:
         assert mu is not None, "chirp is None"
         D, times = chirp_correction(D, times, mu)
+
+    if hatched_wls[0] is not None:
+        idx1, idx2 = fi(wavelengths, hatched_wls)
+
+        mask = np.zeros_like(D)
+        mask[:, idx1 + 1:idx2] = 1
+
+        D = ma.masked_array(D, mask=mask)
 
     t_lim = (times[0] if t_lim[0] is None else t_lim[0], times[-1] if t_lim[1] is None else t_lim[1])
     w_lim = (wavelengths[0] if w_lim[0] is None else w_lim[0], wavelengths[-1] if w_lim[1] is None else w_lim[1])
@@ -664,11 +678,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
         w_ax.tick_params(which='major', direction='out')
 
     #     ax.set_facecolor((0.8, 0.8, 0.8, 1))
-    if ma.is_masked(D):  # https://stackoverflow.com/questions/41664850/hatch-area-using-pcolormesh-in-basemap
-        m_idxs = np.argwhere(D.mask[0] > 0).squeeze()
-        wl_range = [wavelengths[m_idxs[0] - 1], wavelengths[m_idxs[-1] + 1]]
-        ax.fill_between(wl_range, [t_lim[0], t_lim[0]], [t_lim[1], t_lim[1]], facecolor="none",
-                        hatch=hatch, edgecolor="k", linewidth=0.0)
+
 
     #     mappable = ax.pcolormesh(x, y, D, cmap=cmap, vmin=zmin, vmax=zmax)
     if n_levels is not None:
@@ -700,6 +710,12 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
 
     ax.set_axisbelow(False)
     ax.set_title(title)
+
+    if ma.is_masked(D):  # https://stackoverflow.com/questions/41664850/hatch-area-using-pcolormesh-in-basemap
+        # m_idxs = np.argwhere(D.mask[0] > 0).squeeze()
+        # wl_range = [wavelengths[m_idxs[0] - 1], wavelengths[m_idxs[-1] + 1]]
+        ax.fill_between(hatched_wls, [t_lim[0], t_lim[0]], [t_lim[1], t_lim[1]], facecolor="none",
+                        hatch=hatch, edgecolor="k", linewidth=0.0)
 
     plt.colorbar(mappable, ax=ax, label=z_unit, orientation='vertical', aspect=colorbar_aspect, pad=colorbarpad,
                  )  # , format=ScalarFormatter()  ticks=colorbar_locator  ticks=None if log_z else colorbar_locator
@@ -835,14 +851,14 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 #         ax.yaxis.set_major_formatter(y_major_formatter)
 
 
-def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None, zero_reg=(None, None), z_unit=dA_unit, D_mul_factor=1,
-                 legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True,
+def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1,
+                 legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True, y_lim=(None, None),
                  area_plot_datas: list[tuple] = [], area_plot_colors=('violet', 'blue', 'green'), 
                  title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None,
                  area_plot_alpha=0.2, w_lim=(None, None), **kwargs):
     _SADS = SADS.copy() * D_mul_factor
-    if zero_reg[0] is not None:
-        cut_idxs = fi(wls, zero_reg)
+    if hatched_wls[0] is not None:
+        cut_idxs = fi(wls, hatched_wls)
         _SADS[cut_idxs[0]:cut_idxs[1]] = np.nan
 
     w_lim = (wls[0] if w_lim[0] is None else w_lim[0], wls[-1] if w_lim[1] is None else w_lim[1])
@@ -853,7 +869,7 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
     # fctr = 1.1
     # _min, _max = abs(np.nanmin(_SADS)) * fctr * np.sign(np.nanmin(_SADS)), abs(np.nanmax(_SADS)) * fctr * np.sign(np.nanmax(_SADS))
 
-    set_main_axis(ax, y_label=z_unit, xlim=w_lim, #, ylim=(_min, _max),
+    set_main_axis(ax, y_label=z_unit, xlim=w_lim,  ylim=y_lim,
                   x_minor_locator=x_minor_locator, x_major_locator=x_major_locator, y_minor_locator=None)
     # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 

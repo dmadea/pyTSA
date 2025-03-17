@@ -547,6 +547,17 @@ class FirstOrderModel(KineticModel):
 
         return params
     
+    def get_irf_width(self, params: Parameters | None = None):
+        params = self.params if params is None else params
+
+        if not self.include_irf:
+            return 0
+        
+        if self.irf_type == self.irf_types[0]:
+            return params['FWHM'].value
+        elif self.irf_type == self.irf_types[1]:
+            return params['SQW'].value 
+    
     def get_rates(self, params: Parameters | None = None) -> np.ndarray:
         if (self.n_species == 0 or not self._include_rates_params):
             return np.asarray([])
@@ -556,8 +567,23 @@ class FirstOrderModel(KineticModel):
         vals = np.asarray([params[f"tau_{i+1}"].value for i in range(self.n_species)])
         return 1 / vals
     
-    def get_labels(self, t_unit='ps'):
-        return [f"{1 / rate:.3g} {t_unit}" for rate in self.get_rates()]
+    def get_labels(self, t_unit='ps', t_unit1e3='ns') -> list[str]:
+        labels = []
+        irf = self.get_irf_width()
+        for rate in self.get_rates():
+            l = 1/rate
+
+            if l <= irf:
+                labels.append(f"$\\leq${irf:.2g} {t_unit} (IRF)")
+                continue
+
+            if l >= 1000:
+                l *= 1e-3
+                labels.append(f"{l:.3g} {t_unit1e3}")
+            else:
+                labels.append(f"{l:.3g} {t_unit}")
+            
+        return labels
     
     def get_width(self, params: Parameters | None = None) -> float:
         params = self.params if params is None else params

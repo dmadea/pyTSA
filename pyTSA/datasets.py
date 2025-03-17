@@ -53,15 +53,31 @@ class Datasets(object):
         ds._datasets = deepcopy(self._datasets)
         return ds
 
-    def __getitem__(self, key: int | slice) -> Dataset | list[Dataset]:
+    def __getitem__(self, key: int | slice | list[int]) -> Dataset | list[Dataset]:
+        # with deep copy
+        # if isinstance(key, slice):
+        #     ds = Datasets()
+        #     ds.fitter_kwds = deepcopy(self.fitter_kwds)
+        #     ds.fit_algorithm = deepcopy(self.fit_algorithm)
+        #     ds._datasets = deepcopy(self._datasets[key])
+        #     return ds
+        
         if isinstance(key, slice):
             ds = Datasets()
             ds.fitter_kwds = deepcopy(self.fitter_kwds)
             ds.fit_algorithm = deepcopy(self.fit_algorithm)
-            ds._datasets = deepcopy(self._datasets[key])
+            ds._datasets = self._datasets[key]  # use only ref
+            return ds
+        
+        elif isinstance(key, list):
+            assert isinstance(key[0], int)
+            ds = Datasets()
+            ds.fitter_kwds = deepcopy(self.fitter_kwds)
+            ds.fit_algorithm = deepcopy(self.fit_algorithm)
+            ds._datasets = [self._datasets[i] for i in key]  # use only ref
             return ds
 
-        elif isinstance(key, (int, np.int64, np.int32, np.int16, np.int8)):
+        elif isinstance(key, (int, np.int64, np.int32, np.int16, np.int8)):  # returns only Dataset
             return self._datasets[key]['dataset']
         else:
             raise TypeError("Invalid input")
@@ -203,7 +219,7 @@ class Datasets(object):
         else:
             plt.show()
 
-    def plot_models(self, *what, outer_nrows: int | None = None, outer_ncols: int | None = None, 
+    def plot_models(self, *what, outer_nrows: int | None = None, outer_ncols: int | None = None, fig_labels_offset=0,
                     inner_nrows: int | None = None, inner_ncols: int | None = None, outer_hspace=0.2, outer_wspace=0.2,
                     inner_hspace=0.2, inner_wspace=0.2, X_SIZE=5.5, Y_SIZE=4.5, filepath=None, transparent=True, dpi=300, **kwargs):
         
@@ -235,13 +251,24 @@ class Datasets(object):
 
         outer_grid = gridspec.GridSpec(outer_nrows, outer_ncols, figure=fig, wspace=outer_wspace, hspace=outer_hspace)
 
+        def get_dataset_specific_kwargs(prefix: str, kwargs: dict):
+            kws = kwargs.copy()
+            for key, value in kwargs.items():
+                if key.startswith(prefix.lower()):
+                    _key = key[len(prefix) + 1:]  # to account for _ symbol, e.g. d1_eas_y_lim -> eas_y_lim
+                    kws[_key] = value
+            return kws
+
         for i, gs in enumerate(outer_grid):
             if i >= self.length():
                 break
 
             assert self[i].model is not None
-            fig_labels_offset = i*n_inner
-            self[i].model._plot_gs(fig, gs, what, inner_nrows, inner_ncols, inner_hspace, inner_wspace, fig_labels_offset=fig_labels_offset, **kwargs)
+            _offset = i*n_inner + fig_labels_offset
+
+            kws = get_dataset_specific_kwargs(f"d{i}", kwargs)  # rewrite dataset-specific kwargs
+
+            self[i].model._plot_gs(fig, gs, what, inner_nrows, inner_ncols, inner_hspace, inner_wspace, fig_labels_offset=_offset, **kws)
 
         if filepath:
             ext = os.path.splitext(filepath)[1].lower()[1:]
