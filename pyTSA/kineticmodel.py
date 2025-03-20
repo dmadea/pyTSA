@@ -567,7 +567,24 @@ class FirstOrderModel(KineticModel):
         vals = np.asarray([params[f"tau_{i+1}"].value for i in range(self.n_species)])
         return 1 / vals
     
-    def get_labels(self, t_unit='ps', t_unit1e3='ns') -> list[str]:
+    def get_labels(self, t_unit='ps') -> list[str]:
+
+        if t_unit == 'ps':
+            t_unit1e3 = 'ns'
+            t_unit1e6 = '$\\mu$s'
+        elif t_unit == 'ns':
+            t_unit1e3 = '$\\mu$s'
+            t_unit1e6 = 'ms'
+        elif t_unit == '$\\mu$s':
+            t_unit1e3 = 'ms'
+            t_unit1e6 = 's'
+        elif t_unit == 'ms':
+            t_unit1e3 = 's'
+            t_unit1e6 = 'ks'
+        elif t_unit == 's':
+            t_unit1e3 = 'ks'
+            t_unit1e6 = 'Ms'
+
         labels = []
         irf = self.get_irf_width()
         for rate in self.get_rates():
@@ -577,7 +594,10 @@ class FirstOrderModel(KineticModel):
                 labels.append(f"$\\leq${irf:.2g} {t_unit} (IRF)")
                 continue
 
-            if l >= 1000:
+            if l >= 1e6:
+                l *= 1e-6
+                labels.append(f"{l:.3g} {t_unit1e6}")
+            elif l >= 1000:
                 l *= 1e-3
                 labels.append(f"{l:.3g} {t_unit1e3}")
             else:
