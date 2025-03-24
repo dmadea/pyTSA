@@ -18,7 +18,7 @@ from abc import abstractmethod
 # from numba import njit
 
 from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq, simulate_target_model, square_conv_exp
-from .plot import MinorSymLogLocator, plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_traces_onefig_ax, set_main_axis
+from .plot import MinorSymLogLocator, plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_time_traces_onefig_ax, plot_traces_onefig_ax, set_main_axis
 if TYPE_CHECKING:
     from .dataset import Dataset
 
@@ -117,15 +117,19 @@ class KineticModel(object):
         # fitter arguments to the underlying fitting algorithm
         self.fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='linear', verbose=2, jac='3-point')
 
-        # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum as 1/std
+        # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum, only works for weight_type == 'prop_tresh'
         self.noise_floor_estimation_from_data: bool = False
         self.noise_range: tuple[float, float] = []   # wavelengths range from which the noise will be taken
 
-        self.prop_weighting_with_noise_floor = False
-        self.prop_weighting_params: dict[float, float | np.ndarray, float] = dict(k=0.000, noise_floor=0.005, exponent=1)
+        # prop = proportional weighting with noise floor, w_ij = 1 / (k * abs(D_ij) ** Exp + noisefloor_i)
+        # log = logarithmic weighting of the data, w_ij = abs(D_ij) > log_tresh ? 1 / ln(abs(D_ij)) : 0
+        self.weight_types = ['prop_thresh', 'prop_noise_floor']  
+        self.weight_type: str | None = None
+        self.calc_weights_from_fit_matrix = True
+
+        self.weighting_params: dict[float, float | np.ndarray, float] = dict(k=0.000, noise_floor=0.005, exponent=1, thresh=1e-5)
 
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
-        self.calc_weights_from_fit_matrix = True
 
     @abstractmethod
     def plot(self, *what: str, nrows: int = 1, ncols: int = None, **kwargs):
@@ -189,13 +193,6 @@ class KineticModel(object):
         w = self.get_weights()
         return w.sum(axis=1)
 
-        # if not self.std_noise_weighting:
-        #     return None
-        
-        # i, j = fi(self.dataset.wavelengths, self.noise_range)
-        # stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1)
-        # return 1 / stds
-
     def _calculate_noise_floor(self):
         if not self.noise_floor_estimation_from_data:
             return
@@ -204,27 +201,34 @@ class KineticModel(object):
         i, j = fi(self.dataset.wavelengths, self.noise_range)
 
         stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1, keepdims=True)
-        self.prop_weighting_params['noise_floor'] = stds
+        self.weighting_params['noise_floor'] = stds
         
 
     def get_weights(self):
         weights = np.ones_like(self.dataset.matrix_fac)
 
+        if self.calc_weights_from_fit_matrix:
+            mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
+        else:
+            mat = self.dataset.matrix_fac
+
+        mat = np.abs(mat)
+
         # https://gregorygundersen.com/blog/2022/08/09/weighted-ols/
-        if self.prop_weighting_with_noise_floor:
+        if self.weight_type == self.weight_types[1]:
             self._calculate_noise_floor()
             
-            noise_floor = self.prop_weighting_params['noise_floor']
-            exponent = self.prop_weighting_params['exponent']
+            noise_floor = self.weighting_params['noise_floor']
+            exponent = self.weighting_params['exponent']
+            k = self.weighting_params['k']
 
-            if self.calc_weights_from_fit_matrix:
-                mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
-            else:
-                mat = self.dataset.matrix_fac
+            weights *= 1 / (k * (mat ** exponent) + noise_floor)
 
-            mat = np.abs(mat)
+        elif self.weight_type == self.weight_types[0]:
 
-            weights *= 1 / (self.prop_weighting_params['k'] * (mat ** exponent) + noise_floor)
+            tresh = self.weighting_params['thresh']
+
+            weights *= np.where(mat > tresh, 1 / mat, 0)
 
         for *rng, w in self._weights:
             i, j = fi(self.dataset.wavelengths, rng)    
@@ -474,6 +478,8 @@ class FirstOrderModel(KineticModel):
         # for EAS, new variables are defined
         self.C_EAS: np.ndarray | None = None
         self.ST_EAS: np.ndarray | None = None
+
+        self.C_opt_full = None  # used for target model
 
         self.LDM: np.ndarray | None = None
         self.LDM_fit: np.ndarray | None = None
@@ -953,7 +959,7 @@ class FirstOrderModel(KineticModel):
                     opt = self.matrix_opt[:, 0] if single_dim else self.matrix_opt.sum(axis=1)
                     res = self.weighted_residuals()[:, 0] if single_dim else self.weighted_residuals().sum(axis=1)
 
-                    plot_fitresiduals_axes(ax, ax_res, self.dataset.times, mat, opt, res, title=self.dataset.name, **kws)
+                    plot_fitresiduals_axes(ax, ax_res, self.dataset.times, mat, opt, res, title=self.dataset.name, mu=mu, **kws)
 
                 case "data":
                     kws.update(dict(title=f"Data [{self.dataset.name}]", log=False, mu=mu))
@@ -964,9 +970,15 @@ class FirstOrderModel(KineticModel):
                     update_kwargs("residuals", kws)  # change to data-specific kwargs
                     plot_data_ax(fig, ax, self.weighted_residuals(), self.dataset.times, self.dataset.wavelengths, **kws)
                 case "weights":
-                    kws.update(dict(title=f"Weights [{self.dataset.name}]", log=False, mu=mu))
+                    kws.update(dict(title=f"Weights [{self.dataset.name}]", log=False, mu=mu), z_unit='Weight')
                     update_kwargs("weights", kws)  # change to data-specific kwargs
-                    plot_data_ax(fig, ax, self.get_weights(), self.dataset.times, self.dataset.wavelengths, **kws)
+
+                    single_dim = self.dataset.matrix_fac.shape[1] == 1
+
+                    if single_dim:
+                        plot_time_traces_onefig_ax(ax, self.get_weights(), self.dataset.times, **kws)
+                    else:
+                        plot_data_ax(fig, ax, self.get_weights(), self.dataset.times, self.dataset.wavelengths, **kws)
                 case "fit":
                     kws.update(dict(title=f"Fit [{self.dataset.name}]", log=False, mu=mu))
                     update_kwargs("fit", kws)  # change to data-specific kwargs
@@ -975,6 +987,16 @@ class FirstOrderModel(KineticModel):
                     kws.update(dict(title=f"Traces", mu=mu, colors=COLORS))
                     update_kwargs("traces", kws)  # change to data-specific kwargs
                     plot_traces_onefig_ax(ax, self.dataset.matrix_fac, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, **kws)
+                case "cprofiles":
+                    kws.update(dict(title=f"C-profiles", colors=COLORS, mu=mu, labels=self.get_labels(t_unit)), z_unit='Population')
+                    update_kwargs("cprofiles", kws)  # change to data-specific kwargs
+
+                    if self.C_opt.ndim == 3:
+                        _C = self.C_opt_full[0] if self.C_opt_full is not None else self.C_opt[0]
+                    else:
+                        _C = self.C_opt_full if self.C_opt_full is not None else self.C_opt
+
+                    plot_time_traces_onefig_ax(ax, _C, self.dataset.times, **kws)
                 case "trapz":
 
                     y = np.trapz(self.dataset.matrix_fac, self.dataset.wavelengths, axis=1)
@@ -1093,7 +1115,7 @@ class TargetFirstOrderModel(FirstOrderModel):
         super(TargetFirstOrderModel, self).__init__(dataset, n_species, set_model)
         self._calculate_EAS = False
         self._include_rates_params = False
-        self.C_opt_full = None
+        # self.C_opt_full = None
 
         # list of compartments that will be assigned from simulated target model (C_opt_full)
         # to C_opt
@@ -1186,7 +1208,9 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
     
     def get_labels(self, t_unit='ps'):
         labels = np.asarray(['S1', 'T1', 'inf'])
-        return list(labels[self.used_compartments])
+        # return list(labels[self.used_compartments])
+        return labels
+    
     
     def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Return a tuple with the first argument as initial j vector and second argument is K matrix"""

@@ -282,6 +282,75 @@ def _plot_tilts(ax, norm, at_value, axis='y', inverted_axis=False):
     ax.plot(x_vals[2], y_vals[2], ls='dotted', lw=1, **kwargs)
 
 
+def plot_time_traces_onefig_ax(ax, traces: np.ndarray, times, mu: float | np.ndarray | None = None, t_axis_formatter=ScalarFormatter(), log_y=False,
+                           y_lim=(None, None), plot_tilts=True, t_unit='ps', labels=None, n_lin_bins=10, n_log_bins=10,
+                          linthresh=1, linscale=1, colors=None, D_mul_factor=1, legend_spacing=0.2, lw=1.5,
+                          legend_loc='best', z_unit=dA_unit, x_label='Time', symlog=True, x_minor_locator=None, y_minor_locator=None,
+                          t_lim=(None, None), plot_zero_line=True, norm_traces=False, **kwargs):
+    
+
+    t0 = 0
+    if mu is not None:
+        if isinstance(mu, float):
+            t0 = mu
+        
+        if isinstance(mu, np.ndarray):
+            t0 = mu[0]
+
+    tt = times - t0
+
+    t_lim = (tt[0] if t_lim[0] is None else t_lim[0], tt[-1] if t_lim[1] is None else t_lim[1])
+
+    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=z_unit, x_label=f"{x_label} / {t_unit}",
+                  y_minor_locator=y_minor_locator, x_minor_locator=x_minor_locator)
+
+    if plot_zero_line:
+        ax.plot(tt, np.zeros_like(tt), ls='--', color='black', lw=1)
+
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] if colors is None else colors
+
+    if traces.ndim == 1:
+        _tr = traces[:, None]
+    else:
+        _tr = traces
+    
+    for i in range(_tr.shape[1]):
+
+        trace = _tr[:, i]
+        
+        if norm_traces:
+            trace /= trace.max()
+
+        ax.plot(tt, trace * D_mul_factor, lw=lw, color=colors[i], label="" if labels is None else labels[i])
+
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+
+    if symlog:
+        ax.set_xscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=linscale, linthresh=linthresh)
+
+        ax.xaxis.set_major_locator(MajorSymLogLocator(base=10, linthresh=linthresh))
+        ax.xaxis.set_minor_locator(MinorSymLogLocator(linthresh, n_lin_ints=n_lin_bins, n_log_ints=n_log_bins, base=10))
+
+        if plot_tilts:
+            norm = c.SymLogNorm(vmin=t_lim[0], vmax=t_lim[1], linscale=linscale, linthresh=linthresh, base=10,
+                                clip=True)
+            _plot_tilts(ax, norm, linthresh, 'x')
+
+    if log_y:
+        ax.set_yscale('log')
+
+    if t_axis_formatter:
+        ax.xaxis.set_major_formatter(t_axis_formatter)
+
+    l = ax.legend(loc=legend_loc, frameon=False, labelspacing=legend_spacing)
+    for text, color in zip(l.get_texts(), colors):
+        text.set_color(color)
+
+    ax.set_axisbelow(False)
+
+
+
 def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarray | None = None, wls=(355, 400, 450, 500, 550), marker_size=10,
                           marker_linewidth=1, n_lin_bins=10, n_log_bins=10, t_axis_formatter=ScalarFormatter(), log_y=False,
                           marker_facecolor='white', alpha=0.8, y_lim=(None, None), plot_tilts=True, wl_unit='nm', t_unit='ps',
@@ -735,10 +804,21 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
     if y_major_formatter:
         ax.yaxis.set_major_formatter(y_major_formatter)
 
-def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.ndarray, trace_fit: np.ndarray, trace_residuals: np.ndarray, 
-                           x_label="Time", t_unit='ns', y_lim_residuals=(None, None), z_unit='A', t_lim=(None, None),
+def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.ndarray, trace_fit: np.ndarray, trace_residuals: np.ndarray, plot_tilts=True,
+                           x_label="Time", t_unit='ns', y_lim_residuals=(None, None), z_unit='A', t_lim=(None, None), mu: float | np.ndarray = None, t_axis_formatter=ScalarFormatter(),
                            y_lim=(None, None), lw_data=1, lw_fit=1, symlog=False, linthresh=1, linscale=1, log_y=False, title="", **kwargs):
 
+    t0 = 0
+    if mu is not None:
+        if isinstance(mu, float):
+            t0 = mu
+        
+        if isinstance(mu, np.ndarray):
+            t0 = mu[0]
+
+    tt = times - t0
+
+    # t_lim = (tt[0] if t_lim[0] is None else t_lim[0], tt[-1] if t_lim[1] is None else t_lim[1])
 
     set_main_axis(ax_data, x_label="", y_label=z_unit, xlim=t_lim, ylim=y_lim)
     set_main_axis(ax_res, x_label=f"{x_label} / {t_unit}", ylim=y_lim_residuals,
@@ -750,9 +830,9 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
     ax_data.tick_params(labelbottom=False)
 
     ax_data.set_title(title)
-    ax_data.plot(times, trace_data, lw=lw_data, color='black')
-    ax_data.plot(times, trace_fit, lw=lw_fit, color='red')
-    ax_res.plot(times, trace_residuals, lw=lw_data, color='black')
+    ax_data.plot(tt, trace_data, lw=lw_data, color='black')
+    ax_data.plot(tt, trace_fit, lw=lw_fit, color='red')
+    ax_res.plot(tt, trace_residuals, lw=lw_data, color='black')
 
     ax_data.set_axisbelow(False)
     ax_res.set_axisbelow(False)
@@ -768,6 +848,15 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
         ax_res.set_xscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=linscale, linthresh=linthresh)
         ax_data.xaxis.set_minor_locator(MinorSymLogLocator(linthresh))
         ax_res.xaxis.set_minor_locator(MinorSymLogLocator(linthresh))
+
+        if plot_tilts:
+            norm = c.SymLogNorm(vmin=t_lim[0], vmax=t_lim[1], linscale=linscale, linthresh=linthresh, base=10,
+                                clip=True)
+            _plot_tilts(ax_data, norm, linthresh, 'x')
+
+    if t_axis_formatter:
+        ax_res.xaxis.set_major_formatter(t_axis_formatter)
+
 
     if log_y:
         ax_data.set_yscale('log')
