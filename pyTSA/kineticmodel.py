@@ -123,11 +123,15 @@ class KineticModel(object):
 
         # prop = proportional weighting with noise floor, w_ij = 1 / (k * abs(D_ij) ** Exp + noisefloor_i)
         # log = logarithmic weighting of the data, w_ij = abs(D_ij) > log_tresh ? 1 / ln(abs(D_ij)) : 0
-        self.weight_types = ['prop_thresh', 'prop_noise_floor']  
+        self.weight_types = ['no_weighting', 'prop_thresh', 'prop_noise_floor']  
         self.weight_type: str | None = None
         self.calc_weights_from_fit_matrix = True
 
-        self.weighting_params: dict[float, float | np.ndarray, float] = dict(k=0.000, noise_floor=0.005, exponent=1, thresh=1e-5)
+        # Individual weighting parameters (previously in weighting_params dictionary)
+        self.weighting_k: float = 0.000
+        self.weighting_noise_floor: float | np.ndarray = 0.005
+        self.weighting_exponent: float = 1
+        self.weighting_thresh: float = 1e-5
 
         self.fit_algorithm = "least_squares"  # trust reagion reflective alg.
 
@@ -201,11 +205,14 @@ class KineticModel(object):
         i, j = fi(self.dataset.wavelengths, self.noise_range)
 
         stds = np.std(self.dataset.matrix_fac[:, i:j+1], axis=1, keepdims=True)
-        self.weighting_params['noise_floor'] = stds
+        self.weighting_noise_floor = stds
         
 
     def get_weights(self):
         weights = np.ones_like(self.dataset.matrix_fac)
+
+        if self.weight_type == 'no_weighting':
+            return weights
 
         if self.calc_weights_from_fit_matrix:
             mat = self.dataset.matrix_fac if self.matrix_opt is None else self.matrix_opt
@@ -215,18 +222,18 @@ class KineticModel(object):
         mat = np.abs(mat)
 
         # https://gregorygundersen.com/blog/2022/08/09/weighted-ols/
-        if self.weight_type == self.weight_types[1]:
+        if self.weight_type == self.weight_types[2]:  # prop_noise_floor
             self._calculate_noise_floor()
             
-            noise_floor = self.weighting_params['noise_floor']
-            exponent = self.weighting_params['exponent']
-            k = self.weighting_params['k']
+            noise_floor = self.weighting_noise_floor
+            exponent = self.weighting_exponent
+            k = self.weighting_k
 
             weights *= 1 / (k * (mat ** exponent) + noise_floor)
 
-        elif self.weight_type == self.weight_types[0]:
+        elif self.weight_type == self.weight_types[1]:  # prop_thresh
 
-            tresh = self.weighting_params['thresh']
+            tresh = self.weighting_thresh
 
             weights *= np.where(mat > tresh, 1 / mat, 0)
 
@@ -250,18 +257,18 @@ class KineticModel(object):
     def estimate_prop_weighting_params(self, use_fit_matrix=True, fix_noise_floor=False) -> MinimizerResult:
 
         pars = Parameters()
-        noise_floor = self.prop_weighting_params['noise_floor']
+        noise_floor = self.weighting_noise_floor
         noise_floor = 0 if np.iterable(noise_floor) else noise_floor
 
         pars.add('noise_floor', value=noise_floor, min=0, max=np.inf, vary=False if fix_noise_floor else not self.noise_floor_estimation_from_data)
-        pars.add('k', value=self.prop_weighting_params['k'], min=0, max=2, vary=True)
-        pars.add('exponent', value=self.prop_weighting_params['exponent'], min=0.1, max=2, vary=True)
+        pars.add('k', value=self.weighting_k, min=0, max=2, vary=True)
+        pars.add('exponent', value=self.weighting_exponent, min=0.1, max=2, vary=True)
 
         def residuals(params):
             k = params['k'].value
             exponent = params['exponent'].value
 
-            n_floor_std = self.prop_weighting_params['noise_floor'] if self.noise_floor_estimation_from_data else params['noise_floor'].value
+            n_floor_std = self.weighting_noise_floor if self.noise_floor_estimation_from_data else params['noise_floor'].value
             mat = self.matrix_opt if use_fit_matrix else self.dataset.matrix_fac
             mat = np.abs(mat)
 
@@ -280,11 +287,11 @@ class KineticModel(object):
         fit_result = minimizer.minimize(method='nelder_mead', **fitter_kwds)  # minimize the 
         
         if not self.noise_floor_estimation_from_data:
-            self.prop_weighting_params['noise_floor'] = fit_result.params['noise_floor'].value
+            self.weighting_noise_floor = fit_result.params['noise_floor'].value
         
-        self.prop_weighting_params['k'] = fit_result.params['k'].value
-        self.prop_weighting_params['exponent'] = fit_result.params['exponent'].value
-
+        self.weighting_k = fit_result.params['k'].value
+        self.weighting_exponent = fit_result.params['exponent'].value
+        
         return fit_result
 
     

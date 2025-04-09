@@ -302,6 +302,13 @@ public setOptions(): IOption[] {
       step: 0.0001
     },
     {
+      name: "Weight type",
+      backendName: "weight_type",
+      type: "select",
+      value: "no_weighting",
+      options: ["no_weighting", "prop_thresh", "prop_noise_floor"]
+    },
+    {
       name: "Use noise floor estimation from data",
       backendName: "noise_floor_estimation_from_data",
       type: "checkbox",
@@ -316,12 +323,44 @@ public setOptions(): IOption[] {
       step: 1
     },
     {
-      name: "Use proportional weighting with noise floor",
-      backendName: "prop_weighting_with_noise_floor",
-      type: "checkbox",
-      value: false,
+      name: "Weighting k",
+      backendName: "weighting_k",
+      type: "number",
+      value: 0.000,
+      min: 0,
+      step: 0.001
     },
-    
+    // {
+    //   name: "Weighting noise floor",
+    //   backendName: "weighting_noise_floor",
+    //   type: "number",
+    //   value: 0.005,
+    //   min: 0,
+    //   step: 0.001
+    // },
+    {
+      name: "Weighting exponent",
+      backendName: "weighting_exponent",
+      type: "number",
+      value: 1,
+      min: 0.1,
+      max: 2,
+      step: 0.1
+    },
+    {
+      name: "Weighting threshold",
+      backendName: "weighting_thresh",
+      type: "number",
+      value: 0.00001,
+      min: 0,
+      step: 0.00001
+    },
+    {
+      name: "Calculate weights from fit matrix",
+      backendName: "calc_weights_from_fit_matrix",
+      type: "checkbox",
+      value: true,
+    },
   ]
 }
 
