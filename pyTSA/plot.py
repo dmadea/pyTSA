@@ -683,6 +683,51 @@ def plot_kinetics_ax(ax, D, times, wavelengths,   lw=0.5,  time_unit='ps',
     # ax.set_axisbelow(False)
     # ax.yaxis.set_ticks_position('both')
 
+def plot_data_one_dim_ax(ax_data, times: np.ndarray, trace_data: np.ndarray, plot_tilts=True,
+                           x_label="Time", t_unit='ns', z_unit='A', t_lim=(None, None), mu: float | np.ndarray = None, t_axis_formatter=ScalarFormatter(),
+                           y_lim=(None, None), lw_data=1, lw_fit=1, symlog=False, linthresh=1, linscale=1, log_y=False, title="", **kwargs):
+
+    t0 = 0
+    if mu is not None:
+        if isinstance(mu, float):
+            t0 = mu
+        
+        if isinstance(mu, np.ndarray):
+            t0 = mu[0]
+
+    tt = times - t0
+
+    # t_lim = (tt[0] if t_lim[0] is None else t_lim[0], tt[-1] if t_lim[1] is None else t_lim[1])
+
+    set_main_axis(ax_data, x_label=f"Time / {t_unit}", y_label=z_unit, xlim=t_lim, ylim=y_lim)
+
+    # ax_data.tick_params(labelbottom=False)
+
+    ax_data.set_title(title)
+    ax_data.plot(tt, trace_data, lw=lw_data, color='black')
+
+    ax_data.set_axisbelow(False)
+
+    ax_data.yaxis.set_ticks_position('both')
+    ax_data.xaxis.set_ticks_position('both')
+
+    if symlog:
+        ax_data.set_xscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=linscale, linthresh=linthresh)
+        ax_data.xaxis.set_minor_locator(MinorSymLogLocator(linthresh))
+
+        if plot_tilts:
+            norm = c.SymLogNorm(vmin=t_lim[0], vmax=t_lim[1], linscale=linscale, linthresh=linthresh, base=10,
+                                clip=True)
+            _plot_tilts(ax_data, norm, linthresh, 'x')
+
+    if t_axis_formatter:
+        ax_data.xaxis.set_major_formatter(t_axis_formatter)
+
+
+    if log_y:
+        ax_data.set_yscale('log')
+
+
 
 def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_unit='ps',
                  z_unit=dA_unit, cmap='diverging_uniform', z_lim=(None, None), hatched_wls=(None, None),

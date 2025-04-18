@@ -1,7 +1,7 @@
 
 from typing import Generator
 from matplotlib import gridspec
-from .plot import plot_data_ax
+from .plot import plot_data_ax, plot_data_one_dim_ax
 from .dataset import Dataset
 from .kineticmodel import KineticModel , FirstOrderModel
 
@@ -209,7 +209,10 @@ class Datasets(object):
             axes = np.asarray([axes])
 
         for d, ax in zip(iter(self), axes.flatten()):
-            plot_data_ax(fig, ax, d.matrix, d.times, d.wavelengths, title=d.name, **kwargs)
+            if d.matrix_fac.shape[1] == 1:
+                plot_data_one_dim_ax(ax, d.times, d.matrix[:, 0], title=d.name, **kwargs)
+            else:
+                plot_data_ax(fig, ax, d.matrix, d.times, d.wavelengths, title=d.name, **kwargs)
 
         plt.tight_layout()
 
@@ -218,6 +221,15 @@ class Datasets(object):
             plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
         else:
             plt.show()
+
+    def get_integrated_datasets(self):
+        ids = Datasets()
+
+        for d in iter(self):
+            ids.append(d.get_integrated_dataset())
+
+        return ids
+
 
     def plot_models(self, *what, outer_nrows: int | None = None, outer_ncols: int | None = None, fig_labels_offset=0,
                     inner_nrows: int | None = None, inner_ncols: int | None = None, outer_hspace=0.2, outer_wspace=0.2,
