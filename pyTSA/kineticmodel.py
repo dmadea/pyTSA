@@ -1189,6 +1189,7 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
 
     def __init__(self, dataset: Dataset | None = None, set_model: bool = False):
         self.add_quenching_rates = False
+        self.add_extra_first_order_compartment = False
         self.add_inf_compartment = False
         super(DelayedFluorescenceModel, self).__init__(dataset, 3, set_model)
 
@@ -1197,6 +1198,9 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
 
     def init_params(self) -> Parameters:
         params = super(DelayedFluorescenceModel, self).init_params()
+
+        if self.add_extra_first_order_compartment:
+            params.add('k_1', value=1, min=0, max=np.inf, vary=True)
 
         params.add('k_rnr', value=0.05, min=0, max=np.inf, vary=True)
         params.add('k_isc', value=0.1, min=0, max=np.inf, vary=True)
@@ -1214,7 +1218,13 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         return params
     
     def get_labels(self, t_unit='ps'):
-        labels = np.asarray(['S1', 'T1', 'inf'])
+        if self.add_extra_first_order_compartment:
+            labels = np.asarray(['LE', 'CT_S1', 'CT_T1'])
+        elif self.add_inf_compartment:
+            labels = np.asarray(['S1', 'T1', 'inf'])
+        else:
+            labels = np.asarray(['S1', 'T1'])
+
         # return list(labels[self.used_compartments])
         return labels
     
@@ -1255,10 +1265,17 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         else:
                     
             K = np.asarray([[-k_rnr - k_isc - ki_isc - kq_s, k_risc + ki_risc],
-                    [k_isc + ki_isc,         -k_risc - ki_risc - kq_t]])
+                             [k_isc + ki_isc,         -k_risc - ki_risc - kq_t]])
         
             j = np.asarray([1, 0])
 
+        if self.add_extra_first_order_compartment:
+            k_1 = params['k_1'].value
+            K = np.asarray([[-k_1,      0,              0],
+                            [k_1, -k_rnr - k_isc - ki_isc - kq_s,  k_risc + ki_risc],
+                            [0,      k_isc + ki_isc,       -k_risc - ki_risc - kq_t]])
+
+            j = np.asarray([1, 0, 0])
 
 
         return j, K
