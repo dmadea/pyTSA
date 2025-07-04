@@ -1,4 +1,5 @@
 
+from typing import Any
 import numpy as np
 from scipy.linalg import svd
 
@@ -208,10 +209,20 @@ class Dataset(object):
 
         # self.SVD()
 
-    def get_integrated_dataset(self):
-        trace = np.trapz(self.matrix_fac, self.wavelengths, axis=1)
-        # trace = self.matrix_fac.sum(axis=1)
-        return Dataset(trace[:, None], self.times, np.asarray([0]), name=f"{self.name}-integrated")
+    def get_integrated_dataset(self, return_crop_matrix=False, w0=None, w1=None) -> tuple[Any, int]:
+        i = fi(self.wavelengths, w0) if w0 is not None else 0
+        j = fi(self.wavelengths, w1) + 1 if w0 is not None else self.matrix_fac.shape[1]
+
+        D_crop = self.matrix_fac[:, i:j]
+        wavelengths_crop = self.wavelengths[i:j]
+
+        trace = np.trapezoid(D_crop, wavelengths_crop, axis=1)
+        ds = Dataset(trace[:, None], self.times, np.asarray([0]), name=f"{self.name}-integrated")
+
+        if return_crop_matrix:
+            return ds, D_crop
+        else:
+            return ds
 
     def set_model(self, model: KineticModel):
         if not isinstance(model, KineticModel):
