@@ -500,10 +500,20 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
 #     ax.set_axisbelow(False)
 
 
-def plot_spectra_ax(ax, D, times, wavelengths, selected_times=[0, 50, 100], mu=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1.0,
+def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0, 50, 100], linspace: tuple | None = None, mu=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1.0,
                     legend_spacing=0.05, colors=None, lw=1.5, darkens_factor_cmap=1, cmap='cet_rainbow4', columnspacing=2, x_minor_locator=AutoMinorLocator(10), x_major_locator=None,
                     legend_loc='lower right', legend_ncol=2, ylim=None, label_prefix='', t_unit='ps', t_unit1e3='ns',
                       plot_chirp_corrected=True, legend_fontsize=12, **kwargs):
+    
+    """
+    
+    use linear range if selected times is None
+                start, stop, number of points
+    linspace = (0, 5, 6) => 0, 1, 2, 3, 4, 5
+    """
+    
+    if linspace is not None:
+        selected_times = list(np.linspace(*linspace))
 
     _D = D * D_mul_factor
 

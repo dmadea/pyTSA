@@ -645,6 +645,17 @@ class Dataset(object):
         else:
             plt.show()
 
+    def plot_spectra(self, filepath=None, **kwargs):
+        fig, ax = plt.subplots(1, 1, figsize=kwargs.get('figsize', (5.5, 4.5)))
+        plot_spectra_ax(ax, self.matrix, self.times, self.wavelengths, 
+                     title=self.name, **kwargs)
+
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
+        else:
+            plt.show()
+
     @staticmethod
     def to_string(array, separator='\t', decimal_sep='.', new_line='\n'):
         list_array = array.tolist()
