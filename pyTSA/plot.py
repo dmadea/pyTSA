@@ -894,10 +894,10 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
         ax_data.xaxis.set_minor_locator(MinorSymLogLocator(linthresh))
         ax_res.xaxis.set_minor_locator(MinorSymLogLocator(linthresh))
 
-        if plot_tilts:
-            norm = c.SymLogNorm(vmin=t_lim[0], vmax=t_lim[1], linscale=linscale, linthresh=linthresh, base=10,
-                                clip=True)
-            _plot_tilts(ax_data, norm, linthresh, 'x')
+        # if plot_tilts:
+        #     norm = c.SymLogNorm(vmin=t_lim[0], vmax=t_lim[1], linscale=linscale, linthresh=linthresh, base=10,
+        #                         clip=True)
+        #     _plot_tilts(ax_data, norm, linthresh, 'x')
 
     if t_axis_formatter:
         ax_res.xaxis.set_major_formatter(t_axis_formatter)
