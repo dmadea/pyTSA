@@ -191,10 +191,10 @@ class KineticModel(object):
             raise TypeError("Optimized matrix is None")
         R = self.dataset.matrix_fac - self.matrix_opt
         weights = self.get_weights()
-        return R * weights
+        return R * np.sqrt(weights)
 
     def get_weights_lstsq(self):
-        w = self.get_weights()
+        w = np.sqrt(self.get_weights())
         return w.sum(axis=1)
 
     def _calculate_noise_floor(self):
@@ -229,7 +229,11 @@ class KineticModel(object):
             exponent = self.weighting_exponent
             k = self.weighting_k
 
-            weights *= 1 / (k * (mat ** exponent) + noise_floor)
+            variance = (k * mat) ** 2 + noise_floor ** 2
+
+            # weights *= 1 / (k * (mat ** exponent) + noise_floor)
+            weights *= 1 / variance
+
 
         elif self.weight_type == self.weight_types[1]:  # prop_thresh
 
@@ -1006,7 +1010,7 @@ class FirstOrderModel(KineticModel):
                     plot_time_traces_onefig_ax(ax, _C, self.dataset.times, **kws)
                 case "trapz":
 
-                    y = np.trapz(self.dataset.matrix_fac, self.dataset.wavelengths, axis=1)
+                    y = np.trapezoid(self.dataset.matrix_fac, self.dataset.wavelengths, axis=1)
                     ax.set_xscale('log')
                     ax.set_yscale('log')
                     ax.set_xlim(2.5, self.dataset.times[-1])
