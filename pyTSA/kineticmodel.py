@@ -229,7 +229,7 @@ class KineticModel(object):
             exponent = self.weighting_exponent
             k = self.weighting_k
 
-            variance = (k * mat) ** 2 + noise_floor ** 2
+            variance = (k * (mat ** exponent)) ** 2 + noise_floor ** 2
 
             # weights *= 1 / (k * (mat ** exponent) + noise_floor)
             weights *= 1 / variance

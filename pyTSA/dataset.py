@@ -209,7 +209,7 @@ class Dataset(object):
 
         # self.SVD()
 
-    def get_integrated_dataset(self, return_crop_matrix=False, w0=None, w1=None) -> tuple[Any, int]:
+    def get_integrated_dataset(self, w0=None, w1=None, return_crop_matrix=False) -> tuple[Any, int]:
         i = fi(self.wavelengths, w0) if w0 is not None else 0
         j = fi(self.wavelengths, w1) + 1 if w0 is not None else self.matrix_fac.shape[1]
 
