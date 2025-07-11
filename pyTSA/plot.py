@@ -43,7 +43,10 @@ X_SIZE, Y_SIZE = 5, 4.5
 dA_unit = '$\Delta A$'
 
 
-COLORS = ['blue', 'red', 'green', 'orange', 'black', 'yellow']
+# COLORS = ['blue', 'red', 'green', 'orange', 'black', 'yellow']
+COLORS = ['#161276', '#D7050D', 'green', 'orange', 'black', 'yellow']
+
+
 COLORS_gradient = ['blue', 'lightblue']
 
 
