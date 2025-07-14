@@ -389,8 +389,8 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
             k, l = fi(wavelengths, wls[i])
             if l < wavelengths.shape[0] - 1:
                 l += 1
-            trace = np.trapz(D[:, k:l], wavelengths[k:l], axis=1)
-            trace_fit = np.trapz(D_fit[:, k:l], wavelengths[k:l], axis=1)
+            trace = np.trapezoid(D[:, k:l], wavelengths[k:l], axis=1)
+            trace_fit = np.trapezoid(D_fit[:, k:l], wavelengths[k:l], axis=1)
             tt = t - (mu[k] + mu[l]) / 2
             label=f'$\\int$({wls[i][0]}$-${wls[i][1]}) {wl_unit}'
             
@@ -528,9 +528,9 @@ def whittaker_smooth(trace: np.ndarray, lam: float = 1e3):
 
 
 def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0, 50, 100], linspace: tuple | None = None, mu=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1.0,
-                    legend_spacing=0.05, colors=None, lw=1.5, darkens_factor_cmap=1, cmap='cet_rainbow4', columnspacing=2, x_minor_locator=AutoMinorLocator(10), x_major_locator=None,
-                    legend_loc='lower right', legend_ncol=2, ylim=None, label_prefix='', t_unit='ps', t_unit1e3='ns', smooth_data_whittaker=False, whittaker_lam=1e3,
-                      plot_chirp_corrected=True, legend_fontsize=12, **kwargs):
+                    legend_spacing=0.05, colors=None, lw=1.5, xlim=None,  darkens_factor_cmap=1, cmap='cet_rainbow4', columnspacing=2, x_minor_locator=AutoMinorLocator(10), x_major_locator=None,
+                    legend_loc='lower right', legend_ncol=2, bbox_to_anchor=None, ylim=None, label_prefix='', t_unit='ps', t_unit1e3='ns', smooth_data_whittaker=False, whittaker_lam=1e3,
+                      plot_chirp_corrected=True, legend_fontsize=12, normalize=False, **kwargs):
     
     """
     
@@ -552,16 +552,33 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
         cut_idxs = fi(wavelengths, hatched_wls)
         _D[:, cut_idxs[0]:cut_idxs[1]] = np.nan
 
-    set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]), x_minor_locator=x_minor_locator, x_major_locator=x_major_locator)  #,
+    set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]) if xlim is None else xlim, x_minor_locator=x_minor_locator, x_major_locator=x_major_locator)  #,
     # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
-    t_idxs = fi(times, selected_times)
+    # t_idxs = fi(times, selected_times)
 
-    _cmap = plt.get_cmap(cmap, t_idxs.shape[0])
+    _cmap = plt.get_cmap(cmap, len(selected_times))
     ax.axhline(0, wavelengths[0], wavelengths[-1], ls='--', color='black', lw=1)
 
-    for i in range(t_idxs.shape[0]):
-        idx = t_idxs[i]
+    for i in range(len(selected_times)):
+        
+        # we have a range of times to integrate
+        if is_iterable(selected_times[i]):
+            k, l = fi(times, selected_times[i])
+            if l < times.shape[0] - 1:
+                l += 1
+            spectrum = np.trapezoid(_D[k:l, :], times[k:l], axis=0)
+            label=f'$\\int$({selected_times[i][0]}$-${selected_times[i][1]}) {t_unit}'
+        else:
+            idx = fi(times, selected_times[i])
+            _t = times[idx]
+            _unit = t_unit
+            if _t >= 1000:
+                _t *= 1e-3
+                _unit = t_unit1e3
+            spectrum = _D[idx]
+            label=f"{label_prefix}${_t:.3g}$ {_unit}"
+
         # if colors is None:
         #     color = np.asarray(c.to_rgb(_cmap(i))) * darkens_factor_cmap
         #     color[color > 1] = 1
@@ -570,20 +587,23 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
 
         color = _cmap(i)
 
-        _t = times[idx]
+        # _t = times[idx]
 
-        _unit = t_unit
-        if _t >= 1000:
-            _t *= 1e-3
-            _unit = t_unit1e3
+        # _unit = t_unit
+        # if _t >= 1000:
+        #     _t *= 1e-3
+        #     _unit = t_unit1e3
 
-        spectrum = _D[idx]
+        # spectrum = _D[idx]
         if smooth_data_whittaker:
             spectrum = whittaker_smooth(spectrum, whittaker_lam)
 
-        ax.plot(wavelengths, spectrum, color=color, lw=lw, label=f"{label_prefix}${_t:.3g}$ {_unit}")
+        if normalize:
+            spectrum /= spectrum.max()
 
-    l = ax.legend(loc=legend_loc, frameon=False, labelspacing=legend_spacing, ncol=legend_ncol, fontsize=legend_fontsize,
+        ax.plot(wavelengths, spectrum, color=color, lw=lw, label=label)
+
+    l = ax.legend(loc=legend_loc, bbox_to_anchor=bbox_to_anchor, frameon=False, labelspacing=legend_spacing, ncol=legend_ncol, fontsize=legend_fontsize,
                   # handlelength=0, handletextpad=0,
                   columnspacing=columnspacing)
     for i, text in enumerate(l.get_texts()):
@@ -1029,7 +1049,7 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1,
                  legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True, y_lim=(None, None),
                  area_plot_datas: list[tuple] = [], area_plot_colors=('violet', 'blue', 'green'), 
-                 title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None,
+                 title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None, inf_as_last_compartment=False,
                  area_plot_alpha=0.2, w_lim=(None, None), **kwargs):
     _SADS = SADS.copy() * D_mul_factor
     if hatched_wls[0] is not None:
@@ -1060,7 +1080,12 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
         else:
             color = colors[i]
 
-        ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=labels[i])
+        if i == _SADS.shape[1] - 1 and inf_as_last_compartment:
+            label = "inf"
+        else:
+            label = labels[i]
+
+        ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=label)
 
     if Artifacts is not None:
         colorsArt = ['black', 'grey', 'navy', 'pink']
