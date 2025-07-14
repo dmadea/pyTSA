@@ -18,7 +18,7 @@ from abc import abstractmethod
 # from numba import njit
 
 from .mathfuncs import LPL_decay, blstsq, fi, fit_polynomial_coefs, fit_sum_exp, fold_exp, gaussian, get_EAS_transform, glstsq, lstsq, simulate_target_model, square_conv_exp
-from .plot import MinorSymLogLocator, plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_time_traces_onefig_ax, plot_traces_onefig_ax, set_main_axis
+from .plot import MinorSymLogLocator, plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_time_traces_onefig_ax, plot_traces_onefig_ax, set_main_axis, COLORS
 if TYPE_CHECKING:
     from .dataset import Dataset
 
@@ -939,7 +939,6 @@ class FirstOrderModel(KineticModel):
         inner_grid = gridspec.GridSpecFromSubplotSpec(nrows, ncols, wspace=wspace, hspace=hspace, subplot_spec=grid_spec)
 
         mu = self.get_mu()
-        COLORS = ['blue', 'red', 'green', 'orange', 'purple', 'black', 'gray']
         t_unit=kwargs.get('t_unit', 'ps')
 
         def update_kwargs(prefix: str, kwargs: dict):
