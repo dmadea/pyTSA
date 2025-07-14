@@ -11,6 +11,8 @@ import matplotlib as mpl
 import matplotlib.colors as c
 from numpy import ma
 
+from scipy.fftpack import dct, idct
+
 import cmasher as cmr
 import colorcet as cc
 
@@ -499,10 +501,32 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
 #
 #     ax.set_axisbelow(False)
 
+def whittaker_smooth(trace: np.ndarray, lam: float = 1e3):
+    """
+    Applies Whittaker smoother to a spectrum. Based on 10.1016/j.csda.2009.09.020, utilizes discrete cosine
+    transform to efficiently perform the calculation.
+
+    Correctly smooths only evenly spaced data!!
+
+    Parameters
+    ----------
+    lam : float
+        Lambda - parametrizes the roughness of the smoothed curve.
+    """
+
+    N = trace.shape[0]
+
+    Lambda = -2 + 2 * np.cos(np.arange(N) * np.pi / N)  # eigenvalues of 2nd order difference matrix
+
+    gamma = 1 / (1 + lam * Lambda * Lambda)
+    trace_smoothed = idct(gamma * dct(trace, norm='ortho'), norm='ortho')
+
+    return trace_smoothed
+
 
 def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0, 50, 100], linspace: tuple | None = None, mu=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1.0,
                     legend_spacing=0.05, colors=None, lw=1.5, darkens_factor_cmap=1, cmap='cet_rainbow4', columnspacing=2, x_minor_locator=AutoMinorLocator(10), x_major_locator=None,
-                    legend_loc='lower right', legend_ncol=2, ylim=None, label_prefix='', t_unit='ps', t_unit1e3='ns',
+                    legend_loc='lower right', legend_ncol=2, ylim=None, label_prefix='', t_unit='ps', t_unit1e3='ns', smooth_data_whittaker=False, whittaker_lam=1e3,
                       plot_chirp_corrected=True, legend_fontsize=12, **kwargs):
     
     """
@@ -550,7 +574,11 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
             _t *= 1e-3
             _unit = t_unit1e3
 
-        ax.plot(wavelengths, _D[idx], color=color, lw=lw, label=f"{label_prefix}${_t:.3g}$ {_unit}")
+        spectrum = _D[idx]
+        if smooth_data_whittaker:
+            spectrum = whittaker_smooth(spectrum, whittaker_lam)
+
+        ax.plot(wavelengths, spectrum, color=color, lw=lw, label=f"{label_prefix}${_t:.3g}$ {_unit}")
 
     l = ax.legend(loc=legend_loc, frameon=False, labelspacing=legend_spacing, ncol=legend_ncol, fontsize=legend_fontsize,
                   # handlelength=0, handletextpad=0,
