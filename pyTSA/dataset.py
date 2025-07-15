@@ -636,12 +636,13 @@ class Dataset(object):
 
     def plot(self, filepath=None, **kwargs):
         fig, ax = plt.subplots(1, 1, figsize=kwargs.get('figsize', (5.5, 4.5)))
+        title = kwargs.pop('title', self.name)
         plot_data_ax(fig, ax, self.matrix, self.times, self.wavelengths, 
-                     title=self.name, **kwargs)
+                     title=title, **kwargs)
 
         if filepath:
             ext = os.path.splitext(filepath)[1].lower()[1:]
-            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
+            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), bbox_inches='tight', dpi=kwargs.get('dpi', 300))
         else:
             plt.show()
 
@@ -652,7 +653,7 @@ class Dataset(object):
 
         if filepath:
             ext = os.path.splitext(filepath)[1].lower()[1:]
-            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
+            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), bbox_inches='tight', dpi=kwargs.get('dpi', 300))
         else:
             plt.show()
 

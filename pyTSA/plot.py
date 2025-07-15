@@ -559,6 +559,13 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
 
     _cmap = plt.get_cmap(cmap, len(selected_times))
     ax.axhline(0, wavelengths[0], wavelengths[-1], ls='--', color='black', lw=1)
+    
+    def change_t_unit(time):
+        _unit = t_unit
+        if time >= 1000:
+            time *= 1e-3
+            _unit = t_unit1e3
+        return time, _unit
 
     for i in range(len(selected_times)):
         
@@ -568,14 +575,16 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
             if l < times.shape[0] - 1:
                 l += 1
             spectrum = np.trapezoid(_D[k:l, :], times[k:l], axis=0)
-            label=f'$\\int$({selected_times[i][0]}$-${selected_times[i][1]}) {t_unit}'
+            
+            t1, unit1 = change_t_unit(selected_times[i][0])
+            t2, unit2 = change_t_unit(selected_times[i][1])
+
+            assert unit1 == unit2, "Cannot use the same time unit for the range"
+
+            label=f'$\\int$({t1}$-${t2}) {unit1}'
         else:
             idx = fi(times, selected_times[i])
-            _t = times[idx]
-            _unit = t_unit
-            if _t >= 1000:
-                _t *= 1e-3
-                _unit = t_unit1e3
+            _t, _unit = change_t_unit(times[idx])
             spectrum = _D[idx]
             label=f"{label_prefix}${_t:.3g}$ {_unit}"
 

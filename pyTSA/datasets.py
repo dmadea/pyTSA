@@ -1,5 +1,4 @@
-
-from typing import Generator
+from typing import Generator, Union
 from matplotlib import gridspec
 from .plot import plot_data_ax, plot_data_one_dim_ax
 from .dataset import Dataset
@@ -99,14 +98,43 @@ class Datasets(object):
     def append(self, dataset: Dataset, key: str | int | None = None):
         self._datasets.append(dict(dataset=dataset, key=len(self._datasets) if key is None else key))
 
-    def extend(self, datasets: list[Dataset], keys: list[str | int] | None = None):
-        n = len(datasets)
+    def extend(self, datasets: Union[list["Dataset"], "Datasets"], keys: Union[list[str | int], None] = None):
+        # Allow extending with another Datasets instance
+        if isinstance(datasets, Datasets):
+            datasets_list = [d for d in datasets]
+        else:
+            datasets_list = datasets
+
+        n = len(datasets_list)
         if keys is not None:
             assert len(keys) == n
         else:
             keys = list(range(len(self._datasets), n + len(self._datasets)))
 
-        self._datasets.extend([dict(dataset=d, key=key) for d, key in zip(datasets, keys)])
+        self._datasets.extend([dict(dataset=d, key=key) for d, key in zip(datasets_list, keys)])
+
+    def __add__(self, other):
+        # TODO fix key assignment
+        if isinstance(other, Datasets):
+            new_items = self._datasets + other._datasets
+        elif isinstance(other, list):
+            new_items = self._datasets + other
+        elif isinstance(other, Dataset):
+            new_items = self._datasets + [other]
+        else:
+            return NotImplemented
+        return Datasets(new_items)
+
+    def __iadd__(self, other):
+        if isinstance(other, Datasets):
+            self._datasets.extend(other._datasets)
+        elif isinstance(other, list):
+            self._datasets.extend(other)
+        elif isinstance(other, Dataset):
+            self._datasets.append(other)
+        else:
+            return NotImplemented
+        return self
 
     def remove(self, index: int | None = None, key: int | str | None = None):
         if key is not None:

@@ -946,7 +946,8 @@ class FirstOrderModel(KineticModel):
                 if key.startswith(prefix.lower()):
                     _key = key[len(prefix) + 1:]  # to account for _ symbol
                     kwargs[_key] = value
-        f_labels = list('abcdefghijklmnopqrstuvw')
+        f_labels = list('abcdefghijklmnopqrstuvwxyz')
+        f_labels += [s + s for s in f_labels]
 
         for i, (p, ig) in enumerate(zip(what, inner_grid)):
             if i >= nrows * ncols:
@@ -969,7 +970,9 @@ class FirstOrderModel(KineticModel):
                     opt = self.matrix_opt[:, 0] if single_dim else self.matrix_opt.sum(axis=1)
                     res = self.weighted_residuals()[:, 0] if single_dim else self.weighted_residuals().sum(axis=1)
 
-                    plot_fitresiduals_axes(ax, ax_res, self.dataset.times, mat, opt, res, title=self.dataset.name, mu=mu, **kws)
+                    title = kws.pop('title', self.dataset.name)
+
+                    plot_fitresiduals_axes(ax, ax_res, self.dataset.times, mat, opt, res, title=title, mu=mu, **kws)
 
                 case "data":
                     kws.update(dict(title=f"Data [{self.dataset.name}]", log=False, mu=mu))
