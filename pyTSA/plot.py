@@ -805,7 +805,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
                  n_lin_bins=10, n_log_bins=10, plot_tilts=True, squeeze_z_range_factor=1,
                  y_major_formatter=ScalarFormatter(), y_label='Time delay',
                  x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels: int | None = 30, plot_countours=True,
-                 colorbar_locator=AutoLocator(), colorbarpad=0.04, title='', log_z=False,
+                 colorbar_locator=AutoLocator(), colorbarpad=0.04, title='', log_z=False, rasterized=True,
                  diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=False,
                  x_label="Wavelength / nm", plot_chirp_corrected=False, mu=None, draw_chirp=True, **kwargs):
     """data is individual dataset"""
@@ -875,9 +875,10 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
         norm = mpl.colors.Normalize(vmin=zmin,vmax=zmax, clip=True)
 
     if n_levels is None:
-        mappable = ax.pcolormesh(x, y, D, cmap=cmap, norm=norm)
+        mappable = ax.pcolormesh(x, y, D, cmap=cmap, norm=norm, rasterized=rasterized)
+        
     else:
-        mappable = ax.contourf(x, y, D, cmap=cmap, norm=norm, levels=levels, antialiased=True)
+        mappable = ax.contourf(x, y, D, cmap=cmap, norm=norm, levels=levels, antialiased=True, rasterized=rasterized)
 
     if plot_countours and n_levels is not None:
         cmap_colors = cmaps.get_cmap(cmap)
