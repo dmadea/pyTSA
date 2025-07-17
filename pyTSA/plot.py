@@ -936,9 +936,7 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 
     # t_lim = (tt[0] if t_lim[0] is None else t_lim[0], tt[-1] if t_lim[1] is None else t_lim[1])
 
-    set_main_axis(ax_data, x_label="", y_label=z_unit, xlim=t_lim, ylim=y_lim)
-    set_main_axis(ax_res, x_label=f"{x_label} / {t_unit}", ylim=y_lim_residuals,
-                    y_label='res.', xlim=t_lim)
+
 
     # plot zero lines
     ax_res.axline((0, 0), slope=0, ls='--', color='black', lw=0.5)
@@ -976,6 +974,10 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 
     if log_y:
         ax_data.set_yscale('log')
+
+    set_main_axis(ax_data, x_label="", y_label=z_unit, xlim=t_lim, ylim=y_lim)
+    set_main_axis(ax_res, x_label=f"{x_label} / {t_unit}", ylim=y_lim_residuals,
+                    y_label='res.', xlim=t_lim if t_lim[0] is not None else ax_data.get_xlim())
 
 #
 # def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, t_unit='ps',

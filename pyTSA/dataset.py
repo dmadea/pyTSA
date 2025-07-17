@@ -209,15 +209,19 @@ class Dataset(object):
 
         # self.SVD()
 
-    def get_integrated_dataset(self, w0=None, w1=None, return_crop_matrix=False) -> tuple[Any, int]:
+    def get_integrated_dataset(self, t0=None, t1=None,  w0=None, w1=None, return_crop_matrix=False) -> tuple[Any, int]:
         i = fi(self.wavelengths, w0) if w0 is not None else 0
         j = fi(self.wavelengths, w1) + 1 if w0 is not None else self.matrix_fac.shape[1]
 
-        D_crop = self.matrix_fac[:, i:j]
+        k = fi(self.times, t0) if t0 is not None else 0
+        l = fi(self.times, t1) + 1 if t1 is not None else self.matrix_fac.shape[0]
+
+        D_crop = self.matrix_fac[k:l, i:j]
         wavelengths_crop = self.wavelengths[i:j]
+        times_crop = self.times[k:l]
 
         trace = np.trapezoid(D_crop, wavelengths_crop, axis=1)
-        ds = Dataset(trace[:, None], self.times, np.asarray([0]), name=f"{self.name}-integrated")
+        ds = Dataset(trace[:, None], times_crop, np.asarray([0]), name=f"{self.name}-integrated")
 
         if return_crop_matrix:
             return ds, D_crop
@@ -648,8 +652,9 @@ class Dataset(object):
 
     def plot_spectra(self, filepath=None, **kwargs):
         fig, ax = plt.subplots(1, 1, figsize=kwargs.get('figsize', (5.5, 4.5)))
+        title = kwargs.pop('title', self.name)
         plot_spectra_ax(ax, self.matrix, self.times, self.wavelengths, 
-                     title=self.name, **kwargs)
+                     title=title, **kwargs)
 
         if filepath:
             ext = os.path.splitext(filepath)[1].lower()[1:]

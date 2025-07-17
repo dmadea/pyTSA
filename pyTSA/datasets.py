@@ -1,6 +1,6 @@
 from typing import Generator, Union
 from matplotlib import gridspec
-from .plot import plot_data_ax, plot_data_one_dim_ax
+from .plot import plot_data_ax, plot_data_one_dim_ax, plot_spectra_ax
 from .dataset import Dataset
 from .kineticmodel import KineticModel , FirstOrderModel
 
@@ -225,6 +225,31 @@ class Datasets(object):
 
         return Dataset(mat, times, wavelengths, name=self[0].name)
     
+    def plot_spectra(self, filepath=None, **kwargs):
+        n = len(self._datasets)
+        if n == 0:
+            return
+        
+        ncols = int(np.floor(n ** 0.5))
+        nrows = int(np.ceil(n / ncols))
+        fig, axes = plt.subplots(nrows, ncols, figsize=kwargs.get('figsize', (5.5 * ncols, 4.5 * nrows)))
+        if nrows * ncols == 1:
+            axes = np.asarray([axes])
+
+        for d, ax in zip(iter(self), axes.flatten()):
+            _kwargs = kwargs.copy()
+            title = _kwargs.pop('title', d.name)
+
+            plot_spectra_ax(ax, d.matrix, d.times, d.wavelengths, title=title, **_kwargs)
+
+        plt.tight_layout()
+
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
+        else:
+            plt.show()
+    
     def plot_data(self, filepath=None, **kwargs):
         n = len(self._datasets)
         if n == 0:
@@ -237,10 +262,13 @@ class Datasets(object):
             axes = np.asarray([axes])
 
         for d, ax in zip(iter(self), axes.flatten()):
+            _kwargs = kwargs.copy()
+            title = _kwargs.pop('title', d.name)
+
             if d.matrix_fac.shape[1] == 1:
-                plot_data_one_dim_ax(ax, d.times, d.matrix[:, 0], title=d.name, **kwargs)
+                plot_data_one_dim_ax(ax, d.times, d.matrix[:, 0], title=title, **_kwargs)
             else:
-                plot_data_ax(fig, ax, d.matrix, d.times, d.wavelengths, title=d.name, **kwargs)
+                plot_data_ax(fig, ax, d.matrix, d.times, d.wavelengths, title=title, **_kwargs)
 
         plt.tight_layout()
 
