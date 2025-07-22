@@ -1059,7 +1059,7 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 
 
 def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1,
-                 legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True, y_lim=(None, None),
+                 legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True, y_lim=(None, None), legend_loc=None,
                  area_plot_datas: list[tuple] = [], area_plot_colors=('violet', 'blue', 'green'), 
                  title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None, inf_as_last_compartment=False,
                  area_plot_alpha=0.2, w_lim=(None, None), **kwargs):
@@ -1116,7 +1116,7 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
     ax.set_title(title)
 
     if show_legend:
-        ax.legend(frameon=False, labelspacing=legend_spacing, ncol=legend_ncol)
+        ax.legend(frameon=False, labelspacing=legend_spacing, ncol=legend_ncol, loc=legend_loc)
     ax.set_axisbelow(False)
     ax.yaxis.set_ticks_position('both')
 
