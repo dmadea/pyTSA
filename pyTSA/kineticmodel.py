@@ -1227,7 +1227,7 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         if self.add_extra_first_order_compartment:
             labels = np.asarray(['LE', 'CT_S1', 'CT_T1'])
         elif self.add_inf_compartment:
-            labels = np.asarray(['S1', 'T1', 'inf'])
+            labels = np.asarray(['S$_1$', 'T$_1$', 'inf'])
         else:
             labels = np.asarray(['S1', 'T1'])
 
