@@ -895,6 +895,19 @@ class FirstOrderModel(KineticModel):
         self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
         self.params = self.fit_result.params
 
+    def add_amplitudes_to_params(self, params: Parameters | None = None, max_amplitudes = 10):
+        params = self.params if params is not None else params
+
+        assert self.ST_opt is not None
+
+        norm_amps = (self.ST_opt / self.ST_opt.sum()).squeeze()
+
+        assert norm_amps.shape[0] <= max_amplitudes
+
+        for i, a in enumerate(norm_amps):
+            self.params.add(f"A_{i+1}", value=a, vary=False)
+
+
     def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None, hspace=0.2, wspace=0.2,
               X_SIZE=5.5, Y_SIZE=4.5, add_figure_labels=False, figure_labels_font_size=17, fig_labels_offset=0,
                transparent=True, dpi=300, filepath=None, **kwargs):
