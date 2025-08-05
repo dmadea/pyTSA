@@ -528,7 +528,7 @@ def whittaker_smooth(trace: np.ndarray, lam: float = 1e3):
 
 
 def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0, 50, 100], linspace: tuple | None = None, mu=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1.0,
-                    legend_spacing=0.05, colors=None, lw=1.5, xlim=None,  darkens_factor_cmap=1, cmap='cet_rainbow4', columnspacing=2, x_minor_locator=AutoMinorLocator(10), x_major_locator=None,
+                    legend_spacing=0.05, colors=None, lw=1.5, w_lim=None,  darkens_factor_cmap=1, cmap='cet_rainbow4', columnspacing=2, x_minor_locator=AutoMinorLocator(10), x_major_locator=None,
                     legend_loc='lower right', legend_ncol=2, bbox_to_anchor=None, ylim=None, label_prefix='', t_unit='ps', t_unit1e3='ns', smooth_data_whittaker=False, whittaker_lam=1e3,
                       plot_chirp_corrected=True, legend_fontsize=12, normalize=False, **kwargs):
     
@@ -552,7 +552,7 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
         cut_idxs = fi(wavelengths, hatched_wls)
         _D[:, cut_idxs[0]:cut_idxs[1]] = np.nan
 
-    set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]) if xlim is None else xlim, x_minor_locator=x_minor_locator, x_major_locator=x_major_locator)  #,
+    set_main_axis(ax, y_label=z_unit, xlim=(wavelengths[0], wavelengths[-1]) if w_lim is None else w_lim, x_minor_locator=x_minor_locator, x_major_locator=x_major_locator)  #,
     # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
     # t_idxs = fi(times, selected_times)
