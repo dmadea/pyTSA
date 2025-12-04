@@ -5,6 +5,7 @@ from numba import njit, vectorize
 # from scipy.linalg import svd
 from math import erfc as math_erfc
 from math import fabs
+# from scipy.special import erfc
 import scipy
 posv = scipy.linalg.get_lapack_funcs(('posv'))
 from scipy.linalg import lstsq as scipy_lstsq
@@ -257,16 +258,21 @@ def fast_erfc(x):
     return ret
 
 
-@vectorize(nopython=True, fastmath=True)
+@vectorize(nopython=True, fastmath=False)
 def fold_exp(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray | float) -> np.ndarray | float:
 
     w = fwhm / (2 * np.sqrt(np.log(2)))  # gaussian width
-    tt = t
-
+    
     if w > 0:
-        return 0.5 * np.exp(k * (k * w * w / 4.0 - tt)) * math_erfc(w * k / 2.0 - tt / w)
-    else:
-        return np.exp(-tt * k) if tt >= 0 else 0
+        # Limiting case threshold: 1/k << FWHM
+        if k > 0 and (1.0 / k) < 0.05 * fwhm:
+            # Delta-function limit: (1/k) * Gaussian IRF
+            return (1.0 / (k * w * np.sqrt(np.pi))) * np.exp(-(t / w) ** 2)
+        else:
+            return 0.5 * np.exp(k * (k * w * w / 4.0 - t)) * math_erfc(w * k / 2.0 - t / w)
+
+    # no IRF, just exponential decay
+    return np.exp(-t * k) if t >= 0 else 0
     
 # exponential convoluted with square wave, from https://lpsa.swarthmore.edu/Convolution/Convolution2.html and wolfram alpha
 @vectorize(nopython=True, fastmath=True)

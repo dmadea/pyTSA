@@ -588,22 +588,12 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
             spectrum = _D[idx]
             label=f"{label_prefix}${_t:.3g}$ {_unit}"
 
-        # if colors is None:
-        #     color = np.asarray(c.to_rgb(_cmap(i))) * darkens_factor_cmap
-        #     color[color > 1] = 1
-        # else:
-        #     color = colors[i]
+        if colors is None:
+            color = np.asarray(c.to_rgb(_cmap(i))) * darkens_factor_cmap
+            color[color > 1] = 1
+        else:
+            color = colors[i]
 
-        color = _cmap(i)
-
-        # _t = times[idx]
-
-        # _unit = t_unit
-        # if _t >= 1000:
-        #     _t *= 1e-3
-        #     _unit = t_unit1e3
-
-        # spectrum = _D[idx]
         if smooth_data_whittaker:
             spectrum = whittaker_smooth(spectrum, whittaker_lam)
 
@@ -615,9 +605,13 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
     l = ax.legend(loc=legend_loc, bbox_to_anchor=bbox_to_anchor, frameon=False, labelspacing=legend_spacing, ncol=legend_ncol, fontsize=legend_fontsize,
                   # handlelength=0, handletextpad=0,
                   columnspacing=columnspacing)
-    for i, text in enumerate(l.get_texts()):
-        # text.set_ha('right')
-        text.set_color(_cmap(i))
+                  
+    # for i, text in enumerate(l.get_texts()):
+    #     # text.set_ha('right')
+    #     text.set_color(_cmap(i))
+
+    for line, text in zip(l.get_lines(), l.get_texts()):
+        text.set_color(line.get_color())
 
     ax.set_axisbelow(False)
     ax.yaxis.set_ticks_position('both')
