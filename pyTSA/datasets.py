@@ -13,8 +13,10 @@ import os
 import pandas as pd
 from itertools import chain
 from typing import Callable
+from .mathfuncs import fi
 
 from copy import deepcopy
+from .plot import MajorSymLogLocator, MinorSymLogLocator, set_main_axis, ScalarFormatter
 # dataset dict  {dataset=, key=}
     
 class Datasets(object):
@@ -277,6 +279,49 @@ class Datasets(object):
             plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
         else:
             plt.show()
+
+
+    def plot_overlays(self, filepath=None, trace_wl = 500, symlog = True, linthresh=1, linscale=1, n_lin_bins=10, n_log_bins=10,
+                            plot_zero_line=True, **kwargs):
+
+        n = len(self._datasets)
+        if n == 0:
+            return
+        
+        fig, ax = plt.subplots(1, 1, figsize=kwargs.get('figsize', (6.5 , 5.5)))
+
+        set_main_axis(ax, y_label="$\\Delta$ A (mOD)", x_label=f"Time (ps)")
+
+        for i in range(n):
+            idx = fi(self[i].wavelengths, trace_wl)
+
+            ax.plot(self[i].times, self[i].matrix[:, idx] * 1e3, lw=1, label=i)
+
+        ax.legend()
+
+        ax.xaxis.set_ticks_position('both')
+        ax.yaxis.set_ticks_position('both')
+
+        ax.set_title(f"Traces at $\\lambda={trace_wl}$ nm")
+
+        if plot_zero_line:
+            ax.plot(self[0].times, np.zeros_like(self[0].times), ls='--', color='black', lw=1)
+
+
+        if symlog:
+            ax.set_xscale('symlog', subs=[2, 3, 4, 5, 6, 7, 8, 9], linscale=linscale, linthresh=linthresh)
+
+            ax.xaxis.set_major_locator(MajorSymLogLocator(base=10, linthresh=linthresh))
+            ax.xaxis.set_minor_locator(MinorSymLogLocator(linthresh, n_lin_ints=n_lin_bins, n_log_ints=n_log_bins, base=10))
+
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, transparent=kwargs.get('transparent', True), dpi=kwargs.get('dpi', 300))
+        else:
+            plt.show()
+
 
     def get_integrated_datasets(self):
         ids = Datasets()
