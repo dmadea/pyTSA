@@ -260,7 +260,14 @@ class Dataset(object):
     def remove_scan(self, t: float):
         idx = fi(self.times, t)
         self.matrix = np.delete(self.matrix, idx, 0)
+        self.matrix_fac = self.matrix
         self.times = np.delete(self.times, idx, 0)
+
+    def remove_trace(self, wl: float):
+        idx = fi(self.wavelengths, wl)
+        self.matrix = np.delete(self.matrix, idx, 1)
+        self.matrix_fac = self.matrix
+        self.wavelengths = np.delete(self.wavelengths, idx, 0)
 
     def clear_mask(self):
         self.mask.clear()
