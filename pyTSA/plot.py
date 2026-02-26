@@ -1060,14 +1060,21 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
                  area_plot_datas: list[tuple] = [], area_plot_colors=('violet', 'blue', 'green'), 
                  title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None, inf_as_last_compartment=False,
                  area_plot_alpha=0.2, w_lim=(None, None), **kwargs):
+    
     _SADS = SADS.copy() * D_mul_factor
+    _art = Artifacts.copy() * D_mul_factor if Artifacts is not None else None
     if hatched_wls[0] is not None:
         cut_idxs = fi(wls, hatched_wls)
         _SADS[cut_idxs[0]:cut_idxs[1]] = np.nan
+        if _art:
+            _art[cut_idxs[0]:cut_idxs[1]] = np.nan
+
 
     w_lim = (wls[0] if w_lim[0] is None else w_lim[0], wls[-1] if w_lim[1] is None else w_lim[1])
     w1, w2 = fi(wls, w_lim)
     _SADS = _SADS[w1:w2 + 1]
+    _art = _art[w1:w2 + 1] if _art else None
+
     wls = wls[w1:w2 + 1]
 
     # fctr = 1.1
@@ -1098,8 +1105,8 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
 
     if Artifacts is not None:
         colorsArt = ['black', 'grey', 'navy', 'pink']
-        for i in range(Artifacts.shape[1]):
-            ax.plot(wls, Artifacts[:, i] * D_mul_factor, color=colorsArt[i], lw=1, ls='--', label=f"Artifact {i + 1}")
+        for i in range(_art.shape[1]):
+            ax.plot(wls, _art[:, i], color=colorsArt[i], lw=1, ls='--', label=f"Artifact {i + 1}")
 
     zorder = 0
     for tup, color in zip(area_plot_datas, area_plot_colors):
