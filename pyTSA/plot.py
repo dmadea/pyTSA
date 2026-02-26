@@ -914,7 +914,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
     if y_major_formatter:
         ax.yaxis.set_major_formatter(y_major_formatter)
 
-def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.ndarray, trace_fit: np.ndarray, trace_residuals: np.ndarray, plot_tilts=True,
+def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.ndarray, trace_fit: np.ndarray, trace_residuals: np.ndarray, plot_tilts=True, D_mul_factor=1,
                            x_label="Time", t_unit='ns', y_lim_residuals=(None, None), z_unit='A', t_lim=(None, None), mu: float | np.ndarray = None, t_axis_formatter=ScalarFormatter(),
                            y_lim=(None, None), lw_data=1, lw_fit=1, symlog=False, linthresh=1, linscale=1, log_y=False, title="", **kwargs):
 
@@ -930,6 +930,9 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 
     # t_lim = (tt[0] if t_lim[0] is None else t_lim[0], tt[-1] if t_lim[1] is None else t_lim[1])
 
+    _trace_data = trace_data * D_mul_factor
+    _trace_fit = trace_fit * D_mul_factor
+    _trace_residuals = trace_residuals * D_mul_factor
 
 
     # plot zero lines
@@ -938,9 +941,9 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
     ax_data.tick_params(labelbottom=False)
 
     ax_data.set_title(title)
-    ax_data.plot(tt, trace_data, lw=lw_data, color='black')
-    ax_data.plot(tt, trace_fit, lw=lw_fit, color='red')
-    ax_res.plot(tt, trace_residuals, lw=lw_data, color='black')
+    ax_data.plot(tt, _trace_data, lw=lw_data, color='black')
+    ax_data.plot(tt, _trace_fit, lw=lw_fit, color='red')
+    ax_res.plot(tt, _trace_residuals, lw=lw_data, color='black')
 
     ax_data.set_axisbelow(False)
     ax_res.set_axisbelow(False)
