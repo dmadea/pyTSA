@@ -4,13 +4,13 @@ import sys, os
 import numpy as np
 import base64
 try:
-    from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel, DelayedFluorescenceModel
+    from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel, DelayedFluorescenceModel, FirstSecondOrderModel
 except ImportError:
     if sys.platform == 'darwin':
         sys.path.append(os.path.abspath("/Users/dominikmadea/Documents/Python + JS/pyTSA"))
     else:
         sys.path.append(os.path.abspath(r'C:\Users\domin\Documents\Python + JS\pyTSA'))  # append library path to 
-    from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel, DelayedFluorescenceModel
+    from pyTSA import Dataset, Datasets, FirstOrderModel, FirstOrderLPLModel, DelayedFluorescenceModel, FirstSecondOrderModel
 
 from lmfit import Parameters, Parameter
 
@@ -136,7 +136,9 @@ class BackendSession(object):
         model_map = {
             'first_order': FirstOrderModel,
             'first_order_lpl': FirstOrderLPLModel,
-            'delayed_fl': DelayedFluorescenceModel
+            'delayed_fl': DelayedFluorescenceModel,
+            'first_second': FirstSecondOrderModel,
+
         }
 
         self.tabs[tab_index].set_model(model_map[model_name]())

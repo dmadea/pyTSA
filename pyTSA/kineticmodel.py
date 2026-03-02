@@ -439,23 +439,20 @@ class KineticModel(object):
         return c
 
 
-class FirstOrderModel(KineticModel):
+class BaseKineticModel(KineticModel):
     """
-    Abstract class for kinetic models.
+    Abstract class for kinetic models. Handles basic simulation and fitting methods, chirp,
+    artifacts simulation and handling. Does not add any kinetic rates.
 
     Attributes
     ----------
- 
-
-
 
     Methods
     -------
 
-
     """
 
-    name = "First order kinetic model"
+    name = "Base kinetic model"
 
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
         # more settings
@@ -492,17 +489,15 @@ class FirstOrderModel(KineticModel):
 
         self.C_opt_full = None  # used for target model
 
-        self.LDM: np.ndarray | None = None
-        self.LDM_fit: np.ndarray | None = None
-        self.LDM_lifetimes: np.ndarray | None = None
+
 
         # self.weight_chirp = False
         # self.w_of_chirp = 0.1
         # self.t_radius_chirp = 0.2  # time radius around chirp / in ps
         self._calculate_EAS = True
-        self._include_rates_params = True
+        # self._include_rates_params = True
 
-        super(FirstOrderModel, self).__init__(dataset, n_species, set_model)
+        super(BaseKineticModel, self).__init__(dataset, n_species, set_model)
 
         # self.update_n()
         # self.ridge_alpha = 0.0001
@@ -530,9 +525,8 @@ class FirstOrderModel(KineticModel):
         names = [f'EAS profile {i+1}' for i in range(self.ST_opt.shape[0])]
         save_matrix(self.dataset.times, names, self.C_EAS, fname=fname, delimiter=delimiter, encoding=encoding, transpose=True)
 
-
     def init_params(self) -> Parameters:
-        params = super(FirstOrderModel, self).init_params()
+        params = super(BaseKineticModel, self).init_params()
 
         params.add('t0', value=0, min=-np.inf, max=np.inf, vary=True)  # time zero at central wave
 
@@ -557,11 +551,6 @@ class FirstOrderModel(KineticModel):
             elif self.irf_type == self.irf_types[1]: # square wave
                 params.add('SQW', value=0.15, min=0, max=np.inf, vary=True)  # width of the square wave
 
-
-        if self._include_rates_params:
-            for i in range(self.n_species):
-                params.add(f'tau_{i+1}', value=10 ** (i - 1), min=0, max=np.inf, vary=True)
-
         return params
     
     def get_irf_width(self, params: Parameters | None = None):
@@ -575,14 +564,6 @@ class FirstOrderModel(KineticModel):
         elif self.irf_type == self.irf_types[1]:
             return params['SQW'].value 
     
-    def get_rates(self, params: Parameters | None = None) -> np.ndarray:
-        if (self.n_species == 0 or not self._include_rates_params):
-            return np.asarray([])
-        
-        params = self.params if params is None else params
-
-        vals = np.asarray([params[f"tau_{i+1}"].value for i in range(self.n_species)])
-        return 1 / vals
     
     def get_labels(self, t_unit='ps') -> list[str]:
 
@@ -768,41 +749,37 @@ class FirstOrderModel(KineticModel):
 
     #     return weights
 
-    def calculate_LDM(self, log_range: tuple[float, float], n: int, ridge_alpha: float = 1) -> tuple[np.ndarray, np.ndarray]:
-        """Calculates lifetime density map according to given lifetimes, ridge alpha and current settings such as 
-        chirp, partau, fwhm, artifacts..."""
+    def get_rates(self, params: Parameters | None = None) -> np.ndarray:
+        raise NotImplementedError()
 
-        lifetimes = np.logspace(log_range[0], log_range[1], num=n, endpoint=True)
 
-        mu = self.get_mu()
-        fwhm = self.get_tau()  # fwhm
-        tensor: bool = isinstance(mu, np.ndarray) or isinstance(fwhm, np.ndarray)
-        _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
+    def get_C_profiles_args(self, params: Parameters | None = None, times: np.ndarray | None = None):
+        params = self.params if params is None else params
+        self.C_opt = None
+        self.C_artifacts = None
+
+        ks = self.get_rates(params)
+        mu = self.get_mu(params)
+        width = self.get_tau(params)  # fwhm
+
+        # if True, partitioned variable projection will be used for fitting
+        tensor: bool = isinstance(mu, np.ndarray) or isinstance(width, np.ndarray)
+
+        _tau = width[:, None, None] if isinstance(width, np.ndarray) else width
         _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
-        _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
+        times = self.dataset.times if times is None else times
+        _t = times[None, :, None] if tensor else times[:, None]
         tt = _t - _mu
 
-        ks = 1 / lifetimes
         _ks = ks[None, None, :] if tensor else ks[None, :]
 
-        C: np.ndarray = fold_exp(tt, _ks, _tau)
-
         if self.include_artifacts:
-            C_artifacts = self._simulate_artifacts(tt, fwhm)
-            C = np.concatenate((C_artifacts, C), axis=-1)
+            self.C_artifacts = self._simulate_artifacts(tt, width)
 
-        w = self.get_weights_lstsq()
-        coefs, D_fit = glstsq(C, self.dataset.matrix_fac, ridge_alpha, w)
-
-        if self.include_artifacts:
-            coefs = coefs[self.artifact_order + 1:]
-
-        self.LDM = coefs
-        self.LDM_fit = D_fit
-        self.LDM_lifetimes = lifetimes
-
-        # coefs = ST
-        return coefs, D_fit
+        return tt, _ks, _tau
+    
+    def calculate_C_profiles(self, params: Parameters | None = None):
+        raise NotImplementedError()
     
     def simulate(self, params: Parameters | None = None):
 
@@ -836,51 +813,6 @@ class FirstOrderModel(KineticModel):
             A = get_EAS_transform(ks)
             self.C_EAS = self.C_opt.dot(A)
             self.ST_EAS = np.linalg.inv(A).dot(self.ST_opt)
-
-    def get_C_profiles_args(self, params: Parameters | None = None, times: np.ndarray | None = None):
-        params = self.params if params is None else params
-        self.C_opt = None
-        self.C_artifacts = None
-
-        ks = self.get_rates(params)
-        mu = self.get_mu(params)
-        width = self.get_tau(params)  # fwhm
-
-        # if True, partitioned variable projection will be used for fitting
-        tensor: bool = isinstance(mu, np.ndarray) or isinstance(width, np.ndarray)
-
-        _tau = width[:, None, None] if isinstance(width, np.ndarray) else width
-        _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
-        times = self.dataset.times if times is None else times
-        _t = times[None, :, None] if tensor else times[:, None]
-        tt = _t - _mu
-
-        _ks = ks[None, None, :] if tensor else ks[None, :]
-
-        if self.include_artifacts:
-            self.C_artifacts = self._simulate_artifacts(tt, width)
-
-        return tt, _ks, _tau
-
-    def get_exp_function(self) -> Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float]:
-        return fold_exp if self.irf_type == self.irf_types[0] else square_conv_exp
-
-        
-    def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
-        """Simulates concentration profiles, including coherent artifacts if setup in a model.
-        
-        if times arg is not None, these values will be used to simulate C profiles from
-        
-        """
-
-        tt, _ks, _tau = self.get_C_profiles_args(params, times)
-
-        if self.n_species == 0:
-            return
-        
-        # simulation for DADS only
-        f = self.get_exp_function()
-        self.C_opt: np.ndarray = f(tt, _ks, _tau)
 
 
     def fit(self):
@@ -1095,6 +1027,240 @@ class FirstOrderModel(KineticModel):
                 
         # for ax in axes.flat[n:]:
         #     ax.set_axis_off()
+
+
+
+class FirstOrderModel(BaseKineticModel):
+    """
+    First order kinetic model
+    ----------
+
+    Methods
+    -------
+
+    """
+
+    name = "First order kinetic model"
+
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
+
+        self._include_rates_params = True
+
+        self.LDM: np.ndarray | None = None
+        self.LDM_fit: np.ndarray | None = None
+        self.LDM_lifetimes: np.ndarray | None = None
+
+        super(FirstOrderModel, self).__init__(dataset, n_species, set_model)
+
+    def init_params(self) -> Parameters:
+        params = super(FirstOrderModel, self).init_params()
+
+        # print(params)
+
+        if self._include_rates_params:
+            for i in range(self.n_species):
+                params.add(f'tau_{i+1}', value=10 ** (i - 1), min=0, max=np.inf, vary=True)
+
+        return params
+    
+
+    def get_rates(self, params: Parameters | None = None) -> np.ndarray:
+        if (self.n_species == 0 or not self._include_rates_params):
+            return np.asarray([])
+        
+        params = self.params if params is None else params
+
+        vals = np.asarray([params[f"tau_{i+1}"].value for i in range(self.n_species)])
+        return 1 / vals
+    
+
+    def calculate_LDM(self, log_range: tuple[float, float], n: int, ridge_alpha: float = 1) -> tuple[np.ndarray, np.ndarray]:
+        """Calculates lifetime density map according to given lifetimes, ridge alpha and current settings such as 
+        chirp, partau, fwhm, artifacts..."""
+
+        lifetimes = np.logspace(log_range[0], log_range[1], num=n, endpoint=True)
+
+        mu = self.get_mu()
+        fwhm = self.get_tau()  # fwhm
+        tensor: bool = isinstance(mu, np.ndarray) or isinstance(fwhm, np.ndarray)
+        _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
+        _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
+        _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
+        tt = _t - _mu
+
+        ks = 1 / lifetimes
+        _ks = ks[None, None, :] if tensor else ks[None, :]
+
+        C: np.ndarray = fold_exp(tt, _ks, _tau)
+
+        if self.include_artifacts:
+            C_artifacts = self._simulate_artifacts(tt, fwhm)
+            C = np.concatenate((C_artifacts, C), axis=-1)
+
+        w = self.get_weights_lstsq()
+        coefs, D_fit = glstsq(C, self.dataset.matrix_fac, ridge_alpha, w)
+
+        if self.include_artifacts:
+            coefs = coefs[self.artifact_order + 1:]
+
+        self.LDM = coefs
+        self.LDM_fit = D_fit
+        self.LDM_lifetimes = lifetimes
+
+        # coefs = ST
+        return coefs, D_fit
+
+    def get_exp_function(self) -> Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float]:
+        return fold_exp if self.irf_type == self.irf_types[0] else square_conv_exp
+
+        
+    def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
+        """Simulates concentration profiles, including coherent artifacts if setup in a model.
+        
+        if times arg is not None, these values will be used to simulate C profiles from
+        
+        """
+
+        tt, _ks, _tau = self.get_C_profiles_args(params, times)
+
+        if self.n_species == 0:
+            return
+        
+        # simulation for DADS only
+        f = self.get_exp_function()
+        self.C_opt: np.ndarray = f(tt, _ks, _tau)
+
+
+class FirstSecondOrderModel(BaseKineticModel):
+
+    """
+    Cannot handle IRF. Has to be simulated without any IRF.
+    k_1 is the first order rate and k_11 is the second order rate constant.
+    Works only for two species.
+    """
+
+    name = "First and Second order model"
+
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
+            super(FirstSecondOrderModel, self).__init__(dataset, n_species, set_model)
+            self._calculate_EAS = False
+
+
+    def init_params(self) -> Parameters:
+        params = super(FirstSecondOrderModel, self).init_params()
+
+        params.add(f'k_1', value=1, min=0, max=np.inf, vary=True)
+        params.add(f'k_11', value=0.5, min=0, max=np.inf, vary=True)
+
+        # for i in range(self.n_species - 1):
+        #     params.add(f'k_{2 + i}', value=0.5 * 10 ** (-i), min=0, max=np.inf, vary=True)
+
+        return params
+    
+
+    def get_rates(self, params: Parameters | None = None) -> np.ndarray:
+        if (self.n_species == 0):
+            return np.asarray([])
+        
+        params = self.params if params is None else params
+
+        # vals = np.asarray([params['k_1'].value, params['k_11'].value] + [params[f"k_{i+2}"].value for i in range(self.n_species - 1)])
+        vals = np.asarray([params['k_1'].value, params['k_11'].value])
+
+        return vals
+    
+    def get_labels(self, t_unit='ps'):
+        return ['A', 'inf']
+    
+
+    def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
+        """
+
+        Now it will work only for 2 species.
+        
+        """
+
+        tt, _ks, _tau = self.get_C_profiles_args(params, times)
+
+        k1, k11 = _ks.squeeze()
+
+        if self.n_species == 0:
+            return
+        
+        c0 = 1   # k1 / [(k11 + k1)e^-(k1t) - k11]
+
+        decay = np.heaviside(tt, 1) * k1 / ((c0 * k11 + k1) * np.exp(k1 * tt) - c0 * k11)
+
+        if self.n_species == 1:
+            self.C_opt = decay
+        elif self.n_species > 1:
+            # TODO fix this, make this general
+            self.C_opt = np.empty((tt.shape[0], 2))
+            self.C_opt[..., 0] = decay.squeeze()
+            self.C_opt[..., 1] = c0 - decay.squeeze()
+
+
+class SecondOrderModel(BaseKineticModel):
+
+    """
+    Cannot handle IRF. Has to be simulated without any IRF.
+    """
+
+    name = "Second order model"
+
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
+            super(SecondOrderModel, self).__init__(dataset, n_species, set_model)
+            self._calculate_EAS = False
+
+    def get_labels(self, t_unit='ps'):
+        return ['A', 'inf']
+
+
+    def init_params(self) -> Parameters:
+        params = super(SecondOrderModel, self).init_params()
+
+        params.add(f'k_11', value=0.5, min=0, max=np.inf, vary=True)
+
+        return params
+    
+
+    def get_rates(self, params: Parameters | None = None) -> np.ndarray:
+        if (self.n_species == 0):
+            return np.asarray([])
+        
+        params = self.params if params is None else params
+
+        vals = np.asarray([params['k_11'].value])
+
+        return vals
+    
+
+    def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
+        """
+
+        Now it will work only for 2 species.
+        
+        """
+
+        tt, _ks, _tau = self.get_C_profiles_args(params, times)
+
+        k2 = _ks[0, 0]
+
+        if self.n_species == 0:
+            return
+        
+        c0 = 1  
+
+        decay = np.heaviside(tt, 1) * c0 / (1 + c0 * k2 * tt)
+
+
+        if self.n_species == 1:
+            self.C_opt = decay
+        elif self.n_species == 2:
+            # TODO fix this, make this general
+            self.C_opt = np.empty((tt.shape[0], 2))
+            self.C_opt[..., 0] = decay.squeeze()
+            self.C_opt[..., 1] = c0 - decay.squeeze()
 
 
 class FirstOrderLPLModel(FirstOrderModel):
