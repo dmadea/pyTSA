@@ -1066,14 +1066,14 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
     if hatched_wls[0] is not None:
         cut_idxs = fi(wls, hatched_wls)
         _SADS[cut_idxs[0]:cut_idxs[1]] = np.nan
-        if _art:
+        if _art is not None:
             _art[cut_idxs[0]:cut_idxs[1]] = np.nan
 
 
     w_lim = (wls[0] if w_lim[0] is None else w_lim[0], wls[-1] if w_lim[1] is None else w_lim[1])
     w1, w2 = fi(wls, w_lim)
     _SADS = _SADS[w1:w2 + 1]
-    _art = _art[w1:w2 + 1] if _art else None
+    _art = _art[w1:w2 + 1] if _art is not None else None
 
     wls = wls[w1:w2 + 1]
 
