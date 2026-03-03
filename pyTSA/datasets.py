@@ -2,7 +2,8 @@ from typing import Generator, Union
 from matplotlib import gridspec
 from .plot import plot_data_ax, plot_data_one_dim_ax, plot_spectra_ax
 from .dataset import Dataset
-from .kineticmodel import KineticModel , FirstOrderModel
+from .kineticmodel.kineticmodel import KineticModel
+from .kineticmodel.firstorder import FirstOrderModel
 
 from lmfit import Parameters, Minimizer
 from lmfit.minimizer import MinimizerResult

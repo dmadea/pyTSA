@@ -13,7 +13,7 @@ from sklearn.decomposition import FastICA
 from numpy import ma
 
 
-from .kineticmodel import FirstOrderModel, KineticModel
+from .kineticmodel.kineticmodel import KineticModel
 from .mathfuncs import crop_data, crop_data_idx, fi, chirp_correction
 from .plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefig_ax, dA_unit, MinorSymLogLocator, plot_kinetics_ax
 

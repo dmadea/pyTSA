@@ -257,6 +257,37 @@ def fast_erfc(x):
 
     return ret
 
+@vectorize(nopython=True, fastmath=False)
+def second_oder(t: np.ndarray | float, k11: float, c0: float = 1):
+    if t < 0:
+        return 0
+    
+    return c0 / (1 + c0 * k11 * t)
+
+
+@vectorize(nopython=True, fastmath=False)
+def mixed1st2nd_oder(t: np.ndarray | float, k1: float, k11: float, c0: float = 1):
+    if t < 0:
+        return 0
+    
+    return k1 / ((c0 * k11 + k1) * np.exp(k1 * t) - c0 * k11)
+
+
+@vectorize(nopython=True, fastmath=False)
+def varorder(t: np.ndarray | float, kn: float, n: float, c0: float = 1):
+    if t < 0:
+        return 0
+    
+    expr = c0 ** (1 - n) + kn * (n - 1) * t
+    if expr < 0:
+        return 0
+    return expr ** (1.0 / (1 - n))
+    
+    # expr_in_root = np.power(float(c0), 1 - n) + kn * (n - 1) * t
+    # # expr_in_root = expr_in_root.clip(min=0)  # set to 0 all the negative values
+    # expr_in_root[expr_in_root < 0] = 0
+    # return np.power(expr_in_root, 1.0 / (1 - n))
+
 
 @vectorize(nopython=True, fastmath=False)
 def fold_exp(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray | float) -> np.ndarray | float:
