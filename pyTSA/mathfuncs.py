@@ -307,7 +307,7 @@ def fold_exp_dist(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float
     signal = np.zeros((t.shape[0], k.shape[1])) if t.ndim == 2 else np.empty((t.shape[0], t.shape[1], k.shape[2]))
 
     # mask for disorder, to separate cases when b == 0 => fold_exp, or b > 0 => sum over hermite nodes
-    mask_dis = b != 0.0
+    mask_dis = b.squeeze() != 0.0
     mask_nodis = ~mask_dis
 
     # ---- 1) Non-disordered components ----
@@ -318,13 +318,51 @@ def fold_exp_dist(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float
     if np.any(mask_dis):
 
         # _ks = ks[None, None, :] if tensor else ks[None, :]
-
         for node, weight in zip(H_NODES, H_WEIGHTS):
             k_dist = k[..., mask_dis] * np.exp(np.sqrt(2.0) * b[..., mask_dis] * node)
             component = fold_exp(t, k_dist, fwhm)
             signal[..., mask_dis] += weight * component   # accumulate components
 
         signal[..., mask_dis] /= sqpi
+
+    return signal
+
+
+def fold_exp_dist_ai(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float, b: np.ndarray | float):
+    t = np.atleast_1d(t)#.astype(np.float64)
+    k = np.atleast_1d(k)#.astype(np.float64)
+    b = np.atleast_1d(b)#.astype(np.float64)
+    # k and b as size [1, 1, k] for tensor or [1, k] for normal
+
+    if k.shape[-1] != b.shape[-1]:
+        raise ValueError("number of rates must be the same as the number of dist. widths")
+
+    n_rates = k.shape[-1]
+    signal = np.zeros(t.shape + (n_rates,))
+
+    # mask for disorder, to separate cases when b == 0 => fold_exp, or b > 0 => sum over hermite nodes
+    mask_dis = b.squeeze() != 0.0
+    mask_nodis = ~mask_dis
+
+    # ---- 1) Non-disordered components ----
+    if np.any(mask_nodis):
+        k_nodis = k[..., mask_nodis]
+        t_bc = t.reshape(t.shape + (1,) * max(0, k_nodis.ndim - t.ndim))
+        signal[..., mask_nodis] = fold_exp(t_bc, k_nodis, fwhm)
+
+    # ---- 2) Disordered components (vectorized Hermite quadrature) ----
+    if np.any(mask_dis):
+        k_masked = k[..., mask_dis]
+        b_masked = b[..., mask_dis]
+        # k_dist: (N_HERM, ..., n_dis) - one k per node per disordered rate
+        nodes_nd = H_NODES.reshape(-1, *((1,) * b_masked.ndim))
+        k_dist = k_masked[None, ...] * np.exp(
+            np.sqrt(2.0) * b_masked[None, ...] * nodes_nd
+        )
+        # Broadcast t for fold_exp: t (1, ..., 1), k_dist (N_HERM, ..., n_dis)
+        t_expand = np.expand_dims(t, axis=(0, -1))
+        component = fold_exp(t_expand, k_dist, fwhm)  # (N_HERM, *t.shape, n_dis)
+        signal[..., mask_dis] = np.tensordot(H_WEIGHTS, component, axes=(0, 0)) / sqpi
 
     return signal
 
