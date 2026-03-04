@@ -11,6 +11,13 @@ posv = scipy.linalg.get_lapack_funcs(('posv'))
 from scipy.linalg import lstsq as scipy_lstsq
 from scipy.integrate import cumulative_trapezoid
 from numpy.linalg import pinv
+from numpy.polynomial.hermite import hermgauss
+
+N_HERM = 60
+H_NODES, H_WEIGHTS = hermgauss(N_HERM)
+H_NODES = H_NODES.astype(np.float64)
+H_WEIGHTS = H_WEIGHTS.astype(np.float64)
+sqpi = np.sqrt(np.pi)
 
 
 # import scipy.constants as sc
@@ -287,6 +294,39 @@ def varorder(t: np.ndarray | float, kn: float, n: float, c0: float = 1):
     # # expr_in_root = expr_in_root.clip(min=0)  # set to 0 all the negative values
     # expr_in_root[expr_in_root < 0] = 0
     # return np.power(expr_in_root, 1.0 / (1 - n))
+
+def fold_exp_dist(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float, b: np.ndarray | float):
+    t = np.atleast_1d(t)#.astype(np.float64)
+    k = np.atleast_1d(k)#.astype(np.float64)
+    b = np.atleast_1d(b)#.astype(np.float64)
+    # k and b as size [1, 1, k] for tensor or [1, k] for normal
+
+    if k.shape[-1] != b.shape[-1]:
+        raise ValueError("number of rates must be the same as the number of dist. widths")
+
+    signal = np.zeros((t.shape[0], k.shape[1])) if t.ndim == 2 else np.empty((t.shape[0], t.shape[1], k.shape[2]))
+
+    # mask for disorder, to separate cases when b == 0 => fold_exp, or b > 0 => sum over hermite nodes
+    mask_dis = b != 0.0
+    mask_nodis = ~mask_dis
+
+    # ---- 1) Non-disordered components ----
+    if np.any(mask_nodis):
+        signal[..., mask_nodis] = fold_exp(t, k[..., mask_nodis], fwhm)
+
+    # ---- 2) Disordered components ----
+    if np.any(mask_dis):
+
+        # _ks = ks[None, None, :] if tensor else ks[None, :]
+
+        for node, weight in zip(H_NODES, H_WEIGHTS):
+            k_dist = k[..., mask_dis] * np.exp(np.sqrt(2.0) * b[..., mask_dis] * node)
+            component = fold_exp(t, k_dist, fwhm)
+            signal[..., mask_dis] += weight * component   # accumulate components
+
+        signal[..., mask_dis] /= sqpi
+
+    return signal
 
 
 @vectorize(nopython=True, fastmath=False)

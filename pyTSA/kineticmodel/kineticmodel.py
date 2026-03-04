@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from abc import abstractmethod
 
-from ..mathfuncs import fi, fit_polynomial_coefs, fit_sum_exp, gaussian, get_EAS_transform, glstsq
+from ..mathfuncs import chirp_correction, fi, fit_polynomial_coefs, fit_sum_exp, gaussian, get_EAS_transform, glstsq
 from ..plot import plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_time_traces_onefig_ax, plot_traces_onefig_ax, set_main_axis, COLORS
 if TYPE_CHECKING:
     from ..dataset import Dataset
@@ -25,6 +25,9 @@ from matplotlib import cm
 # import glob, os
 import scipy.constants as sc
 from copy import deepcopy
+
+
+from numpy.linalg import svd
 
 
 
@@ -831,6 +834,50 @@ class BaseKineticModel(KineticModel):
 
         for i, a in enumerate(norm_amps):
             self.params.add(f"A_{i+1}", value=a, vary=False)
+
+    def plot_SVD(self, n_values: int | None = 15, n_left_vectors: int = 5, n_right_vectors: int = 5, use_chirp_correction: bool = True,
+                 filepath: bool | None = None, transparent: bool = True, dpi: int = 300, figsize=(17, 5)):
+
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
+
+        set_main_axis(ax1, x_label='Singular value', y_label=f'Magnitude')
+        set_main_axis(ax2, x_label='', y_label=f'Magnitude')
+        set_main_axis(ax3, x_label='', y_label=f'Magnitude')
+
+        D = self.dataset.matrix_fac
+        times = self.dataset.times
+
+        if use_chirp_correction:
+            mu = self.get_mu()
+            D, times = chirp_correction(D, times, mu)
+
+        U, S, VT = svd(D, full_matrices=False)
+
+        # plot first 20 singular values of both datasets and combined dataset
+        ax1.scatter(np.arange(1, n_values + 1), S[:n_values], color='r', edgecolors='darkred')
+        ax1.set_yscale('log')
+        ax1.set_xticks(np.arange(1, n_values + 1))
+
+        # plot the left singular vectors
+        ax2.plot(U[:, :n_left_vectors])
+        ax2.legend([f'$\\bf v_{i+1}$' for i in range(n_left_vectors)], frameon=False)
+        ax2.set_title("Time singular vector")
+        ax2.set_xticks([]) # Removes both ticks and labels
+        ax2.set_xticklabels([]) # Removes only labels
+
+        # plot the right singular vectors
+        ax3.plot(VT[:n_right_vectors].T)
+        ax3.legend([f'$\\bf v_{i+1}$' for i in range(n_right_vectors)], frameon=False)
+        ax3.set_title("Spectral singular vector")
+        ax3.set_xticks([]) # Removes both ticks and labels
+        ax3.set_xticklabels([]) # Removes only labels
+
+        plt.tight_layout()
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, bbox_inches='tight', transparent=transparent, dpi=dpi)
+        else:
+            plt.show()
 
 
     def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None, hspace=0.2, wspace=0.2,
