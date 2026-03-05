@@ -599,23 +599,13 @@ class BaseKineticModel(KineticModel):
             
         return labels
     
-    def get_width(self, params: Parameters | None = None) -> float:
-        params = self.params if params is None else params
-
-        if not self.include_irf:
-            return 0
-        
-        if self.irf_type == self.irf_types[0]:
-            return params["FWHM"].value
-        elif self.irf_type == self.irf_types[1]:
-            return params["SQW"].value
 
     def get_tau(self, params: Parameters | None = None) -> np.ndarray | float:
         """Return the curve that defines FWHM with respect to wavelength."""
 
         params = self.params if params is None else params
         
-        width = self.get_width(params)
+        width = self.get_irf_width(params)
         if width == 0 or self.irf_type != self.irf_types[0]:
             return width
         
@@ -701,15 +691,28 @@ class BaseKineticModel(KineticModel):
                 self.params[f"t0_p_{i + 1}"].value = coefs[i+1]
 
 
-    def _simulate_artifacts(self, tt: np.ndarray, fwhm: np.ndarray, zero_coh_range=None) -> np.ndarray:
+    def _simulate_artifacts(self, t: np.ndarray, mu: float | np.ndarray, fwhm: float | np.ndarray, zero_coh_range=None) -> np.ndarray:
 
         order = self.artifact_order
+
+        t = np.atleast_1d(t)
+        fwhm = np.atleast_1d(fwhm)
+        mu = np.atleast_1d(mu)
+
+        tensor: bool = mu.shape[0] > 1 or fwhm.shape[0] > 1
+
+        if tensor:
+            fwhm = fwhm.reshape(-1, 1, 1)
+            tt = t.reshape(1, -1, 1) - mu.reshape(-1, 1, 1)
+        else:
+            fwhm = fwhm[0]
+            tt = (t - mu[0]).reshape(-1, 1)
 
         s = fwhm / (2 * np.sqrt(2 * np.log(2)))  # sigma
 
         y: np.ndarray = gaussian(tt, s)
 
-        y = np.tile(y, (1, 1, order + 1)) if tt.ndim == 3 else np.tile(y, (1, order + 1))
+        y = np.tile(y, (1, 1, order + 1)) if tensor else np.tile(y, (1, order + 1))
 
         if order > 0:  # first derivative
             y[..., 1] *= -tt.squeeze()
@@ -745,41 +748,47 @@ class BaseKineticModel(KineticModel):
 
     #     return weights
 
-    def get_rates(self, params: Parameters | None = None) -> np.ndarray:
-        raise NotImplementedError()
+    # def get_rates(self, params: Parameters | None = None) -> np.ndarray:
+    #     raise NotImplementedError()
 
 
-    def get_C_profiles_args(self, params: Parameters | None = None, times: np.ndarray | None = None):
-        params = self.params if params is None else params
-        self.C_opt = None
-        self.C_artifacts = None
+    # def get_C_profiles_args(self, params: Parameters | None = None, times: np.ndarray | None = None):
+    #     params = self.params if params is None else params
+    #     self.C_opt = None
+    #     self.C_artifacts = None
 
-        ks = self.get_rates(params)
-        mu = self.get_mu(params)
-        width = self.get_tau(params)  # fwhm
+    #     ks = self.get_rates(params)
+    #     mu = self.get_mu(params)
+    #     width = self.get_tau(params)  # fwhm
 
-        # if True, partitioned variable projection will be used for fitting
-        tensor: bool = isinstance(mu, np.ndarray) or isinstance(width, np.ndarray)
+    #     # if True, partitioned variable projection will be used for fitting
+    #     tensor: bool = isinstance(mu, np.ndarray) or isinstance(width, np.ndarray)
 
-        _tau = width[:, None, None] if isinstance(width, np.ndarray) else width
-        _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
-        times = self.dataset.times if times is None else times
-        _t = times[None, :, None] if tensor else times[:, None]
-        tt = _t - _mu
+    #     _tau = width[:, None, None] if isinstance(width, np.ndarray) else width
+    #     _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
+    #     times = self.dataset.times if times is None else times
+    #     _t = times[None, :, None] if tensor else times[:, None]
+    #     tt = _t - _mu
 
-        _ks = ks[None, None, :] if tensor else ks[None, :]
+    #     _ks = ks[None, None, :] if tensor else ks[None, :]
 
-        if self.include_artifacts:
-            self.C_artifacts = self._simulate_artifacts(tt, width)
+    #     if self.include_artifacts:
+    #         self.C_artifacts = self._simulate_artifacts(tt, width)
 
-        return tt, _ks, _tau
+    #     return tt, _ks, _tau
     
-    def calculate_C_profiles(self, params: Parameters | None = None):
+    def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         raise NotImplementedError()
     
     def simulate(self, params: Parameters | None = None):
 
-        self.calculate_C_profiles(params)
+        self.C_opt = None
+        self.C_artifacts = None
+
+        if self.include_artifacts:
+            self.C_artifacts = self._simulate_artifacts(self.dataset.times, self.get_mu(params), self.get_tau(params))
+
+        self.calculate_C_profiles(params, self.dataset.times)
 
         if self.C_opt is None and self.C_artifacts is None:
             return

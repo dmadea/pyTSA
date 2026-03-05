@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from ..dataset import Dataset
 
 from .kineticmodel import BaseKineticModel
-from ..mathfuncs import fold_exp, glstsq, square_conv_exp, simulate_target_model, LPL_decay
+from ..mathfuncs import fold_exp_vec, glstsq, square_conv_exp, simulate_target_model, LPL_decay, fold_exp_dist
 
 from lmfit import Parameters
 from typing import Callable
@@ -41,6 +41,7 @@ class FirstOrderModel(BaseKineticModel):
         if self._include_rates_params:
             for i in range(self.n_species):
                 params.add(f'tau_{i+1}', value=10 ** (i - 1), min=0, max=np.inf, vary=True)
+                params.add(f'b_{i+1}', value=0, min=0, max=np.inf, vary=False)    # describe the dispersion width for the non-exponential kinetics, 0 -> classical exponential
 
         return params
     
@@ -54,6 +55,14 @@ class FirstOrderModel(BaseKineticModel):
         vals = np.asarray([params[f"tau_{i+1}"].value for i in range(self.n_species)])
         return 1 / vals
     
+    def get_b_array(self, params: Parameters | None = None) -> np.ndarray:
+        if (self.n_species == 0):
+                return np.asarray([])
+        
+        params = self.params if params is None else params
+
+        return np.asarray([params[f"b_{i+1}"].value for i in range(self.n_species)])
+
 
     def calculate_LDM(self, log_range: tuple[float, float], n: int, ridge_alpha: float = 1) -> tuple[np.ndarray, np.ndarray]:
         """Calculates lifetime density map according to given lifetimes, ridge alpha and current settings such as 
@@ -72,7 +81,7 @@ class FirstOrderModel(BaseKineticModel):
         ks = 1 / lifetimes
         _ks = ks[None, None, :] if tensor else ks[None, :]
 
-        C: np.ndarray = fold_exp(tt, _ks, _tau)
+        C: np.ndarray = fold_exp_vec(tt, _ks, _tau)
 
         if self.include_artifacts:
             C_artifacts = self._simulate_artifacts(tt, fwhm)
@@ -92,7 +101,7 @@ class FirstOrderModel(BaseKineticModel):
         return coefs, D_fit
 
     def get_exp_function(self) -> Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float]:
-        return fold_exp if self.irf_type == self.irf_types[0] else square_conv_exp
+        return fold_exp_vec if self.irf_type == self.irf_types[0] else square_conv_exp
 
         
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
@@ -102,16 +111,23 @@ class FirstOrderModel(BaseKineticModel):
         
         """
 
-        tt, _ks, _tau = self.get_C_profiles_args(params, times)
+        times = times if times is not None else self.dataset.times
+
+        ks = self.get_rates(params)
+        mu = self.get_mu(params)
+        fwhm = self.get_tau(params)  # fwhm
+        b = self.get_b_array(params)
 
         if self.n_species == 0:
             return
         
-        # simulation for DADS only
-        f = self.get_exp_function()
-        self.C_opt: np.ndarray = f(tt, _ks, _tau)
+        # fix add square wave exponential
 
-
+        self.C_opt = fold_exp_dist(times, ks, fwhm, b, mu)
+        
+        # # simulation for DADS only
+        # f = self.get_exp_function()
+        # self.C_opt: np.ndarray = f(tt, _ks, _tau)
 
 
 class FirstOrderLPLModel(FirstOrderModel):
@@ -173,7 +189,7 @@ class TargetFirstOrderModel(FirstOrderModel):
 
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         params = self.params if params is None else params
-        tt, _ks, _tau = self.get_C_profiles_args(params, times)
+        tt, _ks, _tau = self.get_C_profiles_args(params, times)   # TODO fix
 
         if self.n_species == 0:
             return
