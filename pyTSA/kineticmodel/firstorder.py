@@ -12,6 +12,8 @@ from ..mathfuncs import fold_exp_vec, glstsq, square_conv_exp, simulate_target_m
 from lmfit import Parameters
 from typing import Callable
 
+import matplotlib.pyplot as plt
+
 
 class FirstOrderModel(BaseKineticModel):
     """
@@ -45,6 +47,25 @@ class FirstOrderModel(BaseKineticModel):
 
         return params
     
+    def plot_lifetime_distribution(self, index: int = 1, t_unit: str = 'ps', xscale: str = 'log', lower_factor: float = 1e-5, upper_factor: float = 1e2):
+
+        tau0 = self.params[f'tau_{index}'].value
+        b = self.params[f'b_{index}'].value
+
+        if b == 0:
+            return 
+        
+        taus = np.logspace(np.log10(tau0 * lower_factor), np.log10(tau0 * upper_factor), 1000)
+
+        p = 1 / (taus * b * np.sqrt(2 * np.pi)) * np.exp(-np.log(taus / tau0) ** 2 / (2 * b ** 2))
+
+        print("tau@maximum:", taus[np.argmax(p)])
+
+        plt.plot(taus, p, lw=1.5, color='red')
+        plt.xlabel(f'Lifetime / {t_unit}')
+        plt.ylabel('Amplitude')
+        plt.xscale(xscale)
+        plt.show()
 
     def get_rates(self, params: Parameters | None = None) -> np.ndarray:
         if (self.n_species == 0 or not self._include_rates_params):
