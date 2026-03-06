@@ -30,7 +30,6 @@ from copy import deepcopy
 from numpy.linalg import svd
 
 
-
 def save_matrix(dim0: np.iterable, dim1: np.iterable, matrix: np.ndarray, fname='output.txt', delimiter='\t', encoding='utf8', transpose=False):
     mat = np.vstack((dim0, matrix.T)) if transpose else np.vstack((dim1, matrix))
     buffer = delimiter + delimiter.join(f"{num}" for num in (dim1 if transpose else dim0)) + '\n'
@@ -609,7 +608,7 @@ class BaseKineticModel(KineticModel):
         if width == 0 or self.irf_type != self.irf_types[0]:
             return width
         
-        if not self.include_variable_fwhm:
+        if not self.include_variable_fwhm or (self.include_variable_fwhm and self.irf_type == self.irf_types[1]):  # if square wave, not wavelength-dependency
             return width
         
         tau = np.ones(self.dataset.wavelengths.shape[0], dtype=np.float64) * width
@@ -737,45 +736,6 @@ class BaseKineticModel(KineticModel):
 
         # return self.C_COH
 
-    # def get_weights(self, params=None):
-    #     weights = super(_Femto, self).get_weights()
-    #     if self.weight_chirp:
-    #         mu = self.get_mu(params)
-
-    #         for i, t0 in enumerate(mu):
-    #             idx0, idx1 = find_nearest_idx(self.times, [t0 - self.t_radius_chirp / 2, t0 + self.t_radius_chirp / 2])
-    #             weights[idx0:idx1+1, i] *= self.w_of_chirp
-
-    #     return weights
-
-    # def get_rates(self, params: Parameters | None = None) -> np.ndarray:
-    #     raise NotImplementedError()
-
-
-    # def get_C_profiles_args(self, params: Parameters | None = None, times: np.ndarray | None = None):
-    #     params = self.params if params is None else params
-    #     self.C_opt = None
-    #     self.C_artifacts = None
-
-    #     ks = self.get_rates(params)
-    #     mu = self.get_mu(params)
-    #     width = self.get_tau(params)  # fwhm
-
-    #     # if True, partitioned variable projection will be used for fitting
-    #     tensor: bool = isinstance(mu, np.ndarray) or isinstance(width, np.ndarray)
-
-    #     _tau = width[:, None, None] if isinstance(width, np.ndarray) else width
-    #     _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
-    #     times = self.dataset.times if times is None else times
-    #     _t = times[None, :, None] if tensor else times[:, None]
-    #     tt = _t - _mu
-
-    #     _ks = ks[None, None, :] if tensor else ks[None, :]
-
-    #     if self.include_artifacts:
-    #         self.C_artifacts = self._simulate_artifacts(tt, width)
-
-    #     return tt, _ks, _tau
     
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         raise NotImplementedError()

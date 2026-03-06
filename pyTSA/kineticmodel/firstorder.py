@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from ..dataset import Dataset
 
 from .kineticmodel import BaseKineticModel
-from ..mathfuncs import fold_exp_vec, glstsq, square_conv_exp, simulate_target_model, LPL_decay, fold_exp_dist
+from ..mathfuncs import fold_exp_vec, glstsq, square_conv_exp_vec, simulate_target_model, LPL_decay, exp_dist, reshape_arrays
 
 from lmfit import Parameters
 from typing import Callable
@@ -92,20 +92,14 @@ class FirstOrderModel(BaseKineticModel):
         lifetimes = np.logspace(log_range[0], log_range[1], num=n, endpoint=True)
 
         mu = self.get_mu()
-        fwhm = self.get_tau()  # fwhm
-        tensor: bool = isinstance(mu, np.ndarray) or isinstance(fwhm, np.ndarray)
-        _tau = fwhm[:, None, None] if isinstance(fwhm, np.ndarray) else fwhm
-        _mu = mu[:, None, None] if isinstance(mu, np.ndarray) else mu
-        _t = self.dataset.times[None, :, None] if tensor else self.dataset.times[:, None]
-        tt = _t - _mu
-
+        width = self.get_tau()  # fwhm
         ks = 1 / lifetimes
-        _ks = ks[None, None, :] if tensor else ks[None, :]
 
-        C: np.ndarray = fold_exp_vec(tt, _ks, _tau)
+        tt, k, width_r, _ = reshape_arrays(self.dataset.times, ks, width, mu=mu)
+        C: np.ndarray = fold_exp_vec(tt, k, width_r)
 
         if self.include_artifacts:
-            C_artifacts = self._simulate_artifacts(tt, fwhm)
+            C_artifacts = self._simulate_artifacts(self.dataset.times, mu, width)
             C = np.concatenate((C_artifacts, C), axis=-1)
 
         w = self.get_weights_lstsq()
@@ -122,9 +116,9 @@ class FirstOrderModel(BaseKineticModel):
         return coefs, D_fit
 
     def get_exp_function(self) -> Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float]:
-        return fold_exp_vec if self.irf_type == self.irf_types[0] else square_conv_exp
+        return fold_exp_vec if self.irf_type == self.irf_types[0] else square_conv_exp_vec
 
-        
+
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         """Simulates concentration profiles, including coherent artifacts if setup in a model.
         
@@ -136,19 +130,15 @@ class FirstOrderModel(BaseKineticModel):
 
         ks = self.get_rates(params)
         mu = self.get_mu(params)
-        fwhm = self.get_tau(params)  # fwhm
+        width = self.get_tau(params)  # fwhm or width
         b = self.get_b_array(params)
 
         if self.n_species == 0:
             return
         
-        # fix add square wave exponential
-
-        self.C_opt = fold_exp_dist(times, ks, fwhm, b, mu)
-        
         # # simulation for DADS only
-        # f = self.get_exp_function()
-        # self.C_opt: np.ndarray = f(tt, _ks, _tau)
+        f = self.get_exp_function()
+        self.C_opt: np.ndarray = exp_dist(f, times, ks, width, b, mu)
 
 
 class FirstOrderLPLModel(FirstOrderModel):
@@ -210,15 +200,17 @@ class TargetFirstOrderModel(FirstOrderModel):
 
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         params = self.params if params is None else params
-        tt, _ks, _tau = self.get_C_profiles_args(params, times)   # TODO fix
 
         if self.n_species == 0:
             return
         
         j, K = self.target_params(params)
+        mu = self.get_mu()
+        width = self.get_tau()
+        b = self.get_b_array()
 
         f = self.get_exp_function()
-        self.C_opt_full = simulate_target_model(tt, K, j, f, _tau)
+        self.C_opt_full = simulate_target_model(f, K, j, self.dataset.times, width, b, mu)
 
         if len(self.used_compartments) == 0:
             raise ValueError("At least one compartment has to be assigned to C_opt")

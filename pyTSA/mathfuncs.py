@@ -116,8 +116,9 @@ def get_EAS_transform(ks: np.ndarray):
     bjl *= k_mat
     return bjl
 
-def simulate_target_model(t: np.ndarray | float, K: np.ndarray, j: np.ndarray,
-                           f_exp: Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float], *f_args):
+
+def simulate_target_model(f_exp: Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float],
+                          K: np.ndarray, j: np.ndarray, t: np.ndarray, width: np.ndarray | float, b: np.ndarray | float = None, mu: np.ndarray | float = 0):
     """
     f_exp: folded exponential function to be called 
     f_kwargs: keyword arguemnts passed to f_exp function
@@ -132,9 +133,9 @@ def simulate_target_model(t: np.ndarray | float, K: np.ndarray, j: np.ndarray,
 
     A2_T = Q * Q_inv.dot(j)  # Q @ np.diag(Q_inv.dot(j))
 
-    ks = -L[None, :] if t.ndim == 2 else -L[None, None, :]  # 3 dimensions
+    # ks = -L[None, :] if t.ndim == 2 else -L[None, None, :]  # 3 dimensions
 
-    C = f_exp(t, ks, *f_args)
+    C = exp_dist(f_exp, t, -L, width, b, mu)
 
     return C.dot(A2_T.T)
 
@@ -328,22 +329,26 @@ def varorder(t: np.ndarray | float, kn: float, n: float, c0: float = 1):
 #     return signal
 
 
-def fold_exp_dist(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float, b: np.ndarray | float, mu: np.ndarray | float = 0):
+def reshape_arrays(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float, b: np.ndarray | float | None = None, mu: np.ndarray | float = 0):
+    """
+    t - time array
+    k - rate constants array
+    fwhm - width or full width at half maximum value or array
+    b - dispersion array or None
+    mu - chirp array or number, desccribes time zero
+    """
+
     t = np.atleast_1d(t)
     k = np.atleast_1d(k)
-    b = np.atleast_1d(b)
+    b = np.atleast_1d(b) if b is not None else None
     fwhm = np.atleast_1d(fwhm)
     mu = np.atleast_1d(mu)
 
     assert t.ndim == 1 and k.ndim == 1 and b.ndim == 1 and fwhm.ndim == 1 and mu.ndim == 1, 'all input arrays must be at max 1 dimensional'
 
-    if k.shape != b.shape:
-        raise ValueError("number of rates must be the same as the number of dist. widths")
-    
-    mask_dis = b != 0.0
-    mask_nodis = ~mask_dis
-    # print("mask_dis", mask_dis)
-    # print("mask_nodis", mask_nodis)
+    if b is not None:
+        assert b.ndim == 1
+        assert k.shape == b.shape, "number of rates must be the same as the number of dist. widths"
 
     tensor: bool = mu.shape[0] > 1 or fwhm.shape[0] > 1
 
@@ -351,12 +356,39 @@ def fold_exp_dist(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float
         fwhm = fwhm.reshape(-1, 1, 1)
         tt = t.reshape(1, -1, 1) - mu.reshape(-1, 1, 1)
         k = k.reshape(1, 1, -1)
-        b = b.reshape(1, 1, -1)
+        b = b.reshape(1, 1, -1) if b is not None else None
     else:
         fwhm = fwhm[0]
         tt = (t - mu[0]).reshape(-1, 1)
         k = k.reshape(1, -1)
-        b = b.reshape(1, -1)
+        b = b.reshape(1, -1) if b is not None else None
+
+    return tt, k, fwhm, b
+    
+
+
+def exp_dist(f_exp: Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float], 
+             t: np.ndarray, k: np.ndarray | float, width: np.ndarray | float, b: np.ndarray | float, mu: np.ndarray | float = 0):
+
+    """
+    Exponential decay (either folded exponential or square wave convoluted exponential)
+    that can handle a dispersion kinetics when b != 0
+
+
+    f_exp - the exponential function (fold_exp_vec or square_conv_exp_vec) that will be called
+    
+    """
+
+    tt, k, width, b = reshape_arrays(t, k, width, b, mu)
+
+    if b is None:
+        mask_dis = np.asarray([False] * k.shape[-1])
+    else:
+        mask_dis = np.atleast_1d(b.squeeze()) != 0.0
+
+    mask_nodis = ~mask_dis
+    # print("mask_dis", mask_dis)
+    # print("mask_nodis", mask_nodis)
 
     n_rates = k.shape[-1]
     signal = np.zeros(tt.shape[:-1] + (n_rates,))
@@ -369,11 +401,12 @@ def fold_exp_dist(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float
     if np.any(mask_nodis):
         k_nodis = k[..., mask_nodis]
 
-        result = fold_exp_vec(tt, k_nodis, fwhm)
+        result = f_exp(tt, k_nodis, width)
 
         # print("k_nodis shape", k_nodis.shape)
+        # print("mask_nodis", mask_nodis)
         # print("signal shape", signal.shape)
-        # print("fwhm shape", fwhm.shape if isinstance(fwhm, np.ndarray) else fwhm)
+        # print("fwhm shape", width.shape if isinstance(width, np.ndarray) else width)
         # print("tt shape", tt.shape)
         # print("result shape", result.shape)
 
@@ -388,7 +421,14 @@ def fold_exp_dist(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | float
 
         nodes_nd = H_NODES.reshape(-1, *((1,) * b_masked.ndim))   # prepend 1 dimension
         k_dist = k_masked[None, ...] * np.exp(np.sqrt(2.0) * b_masked[None, ...] * nodes_nd)   # make a 4 or  dim tensor to handle the calculations 
-        component = fold_exp_vec(tt[None, ...], k_dist, fwhm)
+        component = f_exp(tt[None, ...], k_dist, width)
+
+        # print("k_masked shape", k_masked.shape)
+        # print("mask_dis", mask_dis)
+        # print("signal shape", signal.shape)
+        # print("fwhm shape", width.shape if isinstance(width, np.ndarray) else width)
+        # print("tt shape", tt.shape)
+        # print("component shape", component.shape)
 
         # sightly faster than classical elementwise multiplication and then summation
         signal[..., mask_dis] = np.tensordot(H_WEIGHTS, component, axes=(0, 0)) / sqpi
@@ -414,7 +454,7 @@ def fold_exp_vec(t: np.ndarray | float, k: np.ndarray | float, fwhm: np.ndarray 
     
 # exponential convoluted with square wave, from https://lpsa.swarthmore.edu/Convolution/Convolution2.html and wolfram alpha
 @vectorize(nopython=True, fastmath=True)
-def square_conv_exp(t: np.ndarray | float, k: np.ndarray | float, width: np.ndarray | float) -> np.ndarray | float:
+def square_conv_exp_vec(t: np.ndarray | float, k: np.ndarray | float, width: np.ndarray | float) -> np.ndarray | float:
 
     if width == 0:
         return np.exp(-t * k) if t >= 0 else 0
