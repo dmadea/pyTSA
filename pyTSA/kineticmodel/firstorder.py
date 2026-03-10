@@ -77,7 +77,7 @@ class FirstOrderModel(BaseKineticModel):
         return 1 / vals
     
     def get_b_array(self, params: Parameters | None = None) -> np.ndarray:
-        if (self.n_species == 0):
+        if (self.n_species == 0 or not self._include_rates_params):
                 return np.asarray([])
         
         params = self.params if params is None else params
@@ -191,12 +191,15 @@ class TargetFirstOrderModel(FirstOrderModel):
         # to C_opt
         self.used_compartments = [0]
 
-    def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
+    def target_params(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
         """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
         raise NotImplementedError()
     
     def get_labels(self, t_unit='ps'):
         raise NotImplementedError()
+
+    def get_b_array(self, params: Parameters | None = None) -> np.ndarray:
+        return np.zeros(self.n_species)
 
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         params = self.params if params is None else params
@@ -205,9 +208,9 @@ class TargetFirstOrderModel(FirstOrderModel):
             return
         
         j, K = self.target_params(params)
-        mu = self.get_mu()
-        width = self.get_tau()
-        b = self.get_b_array()
+        mu = self.get_mu(params)
+        width = self.get_tau(params)
+        b = None #self.get_b_array()
 
         f = self.get_exp_function()
         self.C_opt_full = simulate_target_model(f, K, j, self.dataset.times, width, b, mu)
@@ -215,8 +218,34 @@ class TargetFirstOrderModel(FirstOrderModel):
         if len(self.used_compartments) == 0:
             raise ValueError("At least one compartment has to be assigned to C_opt")
         else:
-            self.C_opt = self.C_opt_full[:, self.used_compartments]
+            self.C_opt = self.C_opt_full[..., self.used_compartments]
 
+
+
+class TextBasedTargetFirstOrderModel(TargetFirstOrderModel):
+
+    name = "General abstract class for creating parametric target models"
+
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
+        super(TextBasedTargetFirstOrderModel, self).__init__(dataset, n_species, set_model)
+        self.text = ""
+
+    def parse_text(self, text: str):
+        self.text = text
+
+        # parse the text to get the target model
+        # the text is a string of the form:
+        # "S1 -> S2 + S3"
+        # "S1 -> S2"
+        # "S1 -> S2 + S3"
+
+
+    def target_params(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
+        """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
+        raise NotImplementedError()
+    
+    def get_labels(self, t_unit='ps'):
+        raise NotImplementedError()
 
 
 class SensitizationModel(TargetFirstOrderModel):
@@ -235,7 +264,7 @@ class SensitizationModel(TargetFirstOrderModel):
     def get_labels(self, t_unit='ps'):
         raise NotImplementedError()
     
-    def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
+    def target_params(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
         """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
         
         k_sens_0, Kq, k_T = params['k_sens_0'].value, params['Kq'].value, params['k_T'].value
@@ -244,6 +273,42 @@ class SensitizationModel(TargetFirstOrderModel):
                         [Kq,      -k_T]])
     
         j = np.asarray([1, 0])
+
+        return j, K
+
+
+class SingletFissionModel(TargetFirstOrderModel):
+
+    name = "Singlet fission kinetic model"
+
+    def __init__(self, dataset: Dataset | None = None, set_model: bool = False):
+        super(SingletFissionModel, self).__init__(dataset, 4, set_model)
+        self.used_compartments = [0, 1, 2, 3]
+
+    def init_params(self) -> Parameters:
+        params = super(SingletFissionModel, self).init_params()
+
+        params.add('tau_S1_hot', value=0.5, min=0, max=np.inf, vary=True)
+        params.add('tau_TT', value=200, min=0, max=np.inf, vary=True)
+        params.add('tau_S1', value=2500, min=0, max=np.inf, vary=True)
+        params.add('alpha_S1_hot_TT', value=0.5, min=0, max=1, vary=False)
+
+        return params
+    
+    def get_labels(self, t_unit='ps'):
+        return ['$S_1^{hot}$', '$S_1$', '$^1(T_1T_1)$', '$T_1+T_1$']
+    
+    def target_params(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
+        """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
+
+        tau_S1_hot, tau_TT, tau_S1, alpha_S1_hot_TT = params['tau_S1_hot'].value, params['tau_TT'].value, params['tau_S1'].value, params['alpha_S1_hot_TT'].value
+
+        K = np.asarray([[-1/tau_S1_hot, 0, 0, 0],
+                        [(1 - alpha_S1_hot_TT) / tau_S1_hot, -1/tau_S1, 0, 0],
+                        [alpha_S1_hot_TT / tau_S1_hot, 0, -1/tau_TT, 0],       
+                        [0, 1/tau_S1, 1/tau_TT, 0]])
+    
+        j = np.asarray([1, 0, 0, 0])
 
         return j, K
 

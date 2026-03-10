@@ -125,7 +125,6 @@ def simulate_target_model(f_exp: Callable[[np.ndarray | float, np.ndarray | floa
     """
 
     assert j.shape[0] == K.shape[0] == K.shape[1]
-    assert t.ndim > 1
 
     # based on Ivo H.M. van Stokkum equation in doi:10.1016/j.bbabio.2004.04.011
     L, Q = np.linalg.eig(K)
@@ -136,6 +135,9 @@ def simulate_target_model(f_exp: Callable[[np.ndarray | float, np.ndarray | floa
     # ks = -L[None, :] if t.ndim == 2 else -L[None, None, :]  # 3 dimensions
 
     C = exp_dist(f_exp, t, -L, width, b, mu)
+
+    # print("C shape", C.shape)
+    # print("A2_T shape", A2_T.shape)
 
     return C.dot(A2_T.T)
 
@@ -344,7 +346,7 @@ def reshape_arrays(t: np.ndarray, k: np.ndarray | float, fwhm: np.ndarray | floa
     fwhm = np.atleast_1d(fwhm)
     mu = np.atleast_1d(mu)
 
-    assert t.ndim == 1 and k.ndim == 1 and b.ndim == 1 and fwhm.ndim == 1 and mu.ndim == 1, 'all input arrays must be at max 1 dimensional'
+    assert t.ndim == 1 and k.ndim == 1 and fwhm.ndim == 1 and mu.ndim == 1, 'all input arrays must be at max 1 dimensional'
 
     if b is not None:
         assert b.ndim == 1
@@ -380,6 +382,12 @@ def exp_dist(f_exp: Callable[[np.ndarray | float, np.ndarray | float, np.ndarray
     """
 
     tt, k, width, b = reshape_arrays(t, k, width, b, mu)
+
+    # print("tt shape", tt.shape)
+    # print("k shape", k.shape)
+    # print("width shape", width.shape)
+    # print("b shape", b.shape if b is not None else None)
+
 
     if b is None:
         mask_dis = np.asarray([False] * k.shape[-1])

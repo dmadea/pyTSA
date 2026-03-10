@@ -289,7 +289,7 @@ def _plot_tilts(ax, norm, at_value, axis='y', inverted_axis=False):
 
 def plot_time_traces_onefig_ax(ax, traces: np.ndarray, times, mu: float | np.ndarray | None = None, t_axis_formatter=ScalarFormatter(), log_y=False,
                            y_lim=(None, None), plot_tilts=True, t_unit='ps', labels=None, n_lin_bins=10, n_log_bins=10,
-                          linthresh=1, linscale=1, colors=None, D_mul_factor=1, legend_spacing=0.2, lw=1.5,
+                          linthresh=1, linscale=1, colors=None, legend_spacing=0.2, lw=1.5,
                           legend_loc='best', z_unit=dA_unit, x_label='Time', symlog=True, x_minor_locator=None, y_minor_locator=None,
                           t_lim=(None, None), plot_zero_line=True, norm_traces=False, **kwargs):
     
@@ -326,7 +326,7 @@ def plot_time_traces_onefig_ax(ax, traces: np.ndarray, times, mu: float | np.nda
         if norm_traces:
             trace /= trace.max()
 
-        ax.plot(tt, trace * D_mul_factor, lw=lw, color=colors[i], label="" if labels is None else labels[i])
+        ax.plot(tt, trace, lw=lw, color=colors[i], label="" if labels is None else labels[i])
 
     ax.xaxis.set_ticks_position('both')
     ax.yaxis.set_ticks_position('both')

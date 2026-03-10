@@ -762,6 +762,8 @@ class BaseKineticModel(KineticModel):
 
         w = self.get_weights_lstsq()
 
+        # print(C_full.shape, self.dataset.matrix_fac.shape, w.shape if w is not None else None)
+
         ST_full, self.matrix_opt = glstsq(C_full, self.dataset.matrix_fac, self.ridge_alpha, w)
 
         if self.include_artifacts:
@@ -956,10 +958,15 @@ class BaseKineticModel(KineticModel):
                     plot_traces_onefig_ax(ax, self.dataset.matrix_fac, self.matrix_opt, self.dataset.times, self.dataset.wavelengths, **kws)
                 case "cprofiles":
                     kws.update(dict(title=f"C-profiles", colors=COLORS, mu=mu, labels=self.get_labels(t_unit)), z_unit='Population')
+                    lam = kws.get('cprofiles_lambda', None) # wavelength for C profiles to use
                     update_kwargs("cprofiles", kws)  # change to data-specific kwargs
 
                     if self.C_opt.ndim == 3:
-                        _C = self.C_opt_full[0] if self.C_opt_full is not None else self.C_opt[0]
+                        idx = 0
+                        if lam is not None:
+                            idx = fi(self.dataset.wavelengths, lam)
+                            kws.update(dict(mu=mu[idx]))
+                        _C = self.C_opt_full[idx] if self.C_opt_full is not None else self.C_opt[idx]
                     else:
                         _C = self.C_opt_full if self.C_opt_full is not None else self.C_opt
 
@@ -992,6 +999,10 @@ class BaseKineticModel(KineticModel):
                 case "das":
                     kws.update(dict(title="DAS", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("das", kws)  # change to data-specific kwargs
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
+                case "sas":
+                    kws.update(dict(title="SAS", colors=COLORS, labels=self.get_labels(t_unit)))
+                    update_kwargs("sas", kws)  # change to data-specific kwargs
                     plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
                 case "das-norm":
                     kws.update(dict(title="DAS-norm", colors=COLORS, labels=self.get_labels(t_unit)))
