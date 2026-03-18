@@ -358,6 +358,44 @@ class SingletFissionModel(TargetFirstOrderModel):
         return j, K
 
 
+class SingletFissionModelImpurity(TargetFirstOrderModel):
+
+    name = "Singlet fission kinetic model"
+
+    def __init__(self, dataset: Dataset | None = None, set_model: bool = False):
+        super(SingletFissionModelImpurity, self).__init__(dataset, 4, set_model)
+        self.used_compartments = [0, 1, 2, 3]
+
+    def init_params(self) -> Parameters:
+        params = super(SingletFissionModelImpurity, self).init_params()
+
+        params.add('tau_S1_hot', value=0.5, min=0, max=np.inf, vary=True)
+        params.add('tau_TT', value=200, min=0, max=np.inf, vary=True)
+        params.add('tau_imp', value=12300, min=0, max=np.inf, vary=False)
+        params.add('alpha_imp', value=0.1, min=0, max=1, vary=False)
+
+        return params
+    
+    def get_labels(self, t_unit='ps'):
+        return ['$S_1^{hot}$', '$S_1^{imp}$', '$^1(T_1T_1)$', '$T_1+T_1$']
+    
+    def target_params(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
+        """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
+
+        tau_S1_hot, tau_TT, tau_imp, alpha_imp = params['tau_S1_hot'].value, params['tau_TT'].value, params['tau_imp'].value, params['alpha_imp'].value
+
+        # S1 hot, impurity, TT, T1 + T1
+
+        K = np.asarray([[-1/tau_S1_hot, 0, 0, 0],
+                        [0, -1/tau_imp, 0, 0],
+                        [1 / tau_S1_hot, 0, -1/tau_TT, 0],       
+                        [0, 0, 1/tau_TT, 0]])
+    
+        j = np.asarray([(1 - alpha_imp), alpha_imp, 0, 0])
+
+        return j, K
+        
+
 class DelayedFluorescenceModel(TargetFirstOrderModel):
 
     name = "Delayed fluorescence kinetic model"
