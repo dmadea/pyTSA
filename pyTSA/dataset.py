@@ -2,6 +2,7 @@
 from typing import Any
 import numpy as np
 from scipy.linalg import svd
+from scipy.interpolate import interp1d
 
 import os
 import matplotlib.pyplot as plt
@@ -579,6 +580,39 @@ class Dataset(object):
         self._set_D()
 
         return self
+
+
+    def baseline_correct_area(self, wls_vals: np.ndarray | list[float], time_vals: np.ndarray | list[float],
+                                    t0: float | None = None,):
+        """
+        wls_vals and time_vals are arrays of wavelengths and time values to be used as end areas for baseline correction
+        t0 is the start time of the baseline correction, if None, the first time point is used
+        """
+        wls_vals = np.asarray(wls_vals)
+        time_vals = np.asarray(time_vals)
+        t_idx_start = fi(self.times, t0) if t0 is not None else 0
+
+        # Interpolate: for each wavelength, get mu (end time of baseline window)
+        # Linear interpolation within bounds; linear extrapolation outside using neighboring points
+        interp_fn = interp1d(wls_vals, time_vals, kind='linear', fill_value='extrapolate')
+        mu = interp_fn(self.wavelengths)
+
+        # Convert mu to time indices (fi returns nearest index; we need inclusive end)
+        t_idx_ends = np.atleast_1d(np.asarray(fi(self.times, np.atleast_1d(mu).tolist())))
+
+        # Ensure at least one time point in each baseline window
+        t_idx_ends = np.maximum(t_idx_ends, t_idx_start)
+
+        # Subtract baseline (mean over [t0, mu[i]]) from each wavelength trace
+        for i in range(len(self.wavelengths)):
+            D_selection = self.matrix[t_idx_start : t_idx_ends[i] + 1, i]
+            self.matrix[:, i] -= D_selection.mean()
+
+        self.SVD()
+        self._set_D()
+
+        return self
+       
     
     def baseline_drift_correct(self, w0=178, w1=300):
         """Subtracts a average of specified wavelength range from spectra that it corresponds to.
