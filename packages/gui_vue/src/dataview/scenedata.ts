@@ -1,4 +1,4 @@
-import { Dataset, LayoutScene, Colormap, Colormaps, NumberArray, LinearROI } from "@pytsa/ts-graph";
+import { Dataset, LayoutScene, Colormap, Colormaps, NumberArray, LinearROI, getDefaultColor } from "@pytsa/ts-graph";
 
 interface IUpdateFunctions {
   updateTrace: (value: number) => void,
@@ -15,6 +15,8 @@ export class SceneData extends LayoutScene {
 
   constructor(parentElement: HTMLDivElement) {
     super(parentElement);
+    this.onLayoutNeedsRepopulate = () => this.datasets.length > 0;
+    this.repopulateForLayoutChange = () => this.processDatasets();
   }
 
   public updateFitData(fitDataset: Dataset, chirpData?: NumberArray) {
@@ -65,6 +67,8 @@ export class SceneData extends LayoutScene {
 
     const n = this.datasets.length;
 
+    const isOverlay = this.layout === "Overlay";
+
     for (let i = 0; i < n; i++) {
       this.datasets[i] = datasets[i];
 
@@ -82,10 +86,24 @@ export class SceneData extends LayoutScene {
 
       spectrumPlot.x = ds.x;
       tracePlot.x = ds.y;
-      trace.xAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
-      spectrum.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
-      
+
+      if (!isOverlay) {
+        trace.xAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
+        spectrum.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
+      }
+
       hfig.heatmap?.recalculateImage();
+    }
+
+    if (isOverlay && n > 0) {
+      const spectrum = this.groupPlots[0].spectrum;
+      const trace = this.groupPlots[0].trace;
+      const xMin = Math.min(...this.datasets.map(ds => ds.x[0]));
+      const xMax = Math.max(...this.datasets.map(ds => ds.x[ds.x.length - 1]));
+      const yMin = Math.min(...this.datasets.map(ds => ds.y[0]));
+      const yMax = Math.max(...this.datasets.map(ds => ds.y[ds.y.length - 1]));
+      spectrum.xAxis.viewBounds = [xMin, xMax];
+      trace.xAxis.viewBounds = [yMin, yMax];
     }
 
     this.replot();
@@ -105,6 +123,8 @@ export class SceneData extends LayoutScene {
     this.populateFigures(n);
     this.updateFuncions = [];
 
+    const isOverlay = this.layout === "Overlay";
+
     for (let i = 0; i < n; i++) {
       const ds = this.datasets[i];
       const hfig = this.groupPlots[i].heatmapFig;
@@ -118,8 +138,10 @@ export class SceneData extends LayoutScene {
       traceFitPlot.color = 'red';
       spectrumFitPlot.color = 'red';
 
-      // hfig.yAxis.inverted = true;
-      // trace.xAxis.inverted = true;
+      if (isOverlay) {
+        spectrumPlot.color = getDefaultColor(i);
+        tracePlot.color = getDefaultColor(i);
+      }
 
       const cbar = hfig.addColorbar();
       const hmap = hfig.plotHeatmap(ds, new Colormap(Colormaps.symgrad));
@@ -128,16 +150,15 @@ export class SceneData extends LayoutScene {
 
       hfig.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
       hfig.yAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
-      // console.log("x", hfig.xAxis.scale, "y", hfig.yAxis.scale);
-      // console.log("x", hfig.xAxis.viewBounds, "y", hfig.yAxis.viewBounds);
 
       hfig.title = ds.name;
 
-      trace.xAxis.scale = hfig.yAxis.scale;
-      spectrum.xAxis.scale = hfig.xAxis.scale;
-
-      trace.xAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
-      spectrum.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
+      if (!isOverlay) {
+        trace.xAxis.scale = hfig.yAxis.scale;
+        spectrum.xAxis.scale = hfig.xAxis.scale;
+        trace.xAxis.viewBounds = [ds.y[0], ds.y[ds.y.length - 1]];
+        spectrum.xAxis.viewBounds = [ds.x[0], ds.x[ds.x.length - 1]];
+      }
 
       spectrumPlot.x = ds.x;
       tracePlot.x = ds.y;
@@ -146,7 +167,7 @@ export class SceneData extends LayoutScene {
         const idxy = hmap.dataset.y.nearestIndex(y);
         const row = hmap.dataset.data.getRow(idxy);
         spectrumPlot.y = row;
-        
+
         if (this.fitDataset) {
           spectrumFitPlot.x = this.fitDataset.x;
           spectrumFitPlot.y = this.fitDataset.data.getRow(idxy);
@@ -190,6 +211,19 @@ export class SceneData extends LayoutScene {
       this.groupPlots[i].traceDLines.addPositionChangedListener((e) => {
         updateSpectrumData(e.realPosition.x);
       });
+    }
+
+    if (isOverlay && n > 0) {
+      const spectrum = this.groupPlots[0].spectrum;
+      const trace = this.groupPlots[0].trace;
+      const xMin = Math.min(...this.datasets.map(ds => ds.x[0]));
+      const xMax = Math.max(...this.datasets.map(ds => ds.x[ds.x.length - 1]));
+      const yMin = Math.min(...this.datasets.map(ds => ds.y[0]));
+      const yMax = Math.max(...this.datasets.map(ds => ds.y[ds.y.length - 1]));
+      spectrum.xAxis.viewBounds = [xMin, xMax];
+      trace.xAxis.viewBounds = [yMin, yMax];
+      spectrum.xAxis.scale = this.groupPlots[0].heatmapFig.xAxis.scale;
+      trace.xAxis.scale = this.groupPlots[0].heatmapFig.yAxis.scale;
     }
 
     this.arangeFigures();

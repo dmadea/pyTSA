@@ -25,17 +25,21 @@ export class LayoutSceneNavBarContextMenu extends SceneNavBarContextMenu {
 
         const scene = this.scene as LayoutScene;
         
-        var opsLayout = ["Triangle", "Packed"];
+        var opsLayout = ["Triangle", "Packed", "Overlay"];
 
         var layout = this.addSelect("Layout", ...opsLayout);
         layout.addEventListener("change", e => {
-            scene.layout = layout.selectedOptions[0].text;
+            const idx = layout.selectedIndex;
+            const newLayout = (idx >= 0 && layout.options[idx]) ? layout.options[idx].text : opsLayout[0];
+            scene.layout = newLayout;
         });
 
         var opsAlignment = ["Matrix", "Column-wise", "Row-wise"];
         var alignment = this.addSelect("Alignment", ...opsAlignment);
         alignment.addEventListener("change", e => {
-            scene.alignment = alignment.selectedOptions[0].text;
+            const idx = alignment.selectedIndex;
+            const newAlignment = (idx >= 0 && alignment.options[idx]) ? alignment.options[idx].text : opsAlignment[0];
+            scene.alignment = newAlignment;
         });
 
         var linkXAxes = this.addCheckBox("Link x axes");
@@ -133,10 +137,10 @@ export class LayoutSceneNavBarContextMenu extends SceneNavBarContextMenu {
         });
 
         this.addUpdateUICallback(() => {
-            layout.selectedIndex = opsLayout.indexOf(scene.layout);
-            alignment.selectedIndex = opsAlignment.indexOf(scene.alignment);
-
-            // axAlign.selectedOptions[0].text = this.fig.axisAlignment === Orientation.Vertical ? "Vertical" : "Horizontal";
+            const layoutIdx = opsLayout.indexOf(scene.layout);
+            layout.selectedIndex = layoutIdx >= 0 ? layoutIdx : 0;
+            const alignIdx = opsAlignment.indexOf(scene.alignment);
+            alignment.selectedIndex = alignIdx >= 0 ? alignIdx : 0;
         });
     }
 }
@@ -174,9 +178,21 @@ export class LayoutScene extends Scene {
     }
 
     set layout(layout: string) {
+        const wasOverlay = this._layout === "Overlay";
         this._layout = layout;
-        this.arangeFigures();
+        const isOverlay = layout === "Overlay";
+        const needsRepopulate = (wasOverlay !== isOverlay) && this.onLayoutNeedsRepopulate?.();
+        if (needsRepopulate && this.repopulateForLayoutChange) {
+            this.repopulateForLayoutChange();
+        } else {
+            this.arangeFigures();
+        }
     }
+
+    /** Set in subclass to return true when repopulation is needed (e.g. when switching to/from Overlay with datasets). */
+    protected onLayoutNeedsRepopulate?: () => boolean;
+    /** Set in subclass to perform repopulation. */
+    protected repopulateForLayoutChange?: () => void;
 
     get alignment() {
         return this._alignment;
@@ -230,29 +246,59 @@ export class LayoutScene extends Scene {
     protected populateFigures(n: number) {
         this.groupPlots = [];
 
-        for (let i = 0; i < n; i++) {
-            var h = new Figure();
-            var s = new Figure();
-            var t = new Figure();
-            
-            if (this.wasm){
-                h.setWasm(this.wasm);
-                s.setWasm(this.wasm);
-                t.setWasm(this.wasm);
+        if (this.layout === "Overlay" && n > 0) {
+            // Overlay: n heatmaps, 1 shared spectrum figure, 1 shared trace figure
+            const spectrumFig = new Figure();
+            const traceFig = new Figure();
+            if (this.wasm) {
+                spectrumFig.setWasm(this.wasm);
+                traceFig.setWasm(this.wasm);
             }
+            const spectrumDLines = spectrumFig.addDraggableLines(Orientation.Vertical);
+            const traceDLines = traceFig.addDraggableLines(Orientation.Vertical);
 
-            this.groupPlots.push({
-                heatmapFig: h,
-                spectrum: s,
-                trace: t,
-                heatmapDLines: h.addDraggableLines(Orientation.Both),
-                spectrumDLines: s.addDraggableLines(Orientation.Vertical),
-                traceDLines: t.addDraggableLines(Orientation.Vertical),
-                spectrumPlot: s.plotLine([], []),
-                tracePlot: t.plotLine([], []),
-                spectrumFitPlot: s.plotLine([], []),
-                traceFitPlot: t.plotLine([], []),
-            })
+            for (let i = 0; i < n; i++) {
+                const h = new Figure();
+                if (this.wasm) h.setWasm(this.wasm);
+
+                this.groupPlots.push({
+                    heatmapFig: h,
+                    spectrum: spectrumFig,
+                    trace: traceFig,
+                    heatmapDLines: h.addDraggableLines(Orientation.Both),
+                    spectrumDLines,
+                    traceDLines,
+                    spectrumPlot: spectrumFig.plotLine([], []),
+                    tracePlot: traceFig.plotLine([], []),
+                    spectrumFitPlot: spectrumFig.plotLine([], []),
+                    traceFitPlot: traceFig.plotLine([], []),
+                });
+            }
+        } else {
+            for (let i = 0; i < n; i++) {
+                var h = new Figure();
+                var s = new Figure();
+                var t = new Figure();
+
+                if (this.wasm){
+                    h.setWasm(this.wasm);
+                    s.setWasm(this.wasm);
+                    t.setWasm(this.wasm);
+                }
+
+                this.groupPlots.push({
+                    heatmapFig: h,
+                    spectrum: s,
+                    trace: t,
+                    heatmapDLines: h.addDraggableLines(Orientation.Both),
+                    spectrumDLines: s.addDraggableLines(Orientation.Vertical),
+                    traceDLines: t.addDraggableLines(Orientation.Vertical),
+                    spectrumPlot: s.plotLine([], []),
+                    tracePlot: t.plotLine([], []),
+                    spectrumFitPlot: s.plotLine([], []),
+                    traceFitPlot: t.plotLine([], []),
+                })
+            }
         }
     }
 
@@ -372,6 +418,67 @@ export class LayoutScene extends Scene {
                             this.grid.addItem(tr, i, ncols + 1, 1, 1);
                         }
                     }
+                }
+                this.grid.gridSettings.widthRatios = null;
+                this.grid.gridSettings.heightRatios = null;
+                break;
+            }
+            case "Overlay": {
+                this.setDefaultPlotSettings();
+
+                if (n === 0) break;
+
+                const overlaySpectrum = this.groupPlots[0].spectrum;
+                const overlayTrace = this.groupPlots[0].trace;
+
+                // Link all heatmap crosshairs to shared spectrum/trace draggable lines
+                for (let i = 0; i < n; i++) {
+                    const hmap = this.groupPlots[i].heatmapFig;
+                    hmap.linkXRange(overlaySpectrum);
+                    hmap.linkYXRange(overlayTrace);
+                    this.groupPlots[i].heatmapDLines.linkX(this.groupPlots[i].spectrumDLines);
+                    this.groupPlots[i].heatmapDLines.linkYX(this.groupPlots[i].traceDLines);
+                }
+
+                // Link margins across heatmaps and between spectrum/trace
+                for (const [f1, f2] of combinations<Figure>(this.groupPlots.map(p => p.heatmapFig))) {
+                    f1.linkMargin(f2, Orientation.Both);
+                }
+                overlaySpectrum.linkMargin(overlayTrace, Orientation.Horizontal);
+
+                overlaySpectrum.title = "Spectrum (overlay)";
+                overlayTrace.title = "Trace (overlay)";
+
+                const spectrumColSpan = Math.max(1, Math.ceil(n / 2));
+                const traceColSpan = Math.max(1, n - spectrumColSpan);
+
+                if (this._alignment === "Column-wise") {
+                    for (let col = 0; col < n; col++) {
+                        this.grid.addItem(this.groupPlots[col].heatmapFig, 0, col, 1, 1);
+                    }
+                    this.grid.addItem(overlaySpectrum, 1, 0, 1, spectrumColSpan);
+                    this.grid.addItem(overlayTrace, 1, spectrumColSpan, 1, traceColSpan);
+                } else if (this._alignment === "Row-wise") {
+                    for (let row = 0; row < n; row++) {
+                        this.grid.addItem(this.groupPlots[row].heatmapFig, row, 0, 1, 1);
+                    }
+                    const spectrumRowSpan = Math.max(1, Math.ceil(n / 2));
+                    const traceRowSpan = Math.max(1, n - spectrumRowSpan);
+                    this.grid.addItem(overlaySpectrum, 0, 1, spectrumRowSpan, 1);
+                    this.grid.addItem(overlayTrace, spectrumRowSpan, 1, traceRowSpan, 1);
+                } else {
+                    // Matrix
+                    for (let row = 0; row < nrows; row++) {
+                        for (let col = 0; col < ncols; col++) {
+                            const i = row * ncols + col;
+                            if (i === n) break;
+                            this.grid.addItem(this.groupPlots[i].heatmapFig, row, col, 1, 1);
+                        }
+                    }
+                    const matSpectrumColSpan = Math.max(1, Math.ceil(ncols / 2));
+                    const matTraceColSpan = Math.max(1, ncols - matSpectrumColSpan);
+                    this.grid.addItem(overlaySpectrum, nrows, 0, 1, matSpectrumColSpan);
+                    this.grid.addItem(overlayTrace, nrows, matSpectrumColSpan, 1, matTraceColSpan);
                 }
                 this.grid.gridSettings.widthRatios = null;
                 this.grid.gridSettings.heightRatios = null;
