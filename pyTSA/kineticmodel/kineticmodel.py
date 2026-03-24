@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from abc import abstractmethod
 
-from ..mathfuncs import chirp_correction, fi, fit_polynomial_coefs, fit_sum_exp, gaussian, get_EAS_transform, glstsq
+from ..mathfuncs import chirp_correction, fi, fit_polynomial_coefs, fit_sum_exp, gaussian, get_EAS_transform, glstsq, fold_exp_vec, exp_dist
 from ..plot import plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_time_traces_onefig_ax, plot_traces_onefig_ax, set_main_axis, COLORS
 if TYPE_CHECKING:
     from ..dataset import Dataset
@@ -467,6 +467,8 @@ class BaseKineticModel(KineticModel):
         self.include_artifacts = False
         self.artifact_order = 2
 
+        self.n_DOAS = 0  # number of DOAS species (Damped oscillation associated spectra)
+
         self.include_variable_fwhm = False
         self.variable_fwhm_type = 'poly'  # this cannot be changed
         self.num_of_poly_varfwhm_params = 3
@@ -478,6 +480,10 @@ class BaseKineticModel(KineticModel):
         # concentration profiles and spectra of coherent artifacts
         self.C_artifacts: np.ndarray | None = None
         self.ST_artifacts: np.ndarray | None = None
+
+        self.ST_DOAS: np.ndarray | None = None  # contains full reconstructed DOAS
+        self.DOAS_phases = None  # phases of the DOAS components
+        self._C_DOAS: np.ndarray | None = None  # contains individual sin and cos compoenents
         
         # for C_opt and ST_opt, decay profiles and DAS will be plotted
         # for EAS, new variables are defined
@@ -545,6 +551,12 @@ class BaseKineticModel(KineticModel):
 
             elif self.irf_type == self.irf_types[1]: # square wave
                 params.add('SQW', value=0.15, min=0, max=np.inf, vary=True)  # width of the square wave
+
+        if self.n_DOAS > 0:
+            for i in range(self.n_DOAS):
+                params.add(f'os_omega_{i+1}', value=2, min=0, max=np.inf, vary=True)
+                params.add(f'os_tau_{i+1}', value=1, min=0, max=np.inf, vary=True)
+
 
         return params
     
@@ -739,26 +751,48 @@ class BaseKineticModel(KineticModel):
     
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):
         raise NotImplementedError()
+
+    def simulate_C_DOAS(self, params: Parameters | None = None):
+        if self.n_DOAS == 0:
+            return
+
+        params = self.params if params is None else params
+
+        ks = 1 / np.array([params[f'os_tau_{i+1}'].value for i in range(self.n_DOAS)])
+
+        _C = exp_dist(fold_exp_vec, self.dataset.times, ks, self.get_tau(params), None, self.get_mu(params))
+
+        self._C_DOAS = np.empty(_C.shape[:-1] + (self.n_DOAS * 2,))
+
+        for i in range(self.n_DOAS):
+            omega = params[f'os_omega_{i+1}'].value
+            self._C_DOAS[..., i*2] = _C[..., i] * np.cos(omega * self.dataset.times)
+            self._C_DOAS[..., i*2 + 1] = _C[..., i] * np.sin(omega * self.dataset.times)
+
     
     def simulate(self, params: Parameters | None = None):
 
         self.C_opt = None
         self.C_artifacts = None
+        self._C_DOAS = None
+        self.ST_DOAS = None
 
         if self.include_artifacts:
             self.C_artifacts = self._simulate_artifacts(self.dataset.times, self.get_mu(params), self.get_tau(params))
 
+        self.simulate_C_DOAS(params)
+
         self.calculate_C_profiles(params, self.dataset.times)
 
-        if self.C_opt is None and self.C_artifacts is None:
+        arrays = list(filter(lambda x: x is not None, [self.C_opt, self.C_artifacts, self._C_DOAS]))
+        if len(arrays) == 0:
             return
-        
-        if self.C_opt is None:
-            C_full = self.C_artifacts
-        elif self.C_artifacts is None:
-            C_full = self.C_opt
-        else:
-            C_full: np.ndarray = np.concatenate((self.C_artifacts, self.C_opt), axis=-1)
+
+        n_s = self.C_opt.shape[-1] if self.C_opt is not None else 0
+        n_a = self.C_artifacts.shape[-1] if self.C_artifacts is not None else 0
+        n_d = self._C_DOAS.shape[-1] if self._C_DOAS is not None else 0
+
+        C_full = np.concatenate(arrays, axis=-1)
 
         w = self.get_weights_lstsq()
 
@@ -767,12 +801,16 @@ class BaseKineticModel(KineticModel):
         ST_full, self.matrix_opt = glstsq(C_full, self.dataset.matrix_fac, self.ridge_alpha, w)
 
         if self.include_artifacts:
-            n = self.C_artifacts.shape[-1]
-            self.ST_artifacts = ST_full[:n]
-            if self.n_species > 0:
-                self.ST_opt = ST_full[n:]
-        else:
-            self.ST_opt = ST_full
+            self.ST_artifacts = ST_full[n_s:n_s + n_a]
+
+        if n_s > 0:
+            self.ST_opt = ST_full[:n_s]
+
+        if n_d > 0:
+            A = ST_full[n_s + n_a::2]  # cos
+            B = ST_full[1 + n_s + n_a::2]  # sin
+            self.ST_DOAS = np.sqrt(A*A + B*B)
+            self.DOAS_phases = np.unwrap(np.arctan2(-B, A))
 
         if self._calculate_EAS:
             # calculation of EAS profiles and spectra
@@ -991,7 +1029,10 @@ class BaseKineticModel(KineticModel):
                 case "eas":
                     kws.update(dict(title="EAS", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("eas", kws)  # change to data-specific kwargs
-                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_EAS.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_EAS.T, 
+                    Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, 
+                    DOAS=self.ST_DOAS.T if self.ST_DOAS is not None else None,
+                    **kws)
                 case "eas-norm":
                     kws.update(dict(title="EAS-norm", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("eas-norm", kws)  # change to data-specific kwargs
@@ -999,11 +1040,17 @@ class BaseKineticModel(KineticModel):
                 case "das":
                     kws.update(dict(title="DAS", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("das", kws)  # change to data-specific kwargs
-                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T,
+                     Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None,
+                     DOAS=self.ST_DOAS.T if self.ST_DOAS is not None else None,
+                     **kws)
                 case "sas":
                     kws.update(dict(title="SAS", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("sas", kws)  # change to data-specific kwargs
-                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None, **kws)
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T, 
+                    Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None,
+                    DOAS=self.ST_DOAS.T if self.ST_DOAS is not None else None,
+                    **kws)
                 case "das-norm":
                     kws.update(dict(title="DAS-norm", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("das-norm", kws)  # change to data-specific kwargs
@@ -1037,6 +1084,7 @@ class BaseKineticModel(KineticModel):
 
             if add_figure_labels:
                 ax.text(-0.05, 1.05, f_labels[i + fig_labels_offset], color='black', transform=ax.transAxes,
+                  
                         fontstyle='normal', fontweight='bold', fontsize=figure_labels_font_size)        
         # plt.tight_layout()
 

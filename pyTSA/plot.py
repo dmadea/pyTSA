@@ -1055,7 +1055,7 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
 #         ax.yaxis.set_major_formatter(y_major_formatter)
 
 
-def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1,
+def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, DOAS: np.ndarray | None = None, labels=None, hatched_wls=(None, None), z_unit=dA_unit, D_mul_factor=1,
                  legend_spacing=0.2, legend_ncol=1, colors=None, lw=1.5, show_legend=True, y_lim=(None, None), legend_loc=None,
                  area_plot_datas: list[tuple] = [], area_plot_colors=('violet', 'blue', 'green'), 
                  title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None, inf_as_last_compartment=False,
@@ -1063,18 +1063,21 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
     
     _SADS = SADS.copy() * D_mul_factor
     _art = Artifacts.copy() * D_mul_factor if Artifacts is not None else None
+    _doas = DOAS.copy() * D_mul_factor if DOAS is not None else None
     if hatched_wls[0] is not None:
         cut_idxs = fi(wls, hatched_wls)
         _SADS[cut_idxs[0]:cut_idxs[1]] = np.nan
         if _art is not None:
             _art[cut_idxs[0]:cut_idxs[1]] = np.nan
+        if _doas is not None:
+            _doas[cut_idxs[0]:cut_idxs[1]] = np.nan
 
 
     w_lim = (wls[0] if w_lim[0] is None else w_lim[0], wls[-1] if w_lim[1] is None else w_lim[1])
     w1, w2 = fi(wls, w_lim)
     _SADS = _SADS[w1:w2 + 1]
     _art = _art[w1:w2 + 1] if _art is not None else None
-
+    _doas = _doas[w1:w2 + 1] if _doas is not None else None
     wls = wls[w1:w2 + 1]
 
     # fctr = 1.1
@@ -1107,6 +1110,11 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, labels=None
         colorsArt = ['black', 'grey', 'navy', 'pink']
         for i in range(_art.shape[1]):
             ax.plot(wls, _art[:, i], color=colorsArt[i], lw=1, ls='--', label=f"Artifact {i + 1}")
+
+    if DOAS is not None:
+        colorsDoas = ['lime', 'teal', 'indigo', 'violet', 'red', 'orange', 'yellow', 'green', 'blue', 'purple']
+        for i in range(_doas.shape[1]):
+            ax.plot(wls, _doas[:, i], color=colorsDoas[i], lw=1, ls='dotted', label=f"DOAS {i + 1}")
 
     zorder = 0
     for tup, color in zip(area_plot_datas, area_plot_colors):
