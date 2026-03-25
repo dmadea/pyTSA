@@ -99,7 +99,7 @@ class FirstOrderModel(BaseKineticModel):
         C: np.ndarray = fold_exp_vec(tt, k, width_r)
 
         if self.include_artifacts:
-            C_artifacts = self._simulate_artifacts(self.dataset.times, mu, width)
+            C_artifacts = self._simulate_artifacts()
             C = np.concatenate((C_artifacts, C), axis=-1)
 
         w = self.get_weights_lstsq()
@@ -129,8 +129,6 @@ class FirstOrderModel(BaseKineticModel):
         times = times if times is not None else self.dataset.times
 
         ks = self.get_rates(params)
-        mu = self.get_mu(params)
-        width = self.get_tau(params)  # fwhm or width
         b = self.get_b_array(params)
 
         if self.n_species == 0:
@@ -138,7 +136,13 @@ class FirstOrderModel(BaseKineticModel):
         
         # # simulation for DADS only
         f = self.get_exp_function()
-        self.C_opt: np.ndarray = exp_dist(f, times, ks, width, b, mu)
+        C_total: np.ndarray | None = None
+        for amp, width, mu in self._iter_irf_components(params, skip_zero_amp=False):
+            C_irf = exp_dist(f, times, ks, width, b, mu)
+            C_total = amp * C_irf if C_total is None else (C_total + amp * C_irf)
+
+        # n_irfs >= 1, so this should never be None.
+        self.C_opt = C_total if C_total is not None else exp_dist(f, times, ks, 0, b, self.get_mu(params))
 
 
 class FirstOrderLPLModel(FirstOrderModel):

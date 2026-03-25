@@ -45,12 +45,17 @@ class TargetFirstOrderModel(FirstOrderModel):
             return
         
         j, K = self.target_params(params)
-        mu = self.get_mu(params)
-        width = self.get_tau(params)
         b = None #self.get_b_array()
 
         f = self.get_exp_function()
-        self.C_opt_full = simulate_target_model(f, K, j, t, width, b, mu)
+
+        # Apply multi-IRF mixture: each C profile is a weighted sum over per-IRF simulations.
+        C_sum = None
+        for amp, width_irf, mu_irf in self._iter_irf_components(params, skip_zero_amp=False):
+            C_irf = simulate_target_model(f, K, j, t, width_irf, b, mu_irf)
+            C_sum = amp * C_irf if C_sum is None else (C_sum + amp * C_irf)
+
+        self.C_opt_full = C_sum
 
         if len(self.used_compartments) == 0:
             raise ValueError("At least one compartment has to be assigned to C_opt")

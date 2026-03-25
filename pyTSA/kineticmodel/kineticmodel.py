@@ -9,11 +9,11 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 from lmfit import Parameters, Minimizer, conf_interval, conf_interval2d, report_ci
 from lmfit.minimizer import MinimizerResult
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator
 
 from abc import abstractmethod
 
-from ..mathfuncs import chirp_correction, fi, fit_polynomial_coefs, fit_sum_exp, gaussian, get_EAS_transform, glstsq, fold_exp_vec, exp_dist
+from ..mathfuncs import chirp_correction, fi, fit_polynomial_coefs, fit_sum_exp, gaussian, get_EAS_transform, glstsq, fold_exp_vec, square_conv_exp_vec, exp_dist
 from ..plot import plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_time_traces_onefig_ax, plot_traces_onefig_ax, set_main_axis, COLORS
 if TYPE_CHECKING:
     from ..dataset import Dataset
@@ -468,6 +468,7 @@ class BaseKineticModel(KineticModel):
         self.artifact_order = 2
 
         self.n_DOAS = 0  # number of DOAS species (Damped oscillation associated spectra)
+        self.n_irfs = 1  # number of IRFs (cannot be < 1)
 
         self.include_variable_fwhm = False
         self.variable_fwhm_type = 'poly'  # this cannot be changed
@@ -543,14 +544,21 @@ class BaseKineticModel(KineticModel):
 
         if self.include_irf:
             if self.irf_type == self.irf_types[0]:
-                params.add('FWHM', value=0.15, min=0, max=np.inf, vary=True)  # full-width at half maxium of gaussian IRF
+                for i in range(self.n_irfs):
+                    params.add(f'irf_FWHM_{i+1}', value=0.15, min=0, max=np.inf, vary=True)  # full-width at half maxium of gaussian IRF
 
                 if self.include_variable_fwhm:
                     for i in range(self.num_of_poly_varfwhm_params):
                         params.add(f'var_FWHM_p_{i+1}', value=0.01, min=-np.inf, max=np.inf, vary=True)   # wavelength-dependent FWHM
 
             elif self.irf_type == self.irf_types[1]: # square wave
-                params.add('SQW', value=0.15, min=0, max=np.inf, vary=True)  # width of the square wave
+                for i in range(self.n_irfs):
+                    params.add(f'irf_SQW_{i+1}', value=0.15, min=0, max=np.inf, vary=True)  # width of the square wave
+
+            for i in range(self.n_irfs - 1):
+                params.add(f'irf_amp_{i+2}', value=0.3, min=0, max=1, vary=True)  # amplitude of the next IRF
+                params.add(f'irf_mu_{i+2}', value=0, min=-np.inf, max=np.inf, vary=True)  # time shift of the next IRF
+
 
         if self.n_DOAS > 0:
             for i in range(self.n_DOAS):
@@ -567,9 +575,105 @@ class BaseKineticModel(KineticModel):
             return 0
         
         if self.irf_type == self.irf_types[0]:
-            return params['FWHM'].value
+            return params['irf_FWHM_1'].value
         elif self.irf_type == self.irf_types[1]:
-            return params['SQW'].value 
+            return params['irf_SQW_1'].value
+
+    def get_irf_amps(self, params: Parameters | None = None) -> np.ndarray:
+        """
+        IRF mixture amplitudes per IRF index.
+
+        The first ("base") IRF amplitude is derived so that
+        sum(amps) == 1.
+        """
+        params = self.params if params is None else params
+
+        amps = np.zeros(self.n_irfs, dtype=np.float64)
+        if not self.include_irf:
+            amps[0] = 1.0
+            return amps
+
+        other_amp_sum = 0.0
+        for irf_num in range(2, self.n_irfs + 1):
+            other_amp_sum += params[f'irf_amp_{irf_num}'].value
+
+        amps[0] = 1.0 - other_amp_sum
+        for irf_num in range(2, self.n_irfs + 1):
+            amps[irf_num - 1] = params[f'irf_amp_{irf_num}'].value
+
+        return amps
+
+    def get_irf_mu_shifts(self, params: Parameters | None = None) -> np.ndarray:
+        """IRF mixture time shifts (0 for the base IRF)."""
+        params = self.params if params is None else params
+
+        mu_shifts = np.zeros(self.n_irfs, dtype=np.float64)
+        if not self.include_irf:
+            return mu_shifts
+
+        for irf_num in range(2, self.n_irfs + 1):
+            mu_shifts[irf_num - 1] = params[f'irf_mu_{irf_num}'].value
+        return mu_shifts
+
+    def get_tau_for_irf(self, irf_index: int, params: Parameters | None = None) -> np.ndarray | float:
+        """Return the IRF width (FWHM) curve for a specific IRF in the mixture."""
+        params = self.params if params is None else params
+
+        if not self.include_irf:
+            return 0
+
+        if irf_index < 0 or irf_index >= self.n_irfs:
+            raise IndexError(f"irf_index out of range: {irf_index} (n_irfs={self.n_irfs})")
+
+        if self.irf_type == self.irf_types[0]:
+            # Gaussian IRF: wavelength-dependent width via variable-FWHM polynomial (if enabled).
+            base_width = params[f'irf_FWHM_{irf_index + 1}'].value
+        elif self.irf_type == self.irf_types[1]:
+            # Square IRF: a single width parameter, shared by all IRFs.
+            base_width = params[f'irf_SQW_{irf_index + 1}'].value
+        else:
+            base_width = 0
+
+        if base_width == 0 or self.irf_type != self.irf_types[0]:
+            return base_width
+
+        if not self.include_variable_fwhm:
+            return base_width
+
+        tau = np.ones(self.dataset.wavelengths.shape[0], dtype=np.float64) * base_width
+
+        x = (self.dataset.wavelengths - self.central_wave) / 100
+        partaus = [params[f'var_FWHM_p_{i + 1}'] for i in range(self.num_of_poly_varfwhm_params)]
+        for i in range(self.num_of_poly_varfwhm_params):
+            tau += partaus[i] * x ** (i + 1)
+
+        return tau
+
+    def _iter_irf_components(
+        self,
+        params: Parameters | None = None,
+        *,
+        skip_zero_amp: bool = True,
+    ) -> Iterator[tuple[float, np.ndarray | float, np.ndarray | float]]:
+        """
+        Yield IRF mixture components as (amp, width, mu).
+
+        - `width` is the IRF FWHM (or square width) as a scalar or wavelength array.
+        - `mu` is the chirp time-zero curve shifted by the IRF's time shift.
+        """
+        params = self.params if params is None else params
+
+        amps = self.get_irf_amps(params)
+        mu_base = self.get_mu(params)
+        mu_shifts = self.get_irf_mu_shifts(params)
+
+        for irf_idx in range(self.n_irfs):
+            amp = float(amps[irf_idx])
+            if skip_zero_amp and np.isclose(amp, 0.0):
+                continue
+            width = self.get_tau_for_irf(irf_idx, params)
+            mu = mu_base + mu_shifts[irf_idx]
+            yield amp, width, mu
     
     
     def get_labels(self, t_unit='ps') -> list[str]:
@@ -612,25 +716,8 @@ class BaseKineticModel(KineticModel):
     
 
     def get_tau(self, params: Parameters | None = None) -> np.ndarray | float:
-        """Return the curve that defines FWHM with respect to wavelength."""
-
-        params = self.params if params is None else params
-        
-        width = self.get_irf_width(params)
-        if width == 0 or self.irf_type != self.irf_types[0]:
-            return width
-        
-        if not self.include_variable_fwhm or (self.include_variable_fwhm and self.irf_type == self.irf_types[1]):  # if square wave, not wavelength-dependency
-            return width
-        
-        tau = np.ones(self.dataset.wavelengths.shape[0], dtype=np.float64) * width
-
-        partaus = [params[f'var_FWHM_p_{i+1}'] for i in range(self.num_of_poly_varfwhm_params)]
-
-        for i in range(self.num_of_poly_varfwhm_params):
-            tau += partaus[i] * ((self.dataset.wavelengths - self.central_wave) / 100) ** (i + 1)
-
-        return tau
+        """Return the curve that defines (base) IRF FWHM with respect to wavelength."""
+        return self.get_tau_for_irf(0, params)
 
     def plot_tau(self):
         if not self.include_irf and not self.include_variable_fwhm:
@@ -722,46 +809,98 @@ class BaseKineticModel(KineticModel):
                 self.params[f"t0_p_{i + 1}"].value = coefs[i+1]
 
 
-    def _simulate_artifacts(self, t: np.ndarray, mu: float | np.ndarray, fwhm: float | np.ndarray, zero_coh_range=None) -> np.ndarray:
+    def _simulate_artifacts(self, params: Parameters | None = None, zero_coh_range=None) -> np.ndarray:
+        """
+        Simulates coherent artifact basis profiles as derivatives of a Gaussian IRF.
+
+        If multiple IRFs are enabled, the final artifact profile is the weighted sum
+        over the IRF mixture (weighted by `irf_amp_*`, with base IRF amplitude derived
+        so that the total mixture amplitude sums to 1).
+        """
+        params = self.params if params is None else params
 
         order = self.artifact_order
+        t = np.atleast_1d(self.dataset.times)
 
-        t = np.atleast_1d(t)
-        fwhm = np.atleast_1d(fwhm)
-        mu = np.atleast_1d(mu)
+        y_total: np.ndarray | None = None
 
-        tensor: bool = mu.shape[0] > 1 or fwhm.shape[0] > 1
+        for amp, fwhm, mu in self._iter_irf_components(params, skip_zero_amp=False):
 
-        if tensor:
-            fwhm = fwhm.reshape(-1, 1, 1)
-            tt = t.reshape(1, -1, 1) - mu.reshape(-1, 1, 1)
-        else:
-            fwhm = fwhm[0]
-            tt = (t - mu[0]).reshape(-1, 1)
+            fwhm = np.atleast_1d(fwhm)
+            mu = np.atleast_1d(mu)
 
-        s = fwhm / (2 * np.sqrt(2 * np.log(2)))  # sigma
+            tensor: bool = mu.shape[0] > 1 or fwhm.shape[0] > 1
 
-        y: np.ndarray = gaussian(tt, s)
+            if tensor:
+                fwhm_t = fwhm.reshape(-1, 1, 1)
+                tt = t.reshape(1, -1, 1) - mu.reshape(-1, 1, 1)
+                s = fwhm_t / (2 * np.sqrt(2 * np.log(2)))  # sigma
+            else:
+                s = fwhm[0] / (2 * np.sqrt(2 * np.log(2)))  # sigma
+                tt = (t - mu[0]).reshape(-1, 1)
 
-        y = np.tile(y, (1, 1, order + 1)) if tensor else np.tile(y, (1, order + 1))
+            y: np.ndarray = gaussian(tt, s)
+            y = np.tile(y, (1, 1, order + 1)) if tensor else np.tile(y, (1, order + 1))
 
-        if order > 0:  # first derivative
-            y[..., 1] *= -tt.squeeze()
+            if order > 0:  # first derivative
+                y[..., 1] *= -tt.squeeze()
 
-        if order > 1:  # second derivative
-            y[..., 2] *= (tt * tt - s * s).squeeze()
+            if order > 1:  # second derivative
+                y[..., 2] *= (tt * tt - s * s).squeeze()
 
-        if order > 2:  # third derivative
-            y[..., 3] *= (-tt * (tt * tt - 3 * s * s)).squeeze()
+            if order > 2:  # third derivative
+                y[..., 3] *= (-tt * (tt * tt - 3 * s * s)).squeeze()
 
-        if order > 3:  # fourth derivative
-            y[..., 4] *= (tt ** 4 - 6 * tt * tt * s * s + 3 * s ** 4).squeeze()
+            if order > 3:  # fourth derivative
+                y[..., 4] *= (tt ** 4 - 6 * tt * tt * s * s + 3 * s ** 4).squeeze()
 
-        y_max = np.max(y, axis=-2, keepdims=True)  # find maxima over time axis
-        y_max[np.isclose(y_max, 0)] = 1  # values close to zero force to 1 to not divide by zero
-        y /= y_max
+            y_max = np.max(y, axis=-2, keepdims=True)  # find maxima over time axis
+            y_max[np.isclose(y_max, 0)] = 1  # values close to zero force to 1 to not divide by zero
+            y /= y_max
 
-        return y
+            y_total = y * amp if y_total is None else (y_total + amp * y)
+
+        # if y_total is None:
+        #     # Degenerate case: mixture amplitudes are ~0.
+        #     # Fall back to the base IRF (amp=1) to infer the correct shape.
+        #     fwhm = self.get_tau_for_irf(0, params)
+        #     mu = mu_base + mu_shifts[0]
+
+        #     fwhm = np.atleast_1d(fwhm)
+        #     mu = np.atleast_1d(mu)
+
+        #     tensor: bool = mu.shape[0] > 1 or fwhm.shape[0] > 1
+
+        #     if tensor:
+        #         fwhm_t = fwhm.reshape(-1, 1, 1)
+        #         tt = t.reshape(1, -1, 1) - mu.reshape(-1, 1, 1)
+        #         s = fwhm_t / (2 * np.sqrt(2 * np.log(2)))  # sigma
+        #     else:
+        #         s = fwhm[0] / (2 * np.sqrt(2 * np.log(2)))  # sigma
+        #         tt = (t - mu[0]).reshape(-1, 1)
+
+        #     y: np.ndarray = gaussian(tt, s)
+        #     y = np.tile(y, (1, 1, order + 1)) if tensor else np.tile(y, (1, order + 1))
+
+        #     if order > 0:  # first derivative
+        #         y[..., 1] *= -tt.squeeze()
+
+        #     if order > 1:  # second derivative
+        #         y[..., 2] *= (tt * tt - s * s).squeeze()
+
+        #     if order > 2:  # third derivative
+        #         y[..., 3] *= (-tt * (tt * tt - 3 * s * s)).squeeze()
+
+        #     if order > 3:  # fourth derivative
+        #         y[..., 4] *= (tt ** 4 - 6 * tt * tt * s * s + 3 * s ** 4).squeeze()
+
+        #     y_max = np.max(y, axis=-2, keepdims=True)  # find maxima over time axis
+        #     y_max[np.isclose(y_max, 0)] = 1  # values close to zero force to 1 to not divide by zero
+        #     y /= y_max
+
+        #     return y
+
+        return y_total
 
         # if zero_coh_range is not None:
         #     self.C_COH *= zero_coh_range[:, None, None]
@@ -780,7 +919,12 @@ class BaseKineticModel(KineticModel):
 
         ks = 1 / np.array([params[f'os_tau_{i+1}'].value for i in range(self.n_DOAS)])
 
-        _C = exp_dist(fold_exp_vec, self.dataset.times, ks, self.get_tau(params), None, self.get_mu(params))
+        f_exp = fold_exp_vec if self.irf_type == self.irf_types[0] else square_conv_exp_vec
+
+        _C = None
+        for amp, width, mu in self._iter_irf_components(params, skip_zero_amp=False):
+            _C_irf = exp_dist(f_exp, self.dataset.times, ks, width, None, mu)
+            _C = _C_irf * amp if _C is None else (_C + amp * _C_irf)
 
         self._C_DOAS = np.empty(_C.shape[:-1] + (self.n_DOAS * 2,))
 
@@ -798,7 +942,7 @@ class BaseKineticModel(KineticModel):
         self.ST_DOAS = None
 
         if self.include_artifacts:
-            self.C_artifacts = self._simulate_artifacts(self.dataset.times, self.get_mu(params), self.get_tau(params))
+            self.C_artifacts = self._simulate_artifacts(params=params)
 
         self.simulate_C_DOAS(params)
 

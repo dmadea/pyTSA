@@ -20,7 +20,7 @@ from matplotlib.ticker import AutoLocator, SymmetricalLogLocator, ScalarFormatte
 
 WL_LABEL = 'Wavelength / nm'
 WN_LABEL = "Wavenumber / $10^{4}$ cm$^{-1}$"
-CONC_LABEL = 'Concentration / $\mu$mol L$^{-1}$'
+CONC_LABEL = 'Concentration / $\\mu$mol L$^{-1}$'
 
 plt.rcParams.update({'font.size': 12})
 
@@ -42,7 +42,7 @@ MINOR_TICK_DIRECTION = 'in'  # in, out or inout
 
 X_SIZE, Y_SIZE = 5, 4.5
 # dA_unit = '$\Delta A$ / $10^{-3}$'
-dA_unit = '$\Delta A$'
+dA_unit = '$\\Delta A$'
 
 
 # COLORS = ['blue', 'red', 'green', 'orange', 'black', 'yellow']
