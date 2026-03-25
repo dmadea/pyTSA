@@ -1061,21 +1061,22 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, DOAS: np.nd
                  title="", x_minor_locator=AutoMinorLocator(), x_major_locator=None, inf_as_last_compartment=False,
                  area_plot_alpha=0.2, w_lim=(None, None), **kwargs):
     
-    _SADS = SADS.copy() * D_mul_factor
+    _SADS = SADS.copy() * D_mul_factor if SADS is not None else None
     _art = Artifacts.copy() * D_mul_factor if Artifacts is not None else None
     _doas = DOAS.copy() * D_mul_factor if DOAS is not None else None
     if hatched_wls[0] is not None:
         cut_idxs = fi(wls, hatched_wls)
-        _SADS[cut_idxs[0]:cut_idxs[1]] = np.nan
+        if _SADS is not None:
+            _SADS[cut_idxs[0]:cut_idxs[1]] = np.nan
         if _art is not None:
             _art[cut_idxs[0]:cut_idxs[1]] = np.nan
-        if _doas is not None:
+        if _doas is not None and DOAS is not None:
             _doas[cut_idxs[0]:cut_idxs[1]] = np.nan
 
 
     w_lim = (wls[0] if w_lim[0] is None else w_lim[0], wls[-1] if w_lim[1] is None else w_lim[1])
     w1, w2 = fi(wls, w_lim)
-    _SADS = _SADS[w1:w2 + 1]
+    _SADS = _SADS[w1:w2 + 1] if _SADS is not None else None
     _art = _art[w1:w2 + 1] if _art is not None else None
     _doas = _doas[w1:w2 + 1] if _doas is not None else None
     wls = wls[w1:w2 + 1]
@@ -1087,24 +1088,25 @@ def plot_SADS_ax(ax, wls, SADS, Artifacts: np.ndarray | None = None, DOAS: np.nd
                   x_minor_locator=x_minor_locator, x_major_locator=x_major_locator, y_minor_locator=None)
     # _ = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
 
-    cmap = plt.get_cmap('gist_rainbow', _SADS.shape[1] / 0.75)
 
     ax.axhline(0, ls='--', color='black', lw=1)
     labels = list('ABCDEFGHIJ') if labels is None else labels
 
-    for i in range(_SADS.shape[1]):
-        if colors is None:
-            color = np.asarray(c.to_rgb(cmap(i))) * 0.9
-            color[color > 1] = 1
-        else:
-            color = colors[i]
+    if _SADS is not None:
+        cmap = plt.get_cmap('gist_rainbow', _SADS.shape[1] / 0.75)
+        for i in range(_SADS.shape[1]):
+            if colors is None:
+                color = np.asarray(c.to_rgb(cmap(i))) * 0.9
+                color[color > 1] = 1
+            else:
+                color = colors[i]
 
-        if i == _SADS.shape[1] - 1 and inf_as_last_compartment:
-            label = "inf"
-        else:
-            label = labels[i]
+            if i == _SADS.shape[1] - 1 and inf_as_last_compartment:
+                label = "inf"
+            else:
+                label = labels[i]
 
-        ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=label)
+            ax.plot(wls, _SADS[:, i], color=color, lw=lw, label=label)
 
     if Artifacts is not None:
         colorsArt = ['black', 'grey', 'navy', 'pink']

@@ -641,6 +641,26 @@ class BaseKineticModel(KineticModel):
         plt.ylabel('IRF_FWHM / ps')
         plt.show()
 
+    def plot_DOAS(self):
+        if self.ST_DOAS is None:
+            return
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.5))
+
+        set_main_axis(ax1, y_label='$\\Delta A$ (OD)', x_label='Wavelength (nm)')
+        set_main_axis(ax2, y_label='Phase', x_label='Wavelength (nm)')
+
+        ax1.plot(self.dataset.wavelengths, self.ST_DOAS.T)
+        ax2.plot(self.dataset.wavelengths, self.DOAS_phases.T)
+
+        ax1.legend(labels=[f'DOAS {i+1}' for i in range(self.n_DOAS)], frameon=False)
+        ax2.legend(labels=[f'DOAS {i+1}' for i in range(self.n_DOAS)], frameon=False)
+
+        plt.tight_layout()
+        plt.show()
+
+
+
     def get_mu(self, params: Parameters | None = None) -> np.ndarray | float:
         """Return the curve that defines chirp (time zero) with respect to wavelength."""
 
@@ -812,7 +832,7 @@ class BaseKineticModel(KineticModel):
             self.ST_DOAS = np.sqrt(A*A + B*B)
             self.DOAS_phases = np.unwrap(np.arctan2(-B, A))
 
-        if self._calculate_EAS:
+        if self._calculate_EAS and self.C_opt is not None:
             # calculation of EAS profiles and spectra
             ks = self.get_rates(params)
             A = get_EAS_transform(ks)
@@ -1040,7 +1060,7 @@ class BaseKineticModel(KineticModel):
                 case "das":
                     kws.update(dict(title="DAS", colors=COLORS, labels=self.get_labels(t_unit)))
                     update_kwargs("das", kws)  # change to data-specific kwargs
-                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T,
+                    plot_SADS_ax(ax, self.dataset.wavelengths, self.ST_opt.T if self.ST_opt is not None else None,
                      Artifacts=self.ST_artifacts.T if self.ST_artifacts is not None else None,
                      DOAS=self.ST_DOAS.T if self.ST_DOAS is not None else None,
                      **kws)
