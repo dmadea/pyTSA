@@ -486,28 +486,66 @@ class BaseKineticModel(KineticModel):
     # chirp_types: ClassVar[tuple[ChirpType, ...]] = tuple(ChirpType)
     # irf_types: ClassVar[tuple[IrfType, ...]] = tuple(IrfType)
 
+    @property
+    def chirp_type(self) -> ChirpType:
+        return self._chirp_type
+
+    @chirp_type.setter
+    def chirp_type(self, value: ChirpType | str):
+        if isinstance(value, str):
+            value = ChirpType[value.upper()]
+        elif not isinstance(value, ChirpType):
+            raise TypeError(f"chirp_type must be ChirpType, str, got {type(value).__name__}")
+
+        self._chirp_type = value
+
+    @property
+    def irf_type(self) -> IrfType:
+        return self._irf_type
+
+    @irf_type.setter
+    def irf_type(self, value: IrfType | str):
+        if isinstance(value, str):
+            value = IrfType[value.upper()]
+        elif not isinstance(value, IrfType):
+            raise TypeError(f"irf_type must be IrfType, str, got {type(value).__name__}")
+
+        self._irf_type = value
+
+
+    @property
+    def variable_fwhm_type(self) -> VariableFwhmType:
+        return self._variable_fwhm_type
+
+    @variable_fwhm_type.setter
+    def variable_fwhm_type(self, value: VariableFwhmType | str):
+        if isinstance(value, str):
+            value = VariableFwhmType[value.upper()]
+        elif not isinstance(value, VariableFwhmType):
+            raise TypeError(f"variable_fwhm_type must be VariableFwhmType, str, got {type(value).__name__}")
+
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
 
         # Default chirp-related settings
         self.central_wave: float = 500
         self.include_chirp: bool = True
-        self.chirp_type: ChirpType = ChirpType.EXP
+        self._chirp_type: ChirpType = ChirpType.EXP
         self.num_of_poly_chirp_params: int = 5
         self.num_of_exp_chirp_params: int = 2
 
         # Default IRF / variable-FWHM settings
 
         self.include_irf: bool = False
-        self.irf_type: IrfType = IrfType.GAUSSIAN
+        self._irf_type: IrfType = IrfType.GAUSSIAN
         self.n_irfs: int = 1
         self.include_variable_fwhm: bool = False
-        self.variable_fwhm_type: VariableFwhmType = VariableFwhmType.POLY
+        self._variable_fwhm_type: VariableFwhmType = VariableFwhmType.POLY
         self.num_of_poly_varfwhm_params: int = 3
 
         # Default coherent-artifact settings
 
         self.include_artifacts: bool = False
-        self.artifact_order: int = 2
+        self.artifact_order: int = 0
 
         # Default DOAS settings
 
