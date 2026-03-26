@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..dataset import Dataset
 
-from .kineticmodel import BaseKineticModel
+from .kineticmodel import BaseKineticModel, IrfType
 from ..mathfuncs import fold_exp_vec, glstsq, square_conv_exp_vec, simulate_target_model, LPL_decay, exp_dist, reshape_arrays
 
 from lmfit import Parameters
@@ -99,8 +99,8 @@ class FirstOrderModel(BaseKineticModel):
         C: np.ndarray = fold_exp_vec(tt, k, width_r)
 
         if self.include_artifacts:
-            C_artifacts = self._simulate_artifacts()
-            C = np.concatenate((C_artifacts, C), axis=-1)
+            self.simulate_artifacts()
+            C = np.concatenate((self.C_artifacts, C), axis=-1)
 
         w = self.get_weights_lstsq()
         coefs, D_fit = glstsq(C, self.dataset.matrix_fac, ridge_alpha, w)
@@ -116,7 +116,7 @@ class FirstOrderModel(BaseKineticModel):
         return coefs, D_fit
 
     def get_exp_function(self) -> Callable[[np.ndarray | float, np.ndarray | float, np.ndarray | float], np.ndarray | float]:
-        return fold_exp_vec if self.irf_type == self.irf_types[0] else square_conv_exp_vec
+        return fold_exp_vec if self.irf_type is IrfType.GAUSSIAN else square_conv_exp_vec
 
 
     def calculate_C_profiles(self, params: Parameters | None = None, times: np.ndarray | None = None):

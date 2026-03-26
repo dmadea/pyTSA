@@ -4,14 +4,15 @@ import os
 
 # from functools import partial
 
-from matplotlib.ticker import AutoMinorLocator
+from matplotlib.ticker import AutoMinorLocator, FuncFormatter
 import matplotlib.gridspec as gridspec
 import numpy as np
 from lmfit import Parameters, Minimizer, conf_interval, conf_interval2d, report_ci
 from lmfit.minimizer import MinimizerResult
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, ClassVar, Iterator
 
 from abc import abstractmethod
+from enum import Enum, auto
 
 from ..mathfuncs import chirp_correction, fi, fit_polynomial_coefs, fit_sum_exp, gaussian, get_EAS_transform, glstsq, fold_exp_vec, square_conv_exp_vec, exp_dist
 from ..plot import plot_SADS_ax, plot_data_ax, plot_fitresiduals_axes, plot_spectra_ax, plot_time_traces_onefig_ax, plot_traces_onefig_ax, set_main_axis, COLORS
@@ -25,9 +26,38 @@ from matplotlib import cm
 # import glob, os
 import scipy.constants as sc
 from copy import deepcopy
+from dataclasses import dataclass, fields
 
 
 from numpy.linalg import svd
+
+
+class ChirpType(Enum):
+    POLY = auto()
+    EXP = auto()
+
+
+class IrfType(Enum):
+    GAUSSIAN = auto()
+    SQUARE = auto()
+
+
+class VariableFwhmType(Enum):
+    POLY = auto()
+
+
+class WeightType(Enum):
+    NO_WEIGHTING = auto()
+    PROP_THRESH = auto()
+    PROP_NOISE_FLOOR = auto()
+
+
+def _coerce_weight_type(value: WeightType | str | None) -> WeightType | None:
+    if value is None or isinstance(value, WeightType):
+        return value
+    if isinstance(value, str):
+        return WeightType[value]
+    raise TypeError(f"weight_type must be WeightType, str, or None, got {type(value).__name__}")
 
 
 def save_matrix(dim0: np.iterable, dim1: np.iterable, matrix: np.ndarray, fname='output.txt', delimiter='\t', encoding='utf8', transpose=False):
@@ -95,6 +125,8 @@ class KineticModel(object):
     # description = "..."
     # _class = '-class-'
 
+    weight_types: ClassVar[tuple[WeightType, ...]] = tuple(WeightType)
+
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
     
         self.dataset: Dataset = dataset
@@ -114,14 +146,12 @@ class KineticModel(object):
         # fitter arguments to the underlying fitting algorithm
         self.fitter_kwds = dict(ftol=1e-10, xtol=1e-10, gtol=1e-10, loss='linear', verbose=2, jac='3-point')
 
-        # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum, only works for weight_type == 'prop_tresh'
+        # if set, the std will be calculated for each time point in this range and used for weighting of each spectrum
         self.noise_floor_estimation_from_data: bool = False
         self.noise_range: tuple[float, float] = []   # wavelengths range from which the noise will be taken
 
-        # prop = proportional weighting with noise floor, w_ij = 1 / (k * abs(D_ij) ** Exp + noisefloor_i)
-        # log = logarithmic weighting of the data, w_ij = abs(D_ij) > log_tresh ? 1 / ln(abs(D_ij)) : 0
-        self.weight_types = ['no_weighting', 'prop_thresh', 'prop_noise_floor']  
-        self.weight_type: str | None = None
+        # PROP_NOISE_FLOOR: w from variance (k * |D|^Exp)^2 + noise_floor^2; PROP_THRESH: w_ij = |D_ij| > thresh ? 1/|D_ij| : 0
+        self.weight_type: WeightType | None = None
         self.calc_weights_from_fit_matrix = True
 
         # Individual weighting parameters (previously in weighting_params dictionary)
@@ -173,6 +203,8 @@ class KineticModel(object):
         pass
 
     def update_options(self, **kwargs):
+        if "weight_type" in kwargs:
+            kwargs = {**kwargs, "weight_type": _coerce_weight_type(kwargs["weight_type"])}
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -208,7 +240,7 @@ class KineticModel(object):
     def get_weights(self):
         weights = np.ones_like(self.dataset.matrix_fac)
 
-        if self.weight_type == 'no_weighting':
+        if self.weight_type is WeightType.NO_WEIGHTING:
             return weights
 
         if self.calc_weights_from_fit_matrix:
@@ -219,7 +251,7 @@ class KineticModel(object):
         mat = np.abs(mat)
 
         # https://gregorygundersen.com/blog/2022/08/09/weighted-ols/
-        if self.weight_type == self.weight_types[2]:  # prop_noise_floor
+        if self.weight_type is WeightType.PROP_NOISE_FLOOR:
             self._calculate_noise_floor()
             
             noise_floor = self.weighting_noise_floor
@@ -232,7 +264,7 @@ class KineticModel(object):
             weights *= 1 / variance
 
 
-        elif self.weight_type == self.weight_types[1]:  # prop_thresh
+        elif self.weight_type is WeightType.PROP_THRESH:
 
             tresh = self.weighting_thresh
 
@@ -451,28 +483,35 @@ class BaseKineticModel(KineticModel):
 
     name = "Base kinetic model"
 
+    # chirp_types: ClassVar[tuple[ChirpType, ...]] = tuple(ChirpType)
+    # irf_types: ClassVar[tuple[IrfType, ...]] = tuple(IrfType)
+
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
-        # more settings
-        self.central_wave = 500  # lambda_c, wavelength at central wave, it is necessary for calculation of chirp parameters
-        self.include_chirp: bool = True  # if True, model will be fitted with more complex tensor method
-        self.chirp_types = ['poly', 'exp']
-        self.chirp_type = self.chirp_types[1]  # poly, exp chirp type
-        self.num_of_poly_chirp_params = 5
-        self.num_of_exp_chirp_params = 2
 
-        self.include_irf = False   # if True, irf will be used to simulate the exponentials
-        self.irf_types = ['Gaussian', 'Square']
-        self.irf_type = self.irf_types[0]
+        # Default chirp-related settings
+        self.central_wave: float = 500
+        self.include_chirp: bool = True
+        self.chirp_type: ChirpType = ChirpType.EXP
+        self.num_of_poly_chirp_params: int = 5
+        self.num_of_exp_chirp_params: int = 2
 
-        self.include_artifacts = False
-        self.artifact_order = 2
+        # Default IRF / variable-FWHM settings
 
-        self.n_DOAS = 0  # number of DOAS species (Damped oscillation associated spectra)
-        self.n_irfs = 1  # number of IRFs (cannot be < 1)
+        self.include_irf: bool = False
+        self.irf_type: IrfType = IrfType.GAUSSIAN
+        self.n_irfs: int = 1
+        self.include_variable_fwhm: bool = False
+        self.variable_fwhm_type: VariableFwhmType = VariableFwhmType.POLY
+        self.num_of_poly_varfwhm_params: int = 3
 
-        self.include_variable_fwhm = False
-        self.variable_fwhm_type = 'poly'  # this cannot be changed
-        self.num_of_poly_varfwhm_params = 3
+        # Default coherent-artifact settings
+
+        self.include_artifacts: bool = False
+        self.artifact_order: int = 2
+
+        # Default DOAS settings
+
+        self.n_DOAS: int = 0
 
         self.zero_coh_spec_range = []  # zero coherent artifact in that wavelength range
 
@@ -493,19 +532,11 @@ class BaseKineticModel(KineticModel):
 
         self.C_opt_full = None  # used for target model
 
-        # self.weight_chirp = False
-        # self.w_of_chirp = 0.1
-        # self.t_radius_chirp = 0.2  # time radius around chirp / in ps
         self._calculate_EAS = True
         # self._include_rates_params = True
 
         super(BaseKineticModel, self).__init__(dataset, n_species, set_model)
 
-        # self.update_n()
-        # self.ridge_alpha = 0.0001
-
-        # self.C_COH = None
-        # self.ST_COH = None
     
     # TODO update labels for target models,  exporting of full fit matrix command 
 
@@ -533,7 +564,7 @@ class BaseKineticModel(KineticModel):
         params.add('t0', value=0, min=-np.inf, max=np.inf, vary=True)  # time zero at central wave
 
         if self.include_chirp:
-            if self.chirp_type == 'exp':
+            if self.chirp_type is ChirpType.EXP:
                 for i in range(self.num_of_exp_chirp_params):
                     params.add(f't0_mul_{i+1}', value=0.5, min=-np.inf, max=np.inf, vary=True)
                     params.add(f't0_lam_{i+1}', value=0.01, min=-np.inf, max=np.inf, vary=True)
@@ -543,7 +574,7 @@ class BaseKineticModel(KineticModel):
                     params.add(f't0_p_{i+1}', value=0.5, min=-np.inf, max=np.inf, vary=True)
 
         if self.include_irf:
-            if self.irf_type == self.irf_types[0]:
+            if self.irf_type is IrfType.GAUSSIAN:
                 for i in range(self.n_irfs):
                     params.add(f'irf_FWHM_{i+1}', value=0.15, min=0, max=np.inf, vary=True)  # full-width at half maxium of gaussian IRF
 
@@ -551,7 +582,7 @@ class BaseKineticModel(KineticModel):
                     for i in range(self.num_of_poly_varfwhm_params):
                         params.add(f'var_FWHM_p_{i+1}', value=0.01, min=-np.inf, max=np.inf, vary=True)   # wavelength-dependent FWHM
 
-            elif self.irf_type == self.irf_types[1]: # square wave
+            elif self.irf_type is IrfType.SQUARE:  # square wave
                 for i in range(self.n_irfs):
                     params.add(f'irf_SQW_{i+1}', value=0.15, min=0, max=np.inf, vary=True)  # width of the square wave
 
@@ -574,9 +605,9 @@ class BaseKineticModel(KineticModel):
         if not self.include_irf:
             return 0
         
-        if self.irf_type == self.irf_types[0]:
+        if self.irf_type is IrfType.GAUSSIAN:
             return params['irf_FWHM_1'].value
-        elif self.irf_type == self.irf_types[1]:
+        elif self.irf_type is IrfType.SQUARE:
             return params['irf_SQW_1'].value
 
     def get_irf_amps(self, params: Parameters | None = None) -> np.ndarray:
@@ -625,16 +656,16 @@ class BaseKineticModel(KineticModel):
         if irf_index < 0 or irf_index >= self.n_irfs:
             raise IndexError(f"irf_index out of range: {irf_index} (n_irfs={self.n_irfs})")
 
-        if self.irf_type == self.irf_types[0]:
+        if self.irf_type is IrfType.GAUSSIAN:
             # Gaussian IRF: wavelength-dependent width via variable-FWHM polynomial (if enabled).
             base_width = params[f'irf_FWHM_{irf_index + 1}'].value
-        elif self.irf_type == self.irf_types[1]:
+        elif self.irf_type is IrfType.SQUARE:
             # Square IRF: a single width parameter, shared by all IRFs.
             base_width = params[f'irf_SQW_{irf_index + 1}'].value
         else:
             base_width = 0
 
-        if base_width == 0 or self.irf_type != self.irf_types[0]:
+        if base_width == 0 or self.irf_type is not IrfType.GAUSSIAN:
             return base_width
 
         if not self.include_variable_fwhm:
@@ -648,6 +679,9 @@ class BaseKineticModel(KineticModel):
             tau += partaus[i] * x ** (i + 1)
 
         return tau
+
+    def get_rates(self, params: Parameters | None = None) -> np.ndarray:
+        raise NotImplementedError()
 
     def _iter_irf_components(
         self,
@@ -728,20 +762,87 @@ class BaseKineticModel(KineticModel):
         plt.ylabel('IRF_FWHM / ps')
         plt.show()
 
-    def plot_DOAS(self):
+    def plot_DOAS(self, t_unit='ps', t_lim=(None, None)):
         if self.ST_DOAS is None:
             return
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4.5))
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 4.5))
 
-        set_main_axis(ax1, y_label='$\\Delta A$ (OD)', x_label='Wavelength (nm)')
-        set_main_axis(ax2, y_label='Phase', x_label='Wavelength (nm)')
+        set_main_axis(ax1, y_label='Population', x_label=f'Time ({t_unit})', xlim=t_lim)
+        set_main_axis(ax2, y_label='$\\Delta A$ (OD)', x_label='Wavelength (nm)')
+        set_main_axis(ax3, y_label='Phase', x_label='Wavelength (nm)')
 
-        ax1.plot(self.dataset.wavelengths, self.ST_DOAS.T)
-        ax2.plot(self.dataset.wavelengths, self.DOAS_phases.T)
+        C = self._C_DOAS
+        t0 = 0
 
-        ax1.legend(labels=[f'DOAS {i+1}' for i in range(self.n_DOAS)], frameon=False)
-        ax2.legend(labels=[f'DOAS {i+1}' for i in range(self.n_DOAS)], frameon=False)
+        if C.ndim == 3:
+            idx = fi(self.dataset.wavelengths, self.central_wave)
+            mu = self.get_mu()
+            t0 = mu[idx]
+            C = C[idx]
+        else:
+            t0 = self.get_mu()
+
+        for i in range(self.n_DOAS):
+            ax1.plot(self.dataset.times - t0, C[:, i*2], label=f'C_DOAS {i+1} cos', color=COLORS[i], lw=1.5)
+            ax1.plot(self.dataset.times - t0, C[:, i*2 + 1], label=f'C_DOAS {i+1} sin', color=COLORS[i], lw=1.5, ls='--')
+
+            ax2.plot(self.dataset.wavelengths, self.ST_DOAS[i], color=COLORS[i], lw=1.5)
+            ax3.plot(self.dataset.wavelengths, self.DOAS_phases[i], color=COLORS[i], lw=1.5)
+
+        labels = [f'DOAS {i+1}' for i in range(self.n_DOAS)]
+
+        ax1.legend(frameon=False)
+        ax2.legend(labels=labels, frameon=False)
+        ax3.legend(labels=labels, frameon=False)
+
+        # Phase axis ticks as multiples of π/2 or π, based on actual data range.
+        ph = np.asarray(self.DOAS_phases, dtype=float)
+        if ph.size:
+            finite = np.isfinite(ph)
+            if np.any(finite):
+                ymin = float(np.nanmin(ph[finite]))
+                ymax = float(np.nanmax(ph[finite]))
+                span = ymax - ymin
+
+                step = np.pi if span > 2 * np.pi else (np.pi / 2)
+                lo = np.floor(ymin / step) * step
+                hi = np.ceil(ymax / step) * step
+
+                pad = max(0.05 * span, step / 4) if span > 0 else step / 2
+                ax3.set_ylim(lo - pad, hi + pad)
+
+                ticks = np.arange(lo, hi + 0.5 * step, step)
+                ax3.set_yticks(ticks)
+
+                def _pi_formatter(val, _pos):
+                    k = val / np.pi
+                    k2 = int(np.round(k * 2))  # integer in half-π units
+                    if np.isclose(val, 0.0, atol=1e-12):
+                        return "0"
+                    if step >= np.pi * 0.999:
+                        n = int(np.round(k))
+                        if np.isclose(k, n, atol=1e-10):
+                            if n == 1:
+                                return r"$\pi$"
+                            if n == -1:
+                                return r"$-\pi$"
+                            return rf"${n}\pi$"
+                    # π/2 grid (also works if user later forces step=π/2)
+                    if k2 == 1:
+                        return r"$\pi/2$"
+                    if k2 == -1:
+                        return r"$-\pi/2$"
+                    if k2 % 2 == 0:
+                        n = k2 // 2
+                        if n == 1:
+                            return r"$\pi$"
+                        if n == -1:
+                            return r"$-\pi$"
+                        return rf"${n}\pi$"
+                    return rf"${k2}\pi/2$"
+
+                ax3.yaxis.set_major_formatter(FuncFormatter(_pi_formatter))
 
         plt.tight_layout()
         plt.show()
@@ -762,12 +863,12 @@ class BaseKineticModel(KineticModel):
 
         x = self.dataset.wavelengths - self.central_wave
 
-        if self.chirp_type == 'exp':
+        if self.chirp_type is ChirpType.EXP:
             for i in range(self.num_of_exp_chirp_params):
                 factor = params[f"t0_mul_{i + 1}"].value
                 lam = params[f"t0_lam_{i + 1}"].value
                 mu += factor * np.exp(x * lam)
-        elif self.chirp_type == 'poly':
+        elif self.chirp_type is ChirpType.POLY:
             for i in range(self.num_of_poly_chirp_params):
                 p = params[f"t0_p_{i + 1}"].value
                 mu += p * (x / 100) ** (i + 1)
@@ -794,14 +895,14 @@ class BaseKineticModel(KineticModel):
 
         cv = self.central_wave
 
-        if self.chirp_type == 'exp':
+        if self.chirp_type is ChirpType.EXP:
             mul, lam = fit_sum_exp(wls_vals - cv, time_vals, self.num_of_exp_chirp_params, fit_intercept=True)
             self.params['t0'].value = mul[-1]
             for i in range(self.num_of_exp_chirp_params):
                 self.params[f"t0_mul_{i + 1}"].value = mul[i]
                 self.params[f"t0_lam_{i + 1}"].value = lam[i]
 
-        elif self.chirp_type == 'poly':
+        elif self.chirp_type is ChirpType.POLY:
             coefs = fit_polynomial_coefs(wls_vals - cv, time_vals, self.num_of_poly_chirp_params)
             self.params['t0'].value = coefs[0]
             
@@ -809,7 +910,7 @@ class BaseKineticModel(KineticModel):
                 self.params[f"t0_p_{i + 1}"].value = coefs[i+1]
 
 
-    def _simulate_artifacts(self, params: Parameters | None = None, zero_coh_range=None) -> np.ndarray:
+    def simulate_artifacts(self, params: Parameters | None = None, zero_coh_range=None) -> np.ndarray:
         """
         Simulates coherent artifact basis profiles as derivatives of a Gaussian IRF.
 
@@ -817,6 +918,10 @@ class BaseKineticModel(KineticModel):
         over the IRF mixture (weighted by `irf_amp_*`, with base IRF amplitude derived
         so that the total mixture amplitude sums to 1).
         """
+
+        if not self.include_artifacts:
+            return
+
         params = self.params if params is None else params
 
         order = self.artifact_order
@@ -900,7 +1005,7 @@ class BaseKineticModel(KineticModel):
 
         #     return y
 
-        return y_total
+        self.C_artifacts = y_total
 
         # if zero_coh_range is not None:
         #     self.C_COH *= zero_coh_range[:, None, None]
@@ -919,7 +1024,7 @@ class BaseKineticModel(KineticModel):
 
         ks = 1 / np.array([params[f'os_tau_{i+1}'].value for i in range(self.n_DOAS)])
 
-        f_exp = fold_exp_vec if self.irf_type == self.irf_types[0] else square_conv_exp_vec
+        f_exp = fold_exp_vec if self.irf_type is IrfType.GAUSSIAN else square_conv_exp_vec
 
         _C = None
         for amp, width, mu in self._iter_irf_components(params, skip_zero_amp=False):
@@ -928,10 +1033,18 @@ class BaseKineticModel(KineticModel):
 
         self._C_DOAS = np.empty(_C.shape[:-1] + (self.n_DOAS * 2,))
 
-        for i in range(self.n_DOAS):
-            omega = params[f'os_omega_{i+1}'].value
-            self._C_DOAS[..., i*2] = _C[..., i] * np.cos(omega * self.dataset.times)
-            self._C_DOAS[..., i*2 + 1] = _C[..., i] * np.sin(omega * self.dataset.times)
+        omegas = np.array([params[f'os_omega_{i+1}'].value for i in range(self.n_DOAS)])
+        # assert _C.shape[-1] == self.n_DOAS, (_C.shape, self.n_DOAS)
+
+        if _C.ndim == 3:
+            tt = self.dataset.times[None, :, None] - self.get_mu()[:, None, None]
+            phase = tt * omegas[None, None, :]
+        else:
+            tt = (self.dataset.times - self.get_mu()).reshape(-1, 1)
+            phase = tt * omegas[None, :]
+
+        self._C_DOAS[..., ::2] = _C * np.cos(phase)
+        self._C_DOAS[..., 1::2] = _C * np.sin(phase)
 
     
     def simulate(self, params: Parameters | None = None):
@@ -941,8 +1054,7 @@ class BaseKineticModel(KineticModel):
         self._C_DOAS = None
         self.ST_DOAS = None
 
-        if self.include_artifacts:
-            self.C_artifacts = self._simulate_artifacts(params=params)
+        self.simulate_artifacts(params)
 
         self.simulate_C_DOAS(params)
 
@@ -974,7 +1086,11 @@ class BaseKineticModel(KineticModel):
             A = ST_full[n_s + n_a::2]  # cos
             B = ST_full[1 + n_s + n_a::2]  # sin
             self.ST_DOAS = np.sqrt(A*A + B*B)
-            self.DOAS_phases = np.unwrap(np.arctan2(-B, A))
+            # Phase for A*cos(.) + B*sin(.) is atan2(B, A); keep it in [0, 2π).
+            # self.DOAS_phases = np.mod(np.arctan2(B, A), 2 * np.pi)
+            # https://github.com/glotaran/pyglotaran/blob/2dfe53a22add43a0829541255268e9a0c2c0978c/glotaran/builtin/megacomplexes/damped_oscillation/damped_oscillation_megacomplex.py#L149
+            self.DOAS_phases = np.unwrap(np.arctan2(B, A))  # the same as in pyglotaran
+
 
         if self._calculate_EAS and self.C_opt is not None:
             # calculation of EAS profiles and spectra
