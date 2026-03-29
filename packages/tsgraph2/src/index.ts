@@ -7,6 +7,13 @@ export {
   createDefaultFigureSettings,
 } from "./plot/plotHost.js";
 export {
+  Scene,
+  Figure,
+  type SceneOptions,
+  type FigureOptions,
+  type FigureGridPlacement,
+} from "./plot/scene.js";
+export {
   niceTicks,
   formatTickLabel,
   renderSvgAxesGroup,
@@ -14,6 +21,10 @@ export {
   type LabeledTick,
 } from "./plot/svgAxes.js";
 export { WebglLinePlot } from "./plot/webglLine.js";
+export {
+  clampScissorToFramebuffer,
+  plotRectToGlScissor,
+} from "./plot/glPlotClip.js";
 export {
   type AxisScale,
   type AxisSettings,

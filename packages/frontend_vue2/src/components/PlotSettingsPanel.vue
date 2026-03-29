@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { AxisAlignment, AxisScale } from "@pytsa/tsgraph2";
-import { figureSettings } from "../store/figureSettings";
+import type { AxisAlignment, AxisScale, FigureSettings } from "@pytsa/tsgraph2";
 
 defineProps<{
   open: boolean;
+  /** Reactive figure settings object to edit (same reference as the Figure uses). */
+  settings: FigureSettings;
 }>();
 
 const emit = defineEmits<{
@@ -40,7 +41,10 @@ function onBackdrop(e: MouseEvent) {
       >
         <div class="card-body">
           <div class="header">
-            <h2 id="plot-settings-title" class="title">Settings</h2>
+            <h2 id="plot-settings-title" class="title">
+              Settings
+              <span v-if="settings.title" class="title-figure"> — {{ settings.title }}</span>
+            </h2>
             <button type="button" class="icon-btn" aria-label="Close" @click="emit('close')">
               ×
             </button>
@@ -49,17 +53,24 @@ function onBackdrop(e: MouseEvent) {
 
           <label class="row">
             <span class="label">Title</span>
-            <input v-model="figureSettings.title" type="text" class="input" />
+            <input v-model="settings.title" type="text" class="input" />
           </label>
 
           <label class="row">
             <span class="label">Axis alignment</span>
-            <select v-model="figureSettings.axisAlignment" class="select">
+            <select v-model="settings.axisAlignment" class="select">
               <option v-for="o in axisOrientations" :key="o" :value="o">
                 {{ o }}
               </option>
             </select>
           </label>
+
+          <div class="row check-row-inline">
+            <span class="label">Draggable crosshair</span>
+            <label class="check toggle">
+              <input v-model="settings.showDraggableLines" type="checkbox" />
+            </label>
+          </div>
 
           <div class="axis-cols">
             <span />
@@ -69,16 +80,16 @@ function onBackdrop(e: MouseEvent) {
 
           <label class="row grid-2">
             <span class="label">Axis label</span>
-            <input v-model="figureSettings.xAxis.label" type="text" class="input" />
-            <input v-model="figureSettings.yAxis.label" type="text" class="input" />
+            <input v-model="settings.xAxis.label" type="text" class="input" />
+            <input v-model="settings.yAxis.label" type="text" class="input" />
           </label>
 
           <label class="row grid-2">
             <span class="label">Axis scale</span>
-            <select v-model="figureSettings.xAxis.scale" class="select">
+            <select v-model="settings.xAxis.scale" class="select">
               <option v-for="s in axisScales" :key="'x' + s" :value="s">{{ s }}</option>
             </select>
-            <select v-model="figureSettings.yAxis.scale" class="select">
+            <select v-model="settings.yAxis.scale" class="select">
               <option v-for="s in axisScales" :key="'y' + s" :value="s">{{ s }}</option>
             </select>
           </label>
@@ -86,55 +97,55 @@ function onBackdrop(e: MouseEvent) {
           <label class="row grid-2">
             <span class="label">Linthresh</span>
             <input
-              v-model.number="figureSettings.xAxis.symlogLinthresh"
+              v-model.number="settings.xAxis.symlogLinthresh"
               type="number"
               step="any"
               class="input"
-              :disabled="figureSettings.xAxis.scale !== 'Symmetric logarithmic'"
+              :disabled="settings.xAxis.scale !== 'Symmetric logarithmic'"
             />
             <input
-              v-model.number="figureSettings.yAxis.symlogLinthresh"
+              v-model.number="settings.yAxis.symlogLinthresh"
               type="number"
               step="any"
               class="input"
-              :disabled="figureSettings.yAxis.scale !== 'Symmetric logarithmic'"
+              :disabled="settings.yAxis.scale !== 'Symmetric logarithmic'"
             />
           </label>
 
           <label class="row grid-2">
             <span class="label">Linscale</span>
             <input
-              v-model.number="figureSettings.xAxis.symlogLinscale"
+              v-model.number="settings.xAxis.symlogLinscale"
               type="number"
               step="any"
               class="input"
-              :disabled="figureSettings.xAxis.scale !== 'Symmetric logarithmic'"
+              :disabled="settings.xAxis.scale !== 'Symmetric logarithmic'"
             />
             <input
-              v-model.number="figureSettings.yAxis.symlogLinscale"
+              v-model.number="settings.yAxis.symlogLinscale"
               type="number"
               step="any"
               class="input"
-              :disabled="figureSettings.yAxis.scale !== 'Symmetric logarithmic'"
+              :disabled="settings.yAxis.scale !== 'Symmetric logarithmic'"
             />
           </label>
 
           <div class="row grid-2 check-row">
             <span class="label">Inverted</span>
-            <label class="check"><input v-model="figureSettings.xAxis.inverted" type="checkbox" /></label>
-            <label class="check"><input v-model="figureSettings.yAxis.inverted" type="checkbox" /></label>
+            <label class="check"><input v-model="settings.xAxis.inverted" type="checkbox" /></label>
+            <label class="check"><input v-model="settings.yAxis.inverted" type="checkbox" /></label>
           </div>
 
           <div class="row grid-2 check-row">
             <span class="label">Autoscale</span>
-            <label class="check"><input v-model="figureSettings.xAxis.autoscale" type="checkbox" /></label>
-            <label class="check"><input v-model="figureSettings.yAxis.autoscale" type="checkbox" /></label>
+            <label class="check"><input v-model="settings.xAxis.autoscale" type="checkbox" /></label>
+            <label class="check"><input v-model="settings.yAxis.autoscale" type="checkbox" /></label>
           </div>
 
           <div class="row grid-2 check-row">
             <span class="label">Keep centered (0)</span>
-            <label class="check"><input v-model="figureSettings.xAxis.keepCentered" type="checkbox" /></label>
-            <label class="check"><input v-model="figureSettings.yAxis.keepCentered" type="checkbox" /></label>
+            <label class="check"><input v-model="settings.xAxis.keepCentered" type="checkbox" /></label>
+            <label class="check"><input v-model="settings.yAxis.keepCentered" type="checkbox" /></label>
           </div>
         </div>
       </div>
@@ -186,6 +197,11 @@ function onBackdrop(e: MouseEvent) {
   margin: 0;
   font-size: 1rem;
   font-weight: 650;
+}
+
+.title-figure {
+  font-weight: 500;
+  opacity: 0.72;
 }
 
 .icon-btn {
@@ -278,5 +294,13 @@ hr {
 .check input {
   width: 1rem;
   height: 1rem;
+}
+
+.check-row-inline {
+  grid-template-columns: 7.5rem auto;
+}
+
+.check.toggle {
+  justify-content: flex-start;
 }
 </style>
