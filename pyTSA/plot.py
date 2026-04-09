@@ -18,9 +18,9 @@ import colorcet as cc
 
 from matplotlib.ticker import AutoLocator, SymmetricalLogLocator, ScalarFormatter, AutoMinorLocator, MultipleLocator, Locator, FixedLocator
 
-WL_LABEL = 'Wavelength / nm'
-WN_LABEL = "Wavenumber / $10^{4}$ cm$^{-1}$"
-CONC_LABEL = 'Concentration / $\\mu$mol L$^{-1}$'
+WL_LABEL = 'Wavelength (nm)'
+WN_LABEL = "Wavenumber ($10^{4}$ cm$^{-1}$)"
+CONC_LABEL = 'Concentrati ($\\mu$mol L$^{-1})'
 
 plt.rcParams.update({'font.size': 12})
 
@@ -306,7 +306,7 @@ def plot_time_traces_onefig_ax(ax, traces: np.ndarray, times, mu: float | np.nda
 
     t_lim = (tt[0] if t_lim[0] is None else t_lim[0], tt[-1] if t_lim[1] is None else t_lim[1])
 
-    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=z_unit, x_label=f"{x_label} / {t_unit}",
+    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=z_unit, x_label=f"{x_label} ({t_unit})",
                   y_minor_locator=y_minor_locator, x_minor_locator=x_minor_locator)
 
     if plot_zero_line:
@@ -373,7 +373,7 @@ def plot_traces_onefig_ax(ax, D, D_fit, times, wavelengths, mu: float | np.ndarr
 
     t_lim = ((times - mu.min())[0] if t_lim[0] is None else t_lim[0], (times - mu.min())[-1] if t_lim[1] is None else t_lim[1])
 
-    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=z_unit, x_label=f"{x_label} / {t_unit}",
+    set_main_axis(ax, xlim=t_lim, ylim=y_lim, y_label=z_unit, x_label=f"{x_label} ({t_unit})",
                   y_minor_locator=y_minor_locator, x_minor_locator=x_minor_locator)
 
     if plot_zero_line:
@@ -763,7 +763,7 @@ def plot_data_one_dim_ax(ax_data, times: np.ndarray, trace_data: np.ndarray, plo
 
     # t_lim = (tt[0] if t_lim[0] is None else t_lim[0], tt[-1] if t_lim[1] is None else t_lim[1])
 
-    set_main_axis(ax_data, x_label=f"Time / {t_unit}", y_label=z_unit, xlim=t_lim, ylim=y_lim)
+    set_main_axis(ax_data, x_label=f"Time ({t_unit})", y_label=z_unit, xlim=t_lim, ylim=y_lim)
 
     # ax_data.tick_params(labelbottom=False)
 
@@ -801,7 +801,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
                  x_minor_locator=AutoMinorLocator(10), x_major_locator=None, n_levels: int | None = 30, plot_countours=True,
                  colorbar_locator=AutoLocator(), colorbarpad=0.04, title='', log_z=False, rasterized=True,
                  diverging_white_cmap_tr=0.98, hatch='/////', colorbar_aspect=35, add_wn_axis=False,
-                 x_label="Wavelength / nm", plot_chirp_corrected=False, mu=None, draw_chirp=True, **kwargs):
+                 x_label="Wavelength (nm)", plot_chirp_corrected=False, mu=None, draw_chirp=True, **kwargs):
     """data is individual dataset"""
 
     # assert type(data) == Data
@@ -848,7 +848,7 @@ def plot_data_ax(fig, ax, matrix, times, wavelengths, symlog=True, log=False, t_
 
     # plot data matrix D
 
-    set_main_axis(ax, xlim=w_lim, ylim=t_lim, x_label=x_label, y_label=f'{y_label} / {t_unit}',
+    set_main_axis(ax, xlim=w_lim, ylim=t_lim, x_label=x_label, y_label=f'{y_label} ({t_unit})',
                   x_minor_locator=x_minor_locator, x_major_locator=x_major_locator, y_minor_locator=None)
     if add_wn_axis:
         w_ax = setup_wavenumber_axis(ax, x_major_locator=MultipleLocator(0.5))
@@ -973,7 +973,7 @@ def plot_fitresiduals_axes(ax_data, ax_res, times: np.ndarray, trace_data: np.nd
         ax_data.set_yscale('log')
 
     set_main_axis(ax_data, x_label="", y_label=z_unit, xlim=t_lim, ylim=y_lim)
-    set_main_axis(ax_res, x_label=f"{x_label} / {t_unit}", ylim=y_lim_residuals,
+    set_main_axis(ax_res, x_label=f"{x_label} ({t_unit})", ylim=y_lim_residuals,
                     y_label='res.', xlim=t_lim if t_lim[0] is not None else ax_data.get_xlim())
 
 #
@@ -1269,8 +1269,8 @@ def plot_EEM_ax(ax, em_wls: np.ndarray, ex_wls: np.ndarray, matrix: np.ndarray, 
     ylim0 = y_lim[0] if y_lim[0] is not None else y[0]
     ylim1 = y_lim[1] if y_lim[1] is not None else y[-1]
 
-    x_label_down, x_label_top = 'Em. wavelength / nm', 'Em. wavenumber / $10^4$ cm$^{-1}$'
-    y_label_left, y_label_right = 'Ex. wavelength / nm', 'Ex. wavenumber / $10^4$ cm$^{-1}$'
+    x_label_down, x_label_top = 'Em. wavelength (nm)', 'Em. wavenumber / $10^4$ cm$^{-1}$'
+    y_label_left, y_label_right = 'Ex. wavelength (nm)', 'Ex. wavenumber / $10^4$ cm$^{-1}$'
 
     if transform2wavenumber:
         x, y = t2w(x), t2w(y)
