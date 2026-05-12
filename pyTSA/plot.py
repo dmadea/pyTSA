@@ -581,7 +581,7 @@ def plot_spectra_ax(ax, D, times, wavelengths, selected_times: list | None = [0,
 
             assert unit1 == unit2, "Cannot use the same time unit for the range"
 
-            label=f'$\\int$({t1}$-${t2}) {unit1}'
+            label=f'$\\int$(${t1}$$-$${t2}$) {unit1}'
         else:
             idx = fi(times, selected_times[i])
             _t, _unit = change_t_unit(times[idx])
