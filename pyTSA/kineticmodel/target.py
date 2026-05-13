@@ -446,7 +446,6 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
         # return list(labels[self.used_compartments])
         return labels
     
-    
     def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
         """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
         
@@ -495,6 +494,59 @@ class DelayedFluorescenceModel(TargetFirstOrderModel):
 
             j = np.asarray([1, 0, 0])
 
+
+        return j, K
+        
+
+class DelayedFluorescenceModelExtended(TargetFirstOrderModel):
+
+    name = "Delayed fluorescence kinetic model"
+
+    def __init__(self, dataset: Dataset | None = None, set_model: bool = False):
+        super(DelayedFluorescenceModel, self).__init__(dataset, 3, set_model)
+
+        self.total_PLQY = None    # used for fitting of global model using a absolute PLQY values
+
+        self.used_compartments = [0]
+
+
+    def init_params(self) -> Parameters:
+        params = super(DelayedFluorescenceModel, self).init_params()
+
+        params.add('k_nr', value=0.05, min=0, max=np.inf, vary=True)   # nonradiative decay to GS
+        params.add('k_r', value=0.05, min=0, max=np.inf, vary=True)    # radiative decay to GS
+        params.add('k_isc', value=0.1, min=0, max=np.inf, vary=True)
+        params.add('k_risc', value=0.05, min=0, max=np.inf, vary=True)
+        params.add('k_nr_T', value=0.0, min=0, max=np.inf, vary=True)  # nonradiative rate of triplet to ground state
+
+        return params
+    
+    def get_labels(self, t_unit='ps'):
+        labels = np.asarray(['S1', 'T1'])
+
+        # return list(labels[self.used_compartments])
+        return labels
+    
+    def residuals(self, params):
+        res = super().residuals(params)
+
+        # calculate the PLQY residual
+        k_r, k_nr, k_isc, k_risc, k_nr_T = params['k_r'].value, params['k_nr'].value,  params['k_isc'].value, params['k_risc'].value, params['k_nr_T'].value
+        PLQY = k_r / (k_nr + k_r + k_isc * (1 - k_risc / (k_risc + k_nr_T)))
+        plqy_res = PLQY - self.total_PLQY
+        plqy_res *= res.max() * np.sqrt(res.size)
+        return np.concatenate([res.flatten, plqy_res])
+
+    
+    def target_params(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """Return a tuple with the first argument as initial j vector and second argument is K matrix"""
+        
+        k_r, k_nr, k_isc, k_risc, k_nr_T = params['k_r'].value, params['k_nr'].value,  params['k_isc'].value, params['k_risc'].value, params['k_nr_T'].value
+                
+        K = np.asarray([[-k_r - k_nr - k_isc, k_risc],
+                        [k_isc,         -k_risc - k_nr_T]])
+    
+        j = np.asarray([1, 0])
 
         return j, K
         

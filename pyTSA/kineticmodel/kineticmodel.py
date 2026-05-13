@@ -1137,14 +1137,13 @@ class BaseKineticModel(KineticModel):
             self.C_EAS = self.C_opt.dot(A)
             self.ST_EAS = np.linalg.inv(A).dot(self.ST_opt)
 
+    def residuals(self, params: Parameters):
+        self.simulate(params)
+        return self.weighted_residuals()
 
     def fit(self):
-        def residuals(params):
-            self.simulate(params)
-            return self.weighted_residuals()
-
         # iter_cb - callback function
-        self.minimizer = Minimizer(residuals, self.params, nan_policy='omit') #,
+        self.minimizer = Minimizer(self.residuals, self.params, nan_policy='omit') #,
                                         #  iter_cb=lambda params, iter, resid, *args, **kws: self.is_interruption_requested())
         
         self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
