@@ -86,7 +86,7 @@ class LPLModel(KineticModel):
         for i in range(self.n_gaussians):
             params.add(f'rho_amp_{i}', value=1, min=0, max=np.inf, vary=True)
             params.add(f'rho_mu_{i}', value=1, min=0, max=np.inf, vary=True)
-            params.add(f'rho_sigma_{i}', value=1, min=0, max=np.inf, vary=True)
+            params.add(f'rho_sigma_{i}', value=0.2, min=0, max=np.inf, vary=True)
 
         if self.add_exp_distribution:
             params.add('rho_exp_amp', value=1, min=0, max=np.inf, vary=True)
@@ -185,7 +185,7 @@ class LPLModel(KineticModel):
         t_lpl = self.dataset.times
         sol_dec = solve_ivp(rhs_dec, (0, t_lpl[-1]), sol_acc.y[:, -1], **ivp_kw, jac=jac_dec, t_eval=t_lpl)
         if not sol_dec.success:
-            raise RuntimeError(f"decay integration failed: {sol_dec.message}")
+            raise RuntimeError(f"LPL integration failed: {sol_dec.message}")
 
         self.accum_phase_solution = sol_acc.y
         self.lpl_phase_solution = sol_dec.y
