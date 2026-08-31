@@ -68,6 +68,8 @@ class LPLModel(KineticModel):
         self.accum_phase_solution: None | np.ndarray = None
         self.lpl_phase_solution: None | np.ndarray = None
 
+        self.pair_conc: None | np.ndarray = None
+
         self.ridge_alpha = 0.0001
 
         self.initial_state: None | Callable = None
@@ -79,10 +81,6 @@ class LPLModel(KineticModel):
     def init_params(self) -> Parameters:
         params = super(LPLModel, self).init_params()
 
-        params.add('s0', value=1e12, min=0, max=np.inf, vary=False) 
-        params.add('k_sep', value=1e5, min=0, max=np.inf, vary=True) 
-        params.add('k_CT_rnr', value=1e7, min=0, max=np.inf, vary=True)  
-
         for i in range(self.n_gaussians):
             params.add(f'rho_amp_{i}', value=1, min=0, max=np.inf, vary=True)
             params.add(f'rho_mu_{i}', value=1, min=0, max=np.inf, vary=True)
@@ -92,6 +90,11 @@ class LPLModel(KineticModel):
             params.add('rho_exp_amp', value=1, min=0, max=np.inf, vary=True)
             params.add('rho_exp_lambda', value=10, min=0, max=np.inf, vary=True)
 
+        params.add('s0', value=1e13, min=0, max=np.inf, vary=False) 
+        # global amplitude for multi-experiment fit
+        params.add('amp_global', value=1, min=0, max=np.inf, vary=True) 
+        params.add('k_sep', value=1e5, min=0, max=np.inf, vary=True) 
+        params.add('k_CT_rnr', value=1e7, min=0, max=np.inf, vary=True)  
 
         return params
 
@@ -111,6 +114,20 @@ class LPLModel(KineticModel):
         w[-1] /= 2
         return w
 
+    def get_rho(self, params: Parameters | None = None) -> np.ndarray:
+        params = self.params if params is None else params
+
+        Es = np.linspace(0.01, self.E_max, self.n_E)  # energy levels for the gaussian distribution
+        self.Es = Es
+
+        rho_0 = np.zeros(self.n_E)
+        for i in range(self.n_gaussians):
+            rho_0 += params[f'rho_amp_{i}'].value * self.gaussian(Es, params[f'rho_mu_{i}'].value, params[f'rho_sigma_{i}'].value)
+        if self.add_exp_distribution:
+            rho_0 += params['rho_exp_amp'].value * np.exp(-Es / params['rho_exp_lambda'].value)
+
+        return rho_0
+
     def build_saturable_rhs_jac(self, params: Parameters, T_fun: Callable, I_fun: Callable):
         """RHS and analytic Jacobian of the arrowhead system with a
         *saturable* trapping term (Pauli blocking).
@@ -119,35 +136,29 @@ class LPLModel(KineticModel):
         lets the same system serve isothermal charging, LPL decay, and TL ramps.
         """
 
-        Es = np.linspace(0.01, self.E_max, self.n_E)  # energy levels for the gaussian distribution
-        self.Es = Es
-
         # simulate the current distribution of trap depths
-        rho_0 = np.zeros(self.n_E)
-        for i in range(self.n_gaussians):
-            rho_0 += params[f'rho_amp_{i}'].value * self.gaussian(Es, params[f'rho_mu_{i}'].value, params[f'rho_sigma_{i}'].value)
-        if self.add_exp_distribution:
-            rho_0 += params['rho_exp_amp'].value * np.exp(-Es / params['rho_exp_lambda'].value)
+        rho_0 = self.get_rho(params)
 
-        NE = len(Es)
+        NE = len(self.Es)
         idx = np.arange(1, NE + 1)
-        N_tot = np.trapezoid(rho_0, Es)
-        w_E = self.trapezoid_weights(Es)
+        N_tot = np.trapezoid(rho_0, self.Es)
+        w_E = self.trapezoid_weights(self.Es)
 
         s0 = params['s0'].value
         k_sep = params['k_sep'].value
         k_rnr = params['k_CT_rnr'].value
 
         def rhs(t, u):
-            kE = s0 * self.arrhenius(Es, T_fun(t))
+            kE = s0 * self.arrhenius(self.Es, T_fun(t))
             nS, rho = u[0], u[1:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
-            capture = k_sep * nS * q
-            dn = I_fun(t) - k_rnr * nS - np.sum(w_E * capture) + np.sum(w_E * kE * rho)
-            return np.concatenate(([dn], capture - kE * rho))
+            CS = k_sep * nS * q
+            CR = kE * rho
+            dn = I_fun(t) - k_rnr * nS - np.sum(w_E * (CS - CR))
+            return np.concatenate(([dn], CS - CR))
 
         def jac(t, u):
-            kE = s0 * self.arrhenius(Es, T_fun(t))
+            kE = s0 * self.arrhenius(self.Es, T_fun(t))
             nS, rho = u[0], u[1:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot
             # d(capture)/d(rho) = -k_sep*nS/N_tot, only where not clipped full
@@ -160,6 +171,7 @@ class LPLModel(KineticModel):
             return J
 
         return rhs, jac
+
 
     def simulate(self, params: Parameters | None = None) -> np.ndarray:
 
@@ -190,19 +202,22 @@ class LPLModel(KineticModel):
         self.accum_phase_solution = sol_acc.y
         self.lpl_phase_solution = sol_dec.y
 
+        exc_state = self.lpl_phase_solution[0, :][:, None]
+        self.pair_conc = np.trapezoid(self.lpl_phase_solution[1:, :], self.Es)
+
+        # fill matrix_opt
+        amp = self.params['amp_global'].value
+        self.matrix_opt = amp * exc_state
+
+    def residuals(self, params: Parameters):
+        self.simulate(params)
+        return self.weighted_residuals()
+
+    def fit(self):
+        self.minimizer = Minimizer(self.residuals, self.params, nan_policy='omit')
+        
+        self.fit_result = self.minimizer.minimize(method=self.fit_algorithm, **self.fitter_kwds)  # minimize the residuals
+        self.params = self.fit_result.params
 
 
         
-
-
-
-
-
-
-
-
-    
-
-
-
-
