@@ -120,7 +120,7 @@ class LPLModel(KineticModel):
         w[-1] /= 2
         return w
 
-    def get_rho(self, params: Parameters | None = None) -> np.ndarray:
+    def get_rho_0(self, params: Parameters | None = None) -> np.ndarray:
         params = self.params if params is None else params
 
         Es = np.linspace(0.01, self.E_max, self.n_E)  # energy levels for the gaussian distribution
@@ -143,7 +143,7 @@ class LPLModel(KineticModel):
         """
 
         # simulate the current distribution of trap depths
-        rho_0 = self.get_rho(params)
+        rho_0 = self.get_rho_0(params)
 
         NE = len(self.Es)
         idx = np.arange(1, NE + 1)
@@ -308,7 +308,7 @@ class LPLModel(KineticModel):
                     self._require_simulation()
                     update_kwargs("dist-acum", kws)
 
-                    g0_E = self.get_rho()
+                    rho_0 = self.get_rho_0()
                     step = kws.pop('step', 5)
                     idxs = np.arange(0, len(self.t_acum), step)
                     norm = Normalize(self.t_acum[0], self.t_acum[-1])
@@ -316,7 +316,7 @@ class LPLModel(KineticModel):
                     for j in idxs:
                         ax.plot(self.Es, self.accum_phase_solution[1:, j],
                                 color=cmap(norm(self.t_acum[j])), lw=1)
-                    ax.plot(self.Es, g0_E, color='black', lw=1, ls='--')
+                    ax.plot(self.Es, rho_0, color='black', lw=1, ls='--')
                     ax.set_xlabel('E [eV]')
                     ax.set_ylabel(r'$\rho(E)$')
                     ax.set_title(kws.pop('title', r'Charging: $\rho(E,t)$'))
@@ -326,7 +326,7 @@ class LPLModel(KineticModel):
                     self._require_simulation()
                     update_kwargs("dist-decay", kws)
 
-                    g0_E = self.get_rho()
+                    rho_0 = self.get_rho_0()
                     times = self.dataset.times
                     step = kws.pop('step', 5)
                     idxs = np.arange(0, len(times), step)
@@ -335,7 +335,7 @@ class LPLModel(KineticModel):
                     for j in idxs:
                         ax.plot(self.Es, self.lpl_phase_solution[1:, j],
                                 color=cmap(norm(times[j])), lw=1)
-                    ax.plot(self.Es, g0_E, color='black', lw=1, ls='--')
+                    ax.plot(self.Es, rho_0, color='black', lw=1, ls='--')
                     ax.set_xlabel('E [eV]')
                     ax.set_ylabel(r'$\rho(E)$')
                     ax.set_title(kws.pop('title', r'Recombination: $\rho(E,t)$'))
