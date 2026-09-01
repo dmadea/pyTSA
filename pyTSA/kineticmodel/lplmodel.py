@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from typing import Callable, Literal
 
 import numpy as np
@@ -10,11 +11,14 @@ from enum import Enum, auto
 
 from scipy.integrate import solve_ivp
 
+
 from ..dataset import Dataset
 
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mplcols
+import matplotlib.gridspec as gridspec
+from matplotlib.colors import LogNorm, Normalize
 
 # import glob, os
 import scipy.constants as sc
@@ -25,7 +29,7 @@ from .kineticmodel import KineticModel
 
 from scipy.constants import Boltzmann
 
-
+KB_EV = Boltzmann / sc.e
 
 
 def save_matrix(dim0: np.iterable, dim1: np.iterable, matrix: np.ndarray, fname='output.txt', delimiter='\t', encoding='utf8', transpose=False):
@@ -55,7 +59,9 @@ class LPLModel(KineticModel):
     def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
 
         self.exposure_time_s: float = 1
-        self.I0 = 1  # light intensity 
+        self.lambda_irr_nm = 365
+        self.P_irr_mW = 2
+        self.I0 = self.P_irr_mW * 1e-3 * self.lambda_irr_nm * 1e-9 / (sc.h * sc.c) # light intensity in photons / s
         self.data_type: Literal['LPL', 'PMA'] = 'LPL'
         self.temp_dep_rates: list[str] = []
         self.n_E: int = 300  # number of points to simulate the gaussian distribution of trap depths
@@ -83,8 +89,8 @@ class LPLModel(KineticModel):
 
         for i in range(self.n_gaussians):
             params.add(f'rho_amp_{i}', value=1, min=0, max=np.inf, vary=True)
-            params.add(f'rho_mu_{i}', value=1, min=0, max=np.inf, vary=True)
-            params.add(f'rho_sigma_{i}', value=0.2, min=0, max=np.inf, vary=True)
+            params.add(f'rho_mu_{i}', value=1, min=0, max=self.E_max, vary=True)
+            params.add(f'rho_sigma_{i}', value=0.2, min=0, max=self.E_max, vary=True)
 
         if self.add_exp_distribution:
             params.add('rho_exp_amp', value=1, min=0, max=np.inf, vary=True)
@@ -93,15 +99,15 @@ class LPLModel(KineticModel):
         params.add('s0', value=1e13, min=0, max=np.inf, vary=False) 
         # global amplitude for multi-experiment fit
         params.add('amp_global', value=1, min=0, max=np.inf, vary=True) 
-        params.add('k_sep', value=1e5, min=0, max=np.inf, vary=True) 
-        params.add('k_CT_rnr', value=1e7, min=0, max=np.inf, vary=True)  
+        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True) 
+        params.add('k_CT_rnr', value=1e7, min=0, max=1e10, vary=True)  
 
         return params
 
     @staticmethod
     def arrhenius(E: np.ndarray, T: np.ndarray) -> np.ndarray:
         """Boltzmann factor exp(-E / kB*T); E in eV, T in K."""
-        return np.exp(-E / (Boltzmann * T))
+        return np.exp(-E / (KB_EV * T))
 
     @staticmethod
     def gaussian(Es: np.ndarray, mu: float, sigma: float) -> np.ndarray:
@@ -174,8 +180,6 @@ class LPLModel(KineticModel):
 
 
     def simulate(self, params: Parameters | None = None) -> np.ndarray:
-
-
         params = self.params if params is None else params
 
         if self.initial_state is None:
@@ -184,6 +188,8 @@ class LPLModel(KineticModel):
             u0 = self.initial_state()
 
         ivp_kw = dict(method="LSODA", rtol=1e-10, atol=1e-16, first_step=1e-14)
+
+        self.I0 = self.P_irr_mW * 1e-3 * self.lambda_irr_nm * 1e-9 / (sc.h * sc.c) # light intensity in photons / s
 
         # --- accumulation phase: constant illumination I0 at temperature T ---
         rhs_acc, jac_acc = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: self.I0)
@@ -203,11 +209,145 @@ class LPLModel(KineticModel):
         self.lpl_phase_solution = sol_dec.y
 
         exc_state = self.lpl_phase_solution[0, :][:, None]
-        self.pair_conc = np.trapezoid(self.lpl_phase_solution[1:, :], self.Es)
+        self.pair_conc = np.trapezoid(self.lpl_phase_solution[1:, :], self.Es, axis=0)[:, None]
 
         # fill matrix_opt
         amp = self.params['amp_global'].value
         self.matrix_opt = amp * exc_state
+
+    def _require_simulation(self) -> None:
+        if self.lpl_phase_solution is None:
+            if self.params is None:
+                raise RuntimeError("Call simulate() or fit() before plotting.")
+            self.simulate()
+
+    def plot(self, *what: str, nrows: int | None = None, ncols: int | None = None, hspace=0.2, wspace=0.2,
+             X_SIZE=5.5, Y_SIZE=4.5, add_figure_labels=False, figure_labels_font_size=17, fig_labels_offset=0,
+             transparent=True, dpi=300, filepath=None, **kwargs):
+
+        n = len(what)
+        if n == 0:
+            return
+
+        if self.dataset is None:
+            raise TypeError("There is no dataset assigned to the model")
+
+        if nrows is None and ncols is None:
+            ncols = int(np.floor(n ** 0.5))
+            nrows = int(np.ceil(n / ncols))
+        elif nrows is not None and ncols is None:
+            ncols = int(np.ceil(n / nrows))
+        elif nrows is None and ncols is not None:
+            nrows = int(np.ceil(n / ncols))
+
+        fig = plt.figure(figsize=kwargs.get('figsize', (X_SIZE * ncols, Y_SIZE * nrows)))
+        outer_grid = gridspec.GridSpec(1, 1, figure=fig)
+
+        self._plot_gs(fig, outer_grid[0], what, nrows, ncols, hspace=hspace, wspace=wspace,
+                      add_figure_labels=add_figure_labels, figure_labels_font_size=figure_labels_font_size,
+                      fig_labels_offset=fig_labels_offset, **kwargs)
+
+        if filepath:
+            ext = os.path.splitext(filepath)[1].lower()[1:]
+            plt.savefig(fname=filepath, format=ext, bbox_inches='tight', transparent=transparent, dpi=dpi)
+        else:
+            plt.show()
+
+    def _plot_gs(self, fig: plt.Figure, grid_spec: gridspec.GridSpec | gridspec.GridSpecFromSubplotSpec,
+                 what: tuple[str], nrows: int, ncols: int, hspace=0.2, wspace=0.2, add_figure_labels=False,
+                 figure_labels_font_size=17, fig_labels_offset=0, **kwargs):
+
+        inner_grid = gridspec.GridSpecFromSubplotSpec(nrows, ncols, wspace=wspace, hspace=hspace, subplot_spec=grid_spec)
+
+        def update_kwargs(prefix: str, kws: dict):
+            for key, value in kws.copy().items():
+                if key.startswith(prefix.lower()):
+                    _key = key[len(prefix) + 1:]
+                    kws[_key] = value
+
+        f_labels = list('abcdefghijklmnopqrstuvwxyz')
+        f_labels += [s + s for s in f_labels]
+        cmap = plt.cm.jet
+
+        for i, (p, ig) in enumerate(zip(what, inner_grid)):
+            if i >= nrows * ncols:
+                break
+
+            ax = fig.add_subplot(ig)
+            kws = kwargs.copy()
+
+            match p.lower():
+                case "decay-curve":
+                    self._require_simulation()
+                    update_kwargs("decay-curve", kws)
+
+                    times = self.dataset.times
+                    y_fit = self.matrix_opt[:, 0] if self.matrix_opt.ndim > 1 else self.matrix_opt
+                    ax.plot(times, y_fit, label='Fit')
+
+                    if kws.pop('show_data', True):
+                        single_dim = self.dataset.matrix_fac.shape[1] == 1
+                        y_data = self.dataset.matrix_fac[:, 0] if single_dim else self.dataset.matrix_fac.sum(axis=1)
+                        ax.plot(times, y_data, ls='--', label='Data')
+
+                    if kws.pop('show_trap_integral', False):
+                        ax_t = ax.twinx()
+                        pair = self.pair_conc[:, 0] if self.pair_conc.ndim > 1 else self.pair_conc
+                        ax_t.plot(times, pair, ls='--', color='C1')
+                        ax_t.set_yscale('log')
+                        ax_t.set_ylabel(r'$\int\rho\,dE$ (dashed)')
+
+                    ax.set_xscale('log')
+                    ax.set_yscale('log')
+                    ax.set_xlabel('Time after irradiation [s]')
+                    ax.set_ylabel(r'$n_{CT*}$')
+                    ax.set_title(kws.pop('title', 'Recombination (LPL)'))
+                    ax.legend(frameon=False)
+
+                case "dist-acum":
+                    self._require_simulation()
+                    update_kwargs("dist-acum", kws)
+
+                    g0_E = self.get_rho()
+                    step = kws.pop('step', 5)
+                    idxs = np.arange(0, len(self.t_acum), step)
+                    norm = Normalize(self.t_acum[0], self.t_acum[-1])
+
+                    for j in idxs:
+                        ax.plot(self.Es, self.accum_phase_solution[1:, j],
+                                color=cmap(norm(self.t_acum[j])), lw=1)
+                    ax.plot(self.Es, g0_E, color='black', lw=1, ls='--')
+                    ax.set_xlabel('E [eV]')
+                    ax.set_ylabel(r'$\rho(E)$')
+                    ax.set_title(kws.pop('title', r'Charging: $\rho(E,t)$'))
+                    fig.colorbar(plt.cm.ScalarMappable(cmap=cmap, norm=norm), ax=ax, label='t [s]')
+
+                case "dist-decay":
+                    self._require_simulation()
+                    update_kwargs("dist-decay", kws)
+
+                    g0_E = self.get_rho()
+                    times = self.dataset.times
+                    step = kws.pop('step', 5)
+                    idxs = np.arange(0, len(times), step)
+                    norm = LogNorm(times[0], times[-1])
+
+                    for j in idxs:
+                        ax.plot(self.Es, self.lpl_phase_solution[1:, j],
+                                color=cmap(norm(times[j])), lw=1)
+                    ax.plot(self.Es, g0_E, color='black', lw=1, ls='--')
+                    ax.set_xlabel('E [eV]')
+                    ax.set_ylabel(r'$\rho(E)$')
+                    ax.set_title(kws.pop('title', r'Recombination: $\rho(E,t)$'))
+                    fig.colorbar(plt.cm.ScalarMappable(cmap=cmap, norm=norm), ax=ax, label='t after irr. [s]')
+
+                case _:
+                    raise ValueError(f"Plot {p} is not defined.")
+
+            if add_figure_labels:
+                ax.text(-0.05, 1.05, f_labels[i + fig_labels_offset], color='black', transform=ax.transAxes,
+                        fontstyle='normal', fontweight='bold', fontsize=figure_labels_font_size)
+
 
     def residuals(self, params: Parameters):
         self.simulate(params)

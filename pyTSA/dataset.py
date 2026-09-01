@@ -93,7 +93,7 @@ class Dataset(object):
 
     
     @classmethod
-    def from_file(cls, fname: str, transpose: bool = False, load_TRE_ICCD = False, **kwargs):
+    def from_file(cls, fname: str, transpose: bool = False, load_TRE_ICCD = False, log_resample: bool = False, **kwargs):
 
         if load_TRE_ICCD:
             t, w, mat = Dataset.load_TRE_ICCD(fname)
@@ -103,6 +103,9 @@ class Dataset(object):
             t = data[1:, 0]
             w = data[0, 1:]
             mat = data[1:, 1:]
+
+        if log_resample:
+            pass
 
         if transpose:
             [t, w] = [w, t]

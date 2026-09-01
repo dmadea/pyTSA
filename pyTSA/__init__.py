@@ -5,6 +5,7 @@ from .kineticmodel.firstorder import *
 from .kineticmodel.varorder import *
 from .kineticmodel.target import *
 from .kineticmodel.kineticmodel import IrfType, ChirpType, VariableFwhmType, WeightType
+from .kineticmodel.lplmodel import *
 from .plot import *
 from .mathfuncs import fi, find_nearest
 from .plot import COLORS
