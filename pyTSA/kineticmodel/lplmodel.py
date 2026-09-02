@@ -10,6 +10,7 @@ from abc import abstractmethod
 from enum import Enum, auto
 
 from scipy.integrate import solve_ivp
+from scipy.stats import skewnorm
 
 
 from ..dataset import Dataset
@@ -91,8 +92,9 @@ class LPLModel(KineticModel):
 
         for i in range(self.n_gaussians):
             params.add(f'rho_amp_{i}', value=1, min=0, max=np.inf, vary=True)
-            params.add(f'rho_mu_{i}', value=1, min=0, max=self.E_max, vary=True)
-            params.add(f'rho_sigma_{i}', value=0.2, min=0, max=self.E_max, vary=True)
+            params.add(f'rho_loc_{i}', value=1, min=0.3, max=self.E_max, vary=True)
+            params.add(f'rho_scale_{i}', value=0.2, min=0.001, max=self.E_max, vary=True)
+            params.add(f'rho_skew_{i}', value=0, min=-20, max=20, vary=True)
 
         if self.add_exp_distribution:
             params.add('rho_exp_amp', value=1, min=0, max=np.inf, vary=True)
@@ -126,7 +128,9 @@ class LPLModel(KineticModel):
 
         rho_0 = np.zeros(self.n_E)
         for i in range(self.n_gaussians):
-            rho_0 += params[f'rho_amp_{i}'].value * self.gaussian(Es, params[f'rho_mu_{i}'].value, params[f'rho_sigma_{i}'].value)
+            # rho_0 += params[f'rho_amp_{i}'].value * self.gaussian(Es, params[f'rho_mu_{i}'].value, params[f'rho_sigma_{i}'].value)
+            rho_0 += params[f'rho_amp_{i}'].value * skewnorm.pdf(Es, params[f'rho_skew_{i}'].value, loc=params[f'rho_loc_{i}'].value, scale=params[f'rho_scale_{i}'].value)
+
         if self.add_exp_distribution:
             rho_0 += params['rho_exp_amp'].value * np.exp(-Es / params['rho_exp_lambda'].value)
 
