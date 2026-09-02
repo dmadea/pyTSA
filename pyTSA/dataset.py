@@ -8,11 +8,12 @@ import os
 import matplotlib.pyplot as plt
 from matplotlib.ticker import *
 from matplotlib import cm
+import math
 
 from sklearn.decomposition import NMF
 from sklearn.decomposition import FastICA
 from numpy import ma
-
+from numba import njit
 
 from .kineticmodel.kineticmodel import KineticModel
 from .mathfuncs import crop_data, crop_data_idx, fi, chirp_correction
@@ -22,6 +23,128 @@ from .plot import plot_data_ax, plot_SADS_ax, plot_spectra_ax, plot_traces_onefi
 import re
 racc = re.compile(r"(\d+)acc")
 rexposure = re.compile(r"(\d+\.?\d*)exp")
+
+
+@njit(cache=True, fastmath=False)
+def _sum_bins(x, y, edges):
+    """Bin one 1D signal in a single pass over monotonically increasing x."""
+    n_bins = edges.size - 1
+    sums = np.zeros(n_bins, dtype=np.float64)
+    counts = np.zeros(n_bins, dtype=np.int64)
+    current_bin = 0
+
+    for row in range(x.size):
+        x_value = x[row]
+        if x_value < edges[0]:
+            continue
+        if x_value > edges[n_bins]:
+            break
+
+        # pd.cut(..., include_lowest=True) assigns an exact internal edge to
+        # the bin on its left, hence the strict comparison.
+        while current_bin < n_bins - 1 and x_value > edges[current_bin + 1]:
+            current_bin += 1
+
+        sums[current_bin] += y[row]
+        counts[current_bin] += 1
+
+    return sums, counts
+
+
+def log_bin_reduction_average(x: np.ndarray, y: np.ndarray | None = None, 
+                              points_per_decade: int = 100,
+                              force_uniform_points: bool = False,
+                              t_min: float = None, t_max: float = None):
+    """
+    Quickly average time-series data in logarithmically spaced bins.
+    Assumes sorted x values with no NaNs or infinities. Separate NumPy input
+    accepts exactly one 1D y signal; DataFrames may contain multiple signals.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame or numpy.ndarray
+        A DataFrame whose first column is x and remaining columns are signals,
+        or a one-dimensional x array when ``y`` is supplied separately.
+    y : numpy.ndarray, optional
+        One-dimensional signal array with the same length as x.
+    points_per_decade : int
+        Number of logarithmic bins per decade.
+    force_uniform_points : bool
+        Keep empty bins (filled with NaN) when True. Otherwise empty bins are
+        omitted and the bin count is capped at the number of valid x values.
+    t_min : float
+        Lower x bound. Inferred from positive finite x values when omitted.
+    t_max : float
+        Upper x bound. Inferred from positive finite x values when omitted.
+
+    Returns
+    -------
+    pandas.DataFrame or tuple[numpy.ndarray, numpy.ndarray]
+        DataFrame input produces a DataFrame with the original column names.
+        Array input produces ``(binned_x, binned_y)`` with a 1D binned_y.
+
+    Notes
+    -----
+    The first call for each array layout includes Numba compilation overhead.
+    Each DataFrame signal column is sent separately through the compiled 1D
+    kernel, avoiding conversion of the complete signal table to a dense array.
+    """
+    # print("y entry dtype", y.dtype)
+
+    x_values = np.asarray(x, dtype=np.float64)
+    y_values = np.asarray(y, dtype=np.float64) if not isinstance(y, np.ndarray) else y
+    # print("y_values after conversion dtype", y_values.dtype)
+
+    if x_values.ndim != 1:
+        raise ValueError("x must be a one-dimensional array.")
+    if x_values.size == 0:
+        raise ValueError("x must not be empty.")
+    if not isinstance(points_per_decade, (int, np.integer)) or points_per_decade < 1:
+        raise ValueError("points_per_decade must be an integer >= 1.")
+
+    # x is sorted, so discard its non-positive prefix without scanning it in
+    # the Numba kernel. searchsorted finds the first x value strictly above 0.
+    positive_start = int(np.searchsorted(x_values, 0.0, side="right"))
+    if positive_start == x_values.size:
+        raise ValueError("Log-binning requires at least one positive x value.")
+
+    if positive_start > 0:
+        print(f"Log-binning: discarded {positive_start} rows with non-positive x values.")
+    x_values = x_values[positive_start:]
+    y_values = y_values[positive_start:]
+
+    lower = x_values[0] if t_min is None else float(t_min)
+    upper = x_values[-1] if t_max is None else float(t_max)
+    if not np.isfinite(lower) or not np.isfinite(upper) or lower <= 0.0 or upper < lower:
+        raise ValueError("t_min and t_max must be finite, with 0 < t_min <= t_max.")
+
+    n_decades = math.log10(upper) - math.log10(lower)
+    n_bins = max(1, int(points_per_decade * n_decades))
+    if not force_uniform_points:
+        n_bins = min(n_bins, x_values.size)
+
+    if lower == upper:
+        edges = np.array([lower, upper], dtype=np.float64)
+    else:
+        edges = np.logspace(math.log10(lower), math.log10(upper), n_bins + 1)
+
+    # print("y_values before processsing dtype", y_values.dtype)
+    sums, counts = _sum_bins(x_values, y_values, edges)
+    # print(sums.dtype, counts.dtype)
+    means = np.full(n_bins, np.nan, dtype=np.float64)
+    np.divide(sums, counts, out=means, where=counts != 0)
+
+    occupied = counts != 0
+    used_bins = np.arange(n_bins) if force_uniform_points else np.flatnonzero(occupied)
+
+    if force_uniform_points:
+        uniform_centers = np.logspace(math.log10(lower), math.log10(upper), n_bins)
+        centers = uniform_centers[used_bins]
+    else:
+        centers = np.sqrt(edges[used_bins] * edges[used_bins + 1])
+    means = means[used_bins]
+
+    return centers, means
 
 
 class Dataset(object):
@@ -105,7 +228,9 @@ class Dataset(object):
             mat = data[1:, 1:]
 
         if log_resample:
-            pass
+            assert mat.shape[1] == 1, "Log-binning is only supported for single-channel data."
+            t, mat = log_bin_reduction_average(t, mat.squeeze(), kwargs.get('points_per_decade', 100))
+            mat = mat.reshape(-1, 1)
 
         if transpose:
             [t, w] = [w, t]
@@ -564,6 +689,17 @@ class Dataset(object):
     def crop_idxs(self, t0=None, t1=None, w0=None, w1=None):
         self.matrix, self.times, self.wavelengths = crop_data_idx(self.matrix, self.times, self.wavelengths,
                                                                t0, t1, w0, w1)
+        self.SVD()
+        self._set_D()
+
+        return self
+
+    def remove_negative_rows(self):
+        # remove rows where at least one element is negative
+        # also updates the times array
+        mask = np.all(self.matrix >= 0, axis=1)
+        self.matrix = self.matrix[mask]
+        self.times = self.times[mask]
         self.SVD()
         self._set_D()
 

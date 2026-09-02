@@ -178,6 +178,10 @@ class Datasets(object):
                                     t0: float | None = None,):
         for d in self:
             d.baseline_correct_area(wls_vals, time_vals, t0)
+    
+    def remove_negative_rows(self):
+        for d in self:
+            d.remove_negative_rows()
 
     def baseline_drift_correct(self, w0=0, w1=300):
         for d in self:

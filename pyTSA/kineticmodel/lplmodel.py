@@ -31,6 +31,8 @@ from scipy.constants import Boltzmann
 
 KB_EV = Boltzmann / sc.e
 
+# TODO log parametrization of rates
+
 
 def save_matrix(dim0: np.iterable, dim1: np.iterable, matrix: np.ndarray, fname='output.txt', delimiter='\t', encoding='utf8', transpose=False):
     mat = np.vstack((dim0, matrix.T)) if transpose else np.vstack((dim1, matrix))
@@ -97,10 +99,6 @@ class LPLModel(KineticModel):
             params.add('rho_exp_lambda', value=10, min=0, max=np.inf, vary=True)
 
         params.add('s0', value=1e13, min=0, max=np.inf, vary=False) 
-        # global amplitude for multi-experiment fit
-        params.add('amp_global', value=1, min=0, max=np.inf, vary=True) 
-        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True) 
-        params.add('k_CT_rnr', value=1e7, min=0, max=1e10, vary=True)  
 
         return params
 
@@ -135,59 +133,18 @@ class LPLModel(KineticModel):
         return rho_0
 
     def build_saturable_rhs_jac(self, params: Parameters, T_fun: Callable, I_fun: Callable):
-        """RHS and analytic Jacobian of the arrowhead system with a
-        *saturable* trapping term (Pauli blocking).
-
-        T_fun(t), I_fun(t): temperature and generation-rate protocols, which
-        lets the same system serve isothermal charging, LPL decay, and TL ramps.
-        """
-
-        # simulate the current distribution of trap depths
-        rho_0 = self.get_rho_0(params)
-
-        NE = len(self.Es)
-        idx = np.arange(1, NE + 1)
-        N_tot = np.trapezoid(rho_0, self.Es)
-        w_E = self.trapezoid_weights(self.Es)
-
-        s0 = params['s0'].value
-        k_sep = params['k_sep'].value
-        k_rnr = params['k_CT_rnr'].value
-
-        def rhs(t, u):
-            kE = s0 * self.arrhenius(self.Es, T_fun(t))
-            nS, rho = u[0], u[1:]
-            q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
-            CS = k_sep * nS * q
-            CR = kE * rho
-            dn = I_fun(t) - k_rnr * nS - np.sum(w_E * (CS - CR))
-            return np.concatenate(([dn], CS - CR))
-
-        def jac(t, u):
-            kE = s0 * self.arrhenius(self.Es, T_fun(t))
-            nS, rho = u[0], u[1:]
-            q = np.maximum(rho_0 - rho, 0.0) / N_tot
-            # d(capture)/d(rho) = -k_sep*nS/N_tot, only where not clipped full
-            blocking = np.where(q > 0, k_sep * nS / N_tot, 0.0)
-            J = np.zeros((NE + 1, NE + 1))
-            J[0, 0] = -k_rnr - k_sep * np.sum(w_E * q)
-            J[0, 1:] = w_E * (kE + blocking)
-            J[1:, 0] = k_sep * q
-            J[idx, idx] = -kE - blocking
-            return J
-
-        return rhs, jac
+        raise NotImplementedError("This method is not implemented for the base LPLModel class.")
 
 
     def simulate(self, params: Parameters | None = None) -> np.ndarray:
         params = self.params if params is None else params
 
         if self.initial_state is None:
-            u0 = np.zeros(self.n_E + 1)
+            u0 = np.zeros(self.n_E + self.n_species)
         else:
             u0 = self.initial_state()
 
-        ivp_kw = dict(method="LSODA", rtol=1e-10, atol=1e-16, first_step=1e-14)
+        ivp_kw = dict(method="LSODA", rtol=1e-6, atol=1e-10)  # , first_step=1e-14
 
         self.I0 = self.P_irr_mW * 1e-3 * self.lambda_irr_nm * 1e-9 / (sc.h * sc.c) # light intensity in photons / s
 
@@ -208,12 +165,10 @@ class LPLModel(KineticModel):
         self.accum_phase_solution = sol_acc.y
         self.lpl_phase_solution = sol_dec.y
 
-        exc_state = self.lpl_phase_solution[0, :][:, None]
-        self.pair_conc = np.trapezoid(self.lpl_phase_solution[1:, :], self.Es, axis=0)[:, None]
+        self.process_solution(params)
 
-        # fill matrix_opt
-        amp = self.params['amp_global'].value
-        self.matrix_opt = amp * exc_state
+    def process_solution(self, params: Parameters | None = None):
+        raise NotImplementedError("This method is not implemented for the base LPLModel class.")
 
     def _require_simulation(self) -> None:
         if self.lpl_phase_solution is None:
@@ -276,6 +231,8 @@ class LPLModel(KineticModel):
             ax = fig.add_subplot(ig)
             kws = kwargs.copy()
 
+            n = self.n_species
+
             match p.lower():
                 case "decay-curve":
                     self._require_simulation()
@@ -314,7 +271,7 @@ class LPLModel(KineticModel):
                     norm = Normalize(self.t_acum[0], self.t_acum[-1])
 
                     for j in idxs:
-                        ax.plot(self.Es, self.accum_phase_solution[1:, j],
+                        ax.plot(self.Es, self.accum_phase_solution[n:, j],
                                 color=cmap(norm(self.t_acum[j])), lw=1)
                     ax.plot(self.Es, rho_0, color='black', lw=1, ls='--')
                     ax.set_xlabel('E [eV]')
@@ -333,7 +290,7 @@ class LPLModel(KineticModel):
                     norm = LogNorm(times[0], times[-1])
 
                     for j in idxs:
-                        ax.plot(self.Es, self.lpl_phase_solution[1:, j],
+                        ax.plot(self.Es, self.lpl_phase_solution[n:, j],
                                 color=cmap(norm(times[j])), lw=1)
                     ax.plot(self.Es, rho_0, color='black', lw=1, ls='--')
                     ax.set_xlabel('E [eV]')
@@ -360,4 +317,187 @@ class LPLModel(KineticModel):
         self.params = self.fit_result.params
 
 
-        
+class LPLModelCT(LPLModel):
+    """
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    """
+
+    name = "LPL model with single CT state"
+
+
+    def init_params(self) -> Parameters:
+        params = super(LPLModelCT, self).init_params()
+
+        # global amplitude for multi-experiment fit
+        params.add('amp_CT', value=1, min=0, max=np.inf, vary=True) 
+        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True) 
+        params.add('k_CT_rnr', value=1e7, min=0, max=1e10, vary=True)  
+
+        return params
+
+
+    def build_saturable_rhs_jac(self, params: Parameters, T_fun: Callable, I_fun: Callable):
+        """RHS and analytic Jacobian of the arrowhead system with a
+        *saturable* trapping term (Pauli blocking).
+
+        T_fun(t), I_fun(t): temperature and generation-rate protocols, which
+        lets the same system serve isothermal charging, LPL decay, and TL ramps.
+        """
+
+        # simulate the current distribution of trap depths
+        rho_0 = self.get_rho_0(params)
+
+        NE = len(self.Es)
+        idx = np.arange(1, NE + 1)
+        N_tot = np.trapezoid(rho_0, self.Es)
+        w_E = self.trapezoid_weights(self.Es)
+
+        s0 = params['s0'].value
+        k_sep = params['k_sep'].value
+        k_rnr = params['k_CT_rnr'].value
+
+        def rhs(t, u):
+            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            nS, rho = u[0], u[1:]
+            q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
+            CS = k_sep * nS * q
+            CR = kE * rho
+            dn = I_fun(t) - k_rnr * nS - np.sum(w_E * (CS - CR))
+            return np.concatenate(([dn], CS - CR))
+
+        def jac(t, u):
+            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            nS, rho = u[0], u[1:]
+            q = np.maximum(rho_0 - rho, 0.0) / N_tot
+            # d(capture)/d(rho) = -k_sep*nS/N_tot, only where not clipped full
+            blocking = np.where(q > 0, k_sep * nS / N_tot, 0.0)
+            J = np.zeros((NE + 1, NE + 1))
+            J[0, 0] = -k_rnr - k_sep * np.sum(w_E * q)
+            J[0, 1:] = w_E * (kE + blocking)
+            J[1:, 0] = k_sep * q
+            J[idx, idx] = -kE - blocking
+            return J
+
+        return rhs, jac
+
+    def process_solution(self, params: Parameters | None = None):
+        params = self.params if params is None else params
+
+        exc_state = self.lpl_phase_solution[0, :][:, None]
+        self.pair_conc = np.trapezoid(self.lpl_phase_solution[1:, :], self.Es, axis=0)[:, None]
+
+        # fill matrix_opt
+        amp = params['amp_CT'].value
+        self.matrix_opt = amp * exc_state
+
+
+
+
+class LPLModelST(LPLModel):
+    """
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+
+    """
+
+    name = "LPL model with singlet and triplet states"
+
+
+    def init_params(self) -> Parameters:
+        params = super(LPLModelST, self).init_params()
+
+        # global amplitude for multi-experiment fit
+        params.add('amp_S', value=1, min=0, max=np.inf, vary=True)
+        params.add('amp_T', value=1, min=0, max=np.inf, vary=True)
+        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True) 
+        params.add('k_S_rnr', value=1e5, min=0, max=1e10, vary=True) 
+        params.add('k_T_rnr', value=1, min=0, max=1e10, vary=True)  
+        params.add('k_isc', value=1e2, min=0, max=1e10, vary=True) 
+        params.add('k_risc', value=0, min=0, max=1e10, vary=True) 
+
+        return params
+
+
+    def build_saturable_rhs_jac(self, params: Parameters, T_fun: Callable, I_fun: Callable):
+        """RHS and analytic Jacobian of the arrowhead system with a
+        *saturable* trapping term (Pauli blocking).
+
+        T_fun(t), I_fun(t): temperature and generation-rate protocols, which
+        lets the same system serve isothermal charging, LPL decay, and TL ramps.
+        """
+
+        # simulate the current distribution of trap depths
+        rho_0 = self.get_rho_0(params)
+
+        NE = len(self.Es)
+        n = self.n_species
+        idx = np.arange(n, NE + n)
+        N_tot = np.trapezoid(rho_0, self.Es)
+        w_E = self.trapezoid_weights(self.Es)
+
+        s0 = params['s0'].value
+        k_sep = params['k_sep'].value
+        k_S_rnr = params['k_S_rnr'].value
+        k_T_rnr = params['k_T_rnr'].value
+        k_isc = params['k_isc'].value
+        k_risc = params['k_risc'].value
+        fS = 1 / 4
+        fT = 3 / 4
+
+        def rhs(t, u):
+            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            nS, nT, rho = u[0], u[1], u[2:]
+            q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
+            CS = k_sep * nS * q
+            CR = kE * rho
+            rec_sum = (w_E * CR).sum()
+            dnS = I_fun(t) - (k_S_rnr + k_isc) * nS - np.sum(w_E * CS) + fS * rec_sum + k_risc * nT 
+            dnT =  k_isc * nS - (k_T_rnr + k_risc) * nT + fT * rec_sum
+
+            return np.concatenate(([dnS, dnT], CS - CR))
+
+        def jac(t, u):
+            # print("jac called at t =", t)
+            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            nS, nT, rho = u[0], u[1], u[2:]
+            q = np.maximum(rho_0 - rho, 0.0) / N_tot
+            # d(capture)/d(rho) = -k_sep*nS/N_tot where not clipped
+            blocking = np.where(q > 0, k_sep * nS / N_tot, 0.0)
+
+            J = np.zeros((NE + 2, NE + 2))
+            # dnS row
+            J[0, 0] = -(k_S_rnr + k_isc) - k_sep * np.sum(w_E * q)
+            J[0, 1] = k_risc
+            J[0, 2:] = w_E * (fS * kE + blocking)
+            # dnT row
+            J[1, 0] = k_isc
+            J[1, 1] = -(k_T_rnr + k_risc)
+            J[1, 2:] = fT * w_E * kE
+            # drho rows
+            J[2:, 0] = k_sep * q
+            J[idx, idx] = -kE - blocking
+            return J
+
+        return rhs, jac
+
+    def process_solution(self, params: Parameters | None = None):
+        params = self.params if params is None else params
+
+        exc_state_S = self.lpl_phase_solution[0, :][:, None]
+        exc_state_T = self.lpl_phase_solution[1, :][:, None]
+        self.pair_conc = np.trapezoid(self.lpl_phase_solution[2:, :], self.Es, axis=0)[:, None]
+
+        # fill matrix_opt
+        amp_S = params['amp_S'].value
+        amp_T = params['amp_T'].value
+        self.matrix_opt = amp_S * exc_state_S + amp_T * exc_state_T

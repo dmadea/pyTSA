@@ -152,7 +152,7 @@ class KineticModel(object):
 
         # PROP_NOISE_FLOOR: w from variance (k * |D|^Exp)^2 + noise_floor^2; PROP_THRESH: w_ij = |D_ij| > thresh ? 1/|D_ij| : 0
         self.weight_type: WeightType | None = None
-        self.calc_weights_from_fit_matrix = True
+        self.calc_weights_from_fit_matrix = False
 
         # Individual weighting parameters (previously in weighting_params dictionary)
         self.weighting_k: float = 0.000
