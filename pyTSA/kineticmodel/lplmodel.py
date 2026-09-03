@@ -418,7 +418,7 @@ class LPLModelST(LPLModel):
 
 
     def init_params(self) -> Parameters:
-        params = super(LPLModelST, self).init_params()
+        params = super().init_params()
 
         # global amplitude for multi-experiment fit
         params.add('amp_S', value=1, min=0, max=np.inf, vary=True)
@@ -502,6 +502,164 @@ class LPLModelST(LPLModel):
         self.pair_conc = np.trapezoid(self.lpl_phase_solution[2:, :], self.Es, axis=0)[:, None]
 
         # fill matrix_opt
+        amp_S = params['amp_S'].value
+        amp_T = params['amp_T'].value
+        self.matrix_opt = amp_S * exc_state_S + amp_T * exc_state_T
+
+
+class LPLModelSTDispersion(LPLModel):
+    """Singlet/triplet LPL model with a 1-D correlated rate dispersion.
+
+    Each quadrature node ``z`` is a molecular subpopulation. Generation,
+    trapping, and recombination return are weighted by the truncated
+    Gaussian density ``p(z)``; each node has its own (lognormally mapped)
+    rates, coupled through the shared latent coordinate ``z``.
+
+    ``rate_z_corr`` sets how each rate tracks ``z``: ``+1`` (default) is
+    fully correlated, ``-1`` is anticorrelated, ``0`` ignores ``z``.
+    Example:: ``model.rate_z_corr['k_isc'] = -1``.
+    """
+
+    name = "LPL model with singlet and triplet states with rate constant dispersion"
+
+    def __init__(self, dataset: Dataset | None = None, n_species: int = 1, set_model: bool = False):
+
+        self.n_disp = 30  # number of dispersion points for singlet and triplet state
+        self.n_species = 2 * self.n_disp
+        self.kST_points = np.linspace(-3, 3, self.n_disp)
+        self.kST_weights = self.trapezoid_weights(self.kST_points)
+        self.rate_z_corr = dict(k_S_rnr=1, k_T_rnr=1, k_isc=1, k_risc=1)
+
+        super().__init__(dataset, 2 * self.n_disp, set_model)
+
+
+    def init_params(self) -> Parameters:
+        params = super().init_params()
+
+        # global amplitude for multi-experiment fit
+        params.add('amp_S', value=1, min=0, max=np.inf, vary=True)
+        params.add('amp_T', value=1, min=0, max=np.inf, vary=True)
+        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True)
+        params.add('k_S_rnr', value=1e5, min=0, max=1e10, vary=True)
+        params.add('k_S_rnr_sigma', value=0, min=0, max=np.inf, vary=True)
+        params.add('k_T_rnr', value=1, min=0, max=1e10, vary=True)
+        params.add('k_T_rnr_sigma', value=0, min=0, max=np.inf, vary=True)
+        params.add('k_isc', value=1e2, min=0, max=1e10, vary=True)
+        params.add('k_isc_sigma', value=0, min=0, max=np.inf, vary=True)
+        params.add('k_risc', value=0, min=0, max=1e10, vary=True)
+        params.add('k_risc_sigma', value=0, min=0, max=np.inf, vary=True)
+
+        return params
+
+    def _lognormal_rates(self, rate: float, sigma: float, corr: float = 1) -> np.ndarray:
+        """Map the shared latent coordinate ``z`` to a strictly positive rate.
+
+        ``rate`` and ``sigma`` are the arithmetic mean and standard
+        deviation of the implied lognormal. ``corr`` is the coupling to
+        ``z`` (``+1`` correlated, ``-1`` anticorrelated, ``0`` constant).
+        ``sigma == 0`` recovers a constant rate; ``rate <= 0`` returns
+        zeros (e.g. disabled RISC).
+
+        # sigma is relative to the rate, so it can be [0, 1] typically but can be larger
+        """
+
+        sigma = sigma * rate
+
+        z = self.kST_points
+        if rate <= 0:
+            return np.zeros_like(z)
+        if sigma <= 0 or corr == 0:
+            return np.full_like(z, rate)
+
+        log_sigma = np.sqrt(np.log1p((sigma / rate) ** 2))
+        a = corr * log_sigma
+        return rate * np.exp(a * z - 0.5 * a ** 2)
+
+    def _population_pdf(self) -> np.ndarray:
+        p = self.gaussian(self.kST_points, 0, 1)
+        return p / np.dot(self.kST_weights, p)
+
+    def build_saturable_rhs_jac(self, params: Parameters, T_fun: Callable, I_fun: Callable):
+        """RHS and analytic Jacobian of the arrowhead system with a
+        *saturable* trapping term (Pauli blocking).
+
+        T_fun(t), I_fun(t): temperature and generation-rate protocols, which
+        lets the same system serve isothermal charging, LPL decay, and TL ramps.
+        """
+
+        rho_0 = self.get_rho_0(params)
+
+        NE = len(self.Es)
+        n = self.n_species
+        n_disp = self.n_disp
+        N_tot = np.trapezoid(rho_0, self.Es)
+        w_E = self.trapezoid_weights(self.Es)
+        w_z = self.kST_weights
+        p = self._population_pdf()
+
+        s0 = params['s0'].value
+        k_sep = params['k_sep'].value
+        fS = 1 / 4
+        fT = 3 / 4
+
+        corr = self.rate_z_corr
+        k_S_rnr_points = self._lognormal_rates(params['k_S_rnr'].value, params['k_S_rnr_sigma'].value, corr['k_S_rnr'])
+        k_T_rnr_points = self._lognormal_rates(params['k_T_rnr'].value, params['k_T_rnr_sigma'].value, corr['k_T_rnr'])
+        k_isc_points = self._lognormal_rates(params['k_isc'].value, params['k_isc_sigma'].value, corr['k_isc'])
+        k_risc_points = self._lognormal_rates(params['k_risc'].value, params['k_risc_sigma'].value, corr['k_risc'])
+
+        def rhs(t, u):
+            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            nS = u[:n_disp]
+            nT = u[n_disp:n]
+            rho = u[n:]
+            q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
+            nS_tot = np.dot(w_z, nS)
+            vacant_fraction = np.dot(w_E, q)
+            CS = k_sep * nS_tot * q
+            CR = kE * rho
+            rec_sum = np.dot(w_E, CR)
+
+            dnS = p * I_fun(t) - (k_S_rnr_points + k_isc_points) * nS + fS * rec_sum * p + k_risc_points * nT - k_sep * vacant_fraction * nS
+            dnT = k_isc_points * nS - (k_T_rnr_points + k_risc_points) * nT + fT * rec_sum * p
+
+            return np.concatenate((dnS, dnT, CS - CR))
+
+        def jac(t, u):
+            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            nS = u[:n_disp]
+            rho = u[n:]
+            q = np.maximum(rho_0 - rho, 0.0) / N_tot
+            blocking = q > 0
+            vacant_fraction = np.dot(w_E, q)
+            nS_tot = np.dot(w_z, nS)
+            rec_grad = w_E * kE
+            Q_grad = np.where(blocking, -w_E / N_tot, 0.0)
+
+            J = np.zeros((n + NE, n + NE))
+            np.fill_diagonal(J[:n_disp, :n_disp], -(k_S_rnr_points + k_isc_points + k_sep * vacant_fraction))
+            np.fill_diagonal(J[:n_disp, n_disp:n], k_risc_points)
+            J[:n_disp, n:] = fS * p[:, None] * rec_grad[None, :] - k_sep * nS[:, None] * Q_grad[None, :]
+
+            np.fill_diagonal(J[n_disp:n, :n_disp], k_isc_points)
+            np.fill_diagonal(J[n_disp:n, n_disp:n], -(k_T_rnr_points + k_risc_points))
+            J[n_disp:n, n:] = fT * p[:, None] * rec_grad[None, :]
+
+            J[n:, :n_disp] = k_sep * q[:, None] * w_z[None, :]
+            np.fill_diagonal(J[n:, n:], -kE - np.where(blocking, k_sep * nS_tot / N_tot, 0.0))
+            return J
+
+        return rhs, jac
+
+    def process_solution(self, params: Parameters | None = None):
+        params = self.params if params is None else params
+
+        nS = self.lpl_phase_solution[:self.n_disp, :]
+        nT = self.lpl_phase_solution[self.n_disp:2 * self.n_disp, :]
+        exc_state_S = np.dot(self.kST_weights, nS)[:, None]
+        exc_state_T = np.dot(self.kST_weights, nT)[:, None]
+        self.pair_conc = np.trapezoid(self.lpl_phase_solution[2 * self.n_disp:, :], self.Es, axis=0)[:, None]
+
         amp_S = params['amp_S'].value
         amp_T = params['amp_T'].value
         self.matrix_opt = amp_S * exc_state_S + amp_T * exc_state_T
