@@ -3,8 +3,11 @@
 #
 # Kinetic Monte Carlo of geminate charge separation / hopping / recombination
 # around a single charge-transfer (CT) centre in an organic semiconductor.
+
+# generates the random positions in a box
+# then assign the centers and energies of hosts
 #
-# Physics
+ # Physics
 # -------
 # * One CT chromophore at the origin of a 3-D simple-cubic host lattice.
 # * No energetic disorder (yet): every host molecule has the same site energy.
@@ -27,13 +30,26 @@
 using Random
 using Printf
 using Base.Threads
+using Distributions
 
 # ---------------------------------------------------------------------------
 # User parameters
 # ---------------------------------------------------------------------------
 
-const N_TRAJ      = 400_000
+const AVOGADRO = 6.02214076e23
+const KB_EV = 8.617333262145e-5     # eV / K
+const EPS_0 = 8.854187e-12
+
+const M            = 192.17  # g/mol for PET
+const HOST_DENSITY = 1.332 # g/cm^3, density of PET
+const DENSITY      = HOST_DENSITY * AVOGADRO * 1e-21 / M # in units / nm3
+
+const N_TRAJ      = 40_000
 const LAMBDA_EV   = 1.0
+const N_PARTICLES = 1_000
+const L           = (N_PARTICLES / DENSITY)^(1/3) # in nm
+const EPS_HOST    = 3.2
+const C_CENTERS   = 0.01   # 1% conc.
 const G0_LIST     = [0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00, -0.05, -0.10, -0.40]   # eV
 const T_K         = 300.0
 const NU0         = 1.0e13          # s⁻¹, Miller–Abrahams prefactor (as in LPLModel)
@@ -49,7 +65,6 @@ const T_MIN_HIST  = 1.0e-12         # s
 const T_MIN_HIST  = 1.0e-12         # s
 const N_BINS      = 90
 
-const KB_EV = 8.617333262145e-5     # eV / K
 
 const OUTDIR = joinpath(@__DIR__, "kmc_cube_output")
 
@@ -178,10 +193,29 @@ Long-range hops: every lattice site within R_HOP of the current position is a
 possible destination. Landing on the origin is recombination (Marcus Ea_cr);
 all other destinations are isoenergetic host hops (Ea_hop).
 """
-function simulate_one(r::Rates, rng::AbstractRNG;
+function simulate_one(rng::AbstractRNG;
                       t_max::Float64 = T_MAX,
                       r_escape::Int = R_ESCAPE,
                       max_events::Int = MAX_EVENTS)
+
+    # assuming the exciton is already the CT state with the host molecule
+
+    # CT binding energy = E_HOMO_center - E_LUMO_host + 
+
+    # generate random positions in a box
+    xyz_host = rand(rng, (N_PARTICLES, 3)) .* L
+    G0 = 0.2
+
+    # assign centers
+    N_centers = N_PARTICLES * C_CENTERS
+    xyz_centers = rand(rng, (N_centers, 3)) .* L
+    idx_center = rand(rng, 1:N_centers)
+
+    # assign LUMO energies to hosts molecules, gaussian distribution with LUMO_mean and LUMO_std
+    LUMO_CENTER = -4.0
+    LUMO_mean = -5.0
+    LUMO_std = 0.1
+    host_LUMO_energies = rand(rng, Normal(LUMO_mean, LUMO_std), N_PARTICLES)
 
     exciton = true
     x = y = z = 0
@@ -193,18 +227,56 @@ function simulate_one(r::Rates, rng::AbstractRNG;
     t_first_cs = NaN
     r_esc2 = r_escape * r_escape
 
-    k_decay = r.k_decay
-    k_hop = r.k_hop
-    cum_cs = r.cum_cs
-    offs = OFFSETS
-
     # scratch for polaron-step cumulative rates: [CR; hop_1 … hop_N]
     # hop channels that land on the origin are skipped (CR handles that)
     cum = Vector{Float64}(undef, N_OFF + 1)
     hop_idx = Vector{Int}(undef, N_OFF)   # OFFSETS index for each hop channel
 
+    # precalculate the rates for center CS for all particles
+    for i in 1:N_PARTICLES
+        xyz_center = xyz_centers[idx_center, :]
+        xyz_host = xyz_host[i, :]
+        r_nm = sqrt(sum((xyz_center - xyz_host).^2))
+
+        # calculate the Gibs energy of charge separation from the center
+        LUMO_host = host_LUMO_energies[i]
+        dE = 
+
+        Ea_cs = marcus_Ea(λ, G0 - host_LUMO_energies[i])
+        k_cs[i] = miller_abrahams(NU0, BETA_INV_NM, OFFSETS[i].r_nm, Ea_cs,  T_K)
+    end
+
+    Ea_cs  = marcus_Ea(λ, G0)
+    Ea_cr  = marcus_Ea(λ, -G0)
+    Ea_hop = marcus_Ea(λ, 0.0)
+    k_decay = 1.0 / TAU_CT
+
+    k_cs  = Vector{Float64}(undef, N_OFF)
+    k_cr  = Vector{Float64}(undef, N_OFF)
+    k_hop = Vector{Float64}(undef, N_OFF)
+    cum_cs = Vector{Float64}(undef, N_OFF)
+
+    @inbounds for i in 1:N_OFF
+        r = OFFSETS[i].r_nm
+        k_cs[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cs,  T_K)
+        k_cr[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cr,  T_K)
+        k_hop[i] = miller_abrahams(NU0, BETA_INV_NM, r, Ea_hop, T_K)
+        cum_cs[i] = (i == 1 ? 0.0 : cum_cs[i - 1]) + k_cs[i]
+    end
+    k_cs_tot = cum_cs[end]
+
+
+
+
+
     @inbounds for _ in 1:max_events
         if exciton
+            xyz_center = xyz_centers[idx_center, :]
+
+
+
+
+
             k_tot = k_decay + r.k_cs_tot
             t += -log(rand(rng)) / k_tot
             if t > t_max
