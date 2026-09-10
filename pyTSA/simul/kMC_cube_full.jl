@@ -27,6 +27,8 @@
 #
 # Detailed balance at fixed r: k_CS(r) / k_CR(r) = exp(−G0 / kT).
 
+## TODO precompute nearest distance and energetic neighbors for each particle
+
 using Random
 using Printf
 using Base.Threads
@@ -72,30 +74,30 @@ const OUTDIR = joinpath(@__DIR__, "kmc_cube_output")
 # Lattice geometry within R_HOP
 # ---------------------------------------------------------------------------
 
-struct Offset
-    dx::Int16
-    dy::Int16
-    dz::Int16
-    r_nm::Float64
-end
+# struct Offset
+#     dx::Int16
+#     dy::Int16
+#     dz::Int16
+#     r_nm::Float64
+# end
 
-"""All nonzero lattice vectors with |r| ≤ R_HOP (in lattice units)."""
-function build_offsets(r_hop::Int, a_nm::Float64)
-    offs = Offset[]
-    r2max = r_hop * r_hop
-    for dx in -r_hop:r_hop, dy in -r_hop:r_hop, dz in -r_hop:r_hop
-        r2 = dx * dx + dy * dy + dz * dz
-        (r2 == 0 || r2 > r2max) && continue
-        push!(offs, Offset(Int16(dx), Int16(dy), Int16(dz), a_nm * sqrt(Float64(r2))))
-    end
-    # nearer sites first → slightly better branch prediction / early exits
-    sort!(offs; by = o -> o.r_nm)
-    return offs
-end
+# """All nonzero lattice vectors with |r| ≤ R_HOP (in lattice units)."""
+# function build_offsets(r_hop::Int, a_nm::Float64)
+#     offs = Offset[]
+#     r2max = r_hop * r_hop
+#     for dx in -r_hop:r_hop, dy in -r_hop:r_hop, dz in -r_hop:r_hop
+#         r2 = dx * dx + dy * dy + dz * dz
+#         (r2 == 0 || r2 > r2max) && continue
+#         push!(offs, Offset(Int16(dx), Int16(dy), Int16(dz), a_nm * sqrt(Float64(r2))))
+#     end
+#     # nearer sites first → slightly better branch prediction / early exits
+#     sort!(offs; by = o -> o.r_nm)
+#     return offs
+# end
 
-const OFFSETS = build_offsets(R_HOP, A_NM)
-const N_OFF   = length(OFFSETS)
-const R_HOP_NM = A_NM * Float64(R_HOP)
+# const OFFSETS = build_offsets(R_HOP, A_NM)
+# const N_OFF   = length(OFFSETS)
+# const R_HOP_NM = A_NM * Float64(R_HOP)
 
 # ---------------------------------------------------------------------------
 # Rates
@@ -109,60 +111,60 @@ function miller_abrahams(ν0, β, r_nm, Ea, T)
     return ν0 * exp(-2 * β * r_nm - Ea / (KB_EV * T))
 end
 
-struct Rates
-    G0::Float64
-    λ::Float64
-    Ea_cs::Float64
-    Ea_cr::Float64
-    Ea_hop::Float64
-    k_decay::Float64
-    k_cs::Vector{Float64}     # CS rate onto OFFSETS[i] from the origin
-    k_cr::Vector{Float64}     # CR rate from OFFSETS[i] back to the origin
-    k_hop::Vector{Float64}    # host hop of displacement OFFSETS[i]
-    k_cs_tot::Float64
-    k_cs_nn::Float64          # one nearest-neighbour CS channel (diagnostics)
-    k_cr_nn::Float64
-    k_hop_nn::Float64
-    cum_cs::Vector{Float64}   # cumulative CS rates for fast sampling
-end
+# struct Rates
+#     G0::Float64
+#     λ::Float64
+#     Ea_cs::Float64
+#     Ea_cr::Float64
+#     Ea_hop::Float64
+#     k_decay::Float64
+#     k_cs::Vector{Float64}     # CS rate onto OFFSETS[i] from the origin
+#     k_cr::Vector{Float64}     # CR rate from OFFSETS[i] back to the origin
+#     k_hop::Vector{Float64}    # host hop of displacement OFFSETS[i]
+#     k_cs_tot::Float64
+#     k_cs_nn::Float64          # one nearest-neighbour CS channel (diagnostics)
+#     k_cr_nn::Float64
+#     k_hop_nn::Float64
+#     cum_cs::Vector{Float64}   # cumulative CS rates for fast sampling
+# end
 
-function Rates(G0::Float64; λ::Float64 = LAMBDA_EV)
-    Ea_cs  = marcus_Ea(λ, G0)
-    Ea_cr  = marcus_Ea(λ, -G0)
-    Ea_hop = marcus_Ea(λ, 0.0)
-    k_decay = 1.0 / TAU_CT
+# function Rates(G0::Float64; λ::Float64 = LAMBDA_EV)
+#     Ea_cs  = marcus_Ea(λ, G0)
+#     Ea_cr  = marcus_Ea(λ, -G0)
+#     Ea_hop = marcus_Ea(λ, 0.0)
+#     k_decay = 1.0 / TAU_CT
 
-    k_cs  = Vector{Float64}(undef, N_OFF)
-    k_cr  = Vector{Float64}(undef, N_OFF)
-    k_hop = Vector{Float64}(undef, N_OFF)
-    cum_cs = Vector{Float64}(undef, N_OFF)
+#     k_cs  = Vector{Float64}(undef, N_OFF)
+#     k_cr  = Vector{Float64}(undef, N_OFF)
+#     k_hop = Vector{Float64}(undef, N_OFF)
+#     cum_cs = Vector{Float64}(undef, N_OFF)
 
-    @inbounds for i in 1:N_OFF
-        r = OFFSETS[i].r_nm
-        k_cs[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cs,  T_K)
-        k_cr[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cr,  T_K)
-        k_hop[i] = miller_abrahams(NU0, BETA_INV_NM, r, Ea_hop, T_K)
-        cum_cs[i] = (i == 1 ? 0.0 : cum_cs[i - 1]) + k_cs[i]
-    end
-    k_cs_tot = cum_cs[end]
+#     @inbounds for i in 1:N_OFF
+#         r = OFFSETS[i].r_nm
+#         k_cs[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cs,  T_K)
+#         k_cr[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cr,  T_K)
+#         k_hop[i] = miller_abrahams(NU0, BETA_INV_NM, r, Ea_hop, T_K)
+#         cum_cs[i] = (i == 1 ? 0.0 : cum_cs[i - 1]) + k_cs[i]
+#     end
+#     k_cs_tot = cum_cs[end]
 
-    # first shell: r = a (six sites); OFFSETS are sorted by r so index 1 is NN
-    k_cs_nn  = k_cs[1]
-    k_cr_nn  = k_cr[1]
-    k_hop_nn = k_hop[1]
+#     # first shell: r = a (six sites); OFFSETS are sorted by r so index 1 is NN
+#     k_cs_nn  = k_cs[1]
+#     k_cr_nn  = k_cr[1]
+#     k_hop_nn = k_hop[1]
 
-    return Rates(G0, λ, Ea_cs, Ea_cr, Ea_hop, k_decay,
-                 k_cs, k_cr, k_hop, k_cs_tot, k_cs_nn, k_cr_nn, k_hop_nn, cum_cs)
-end
+#     return Rates(G0, λ, Ea_cs, Ea_cr, Ea_hop, k_decay,
+#                  k_cs, k_cr, k_hop, k_cs_tot, k_cs_nn, k_cr_nn, k_hop_nn, cum_cs)
+# end
 
 """CR rate from lattice site (x,y,z) to the origin, or 0 if out of R_HOP."""
-function k_cr_from_site(r::Rates, x::Int, y::Int, z::Int)
-    r2 = x * x + y * y + z * z
-    r2 == 0 && return 0.0
-    r2 > R_HOP * R_HOP && return 0.0
-    r_nm = A_NM * sqrt(Float64(r2))
-    return miller_abrahams(NU0, BETA_INV_NM, r_nm, r.Ea_cr, T_K)
-end
+# function k_cr_from_site(r::Rates, x::Int, y::Int, z::Int)
+#     r2 = x * x + y * y + z * z
+#     r2 == 0 && return 0.0
+#     r2 > R_HOP * R_HOP && return 0.0
+#     r_nm = A_NM * sqrt(Float64(r2))
+#     return miller_abrahams(NU0, BETA_INV_NM, r_nm, r.Ea_cr, T_K)
+# end
 
 # ---------------------------------------------------------------------------
 # Single-trajectory Gillespie kMC
@@ -185,6 +187,9 @@ function sample_cum(cum::Vector{Float64}, rng)
     u = rand(rng) * cum[end]
     return searchsortedfirst(cum, u)
 end
+
+
+
 
 """
 One geminate pair, starting as CT*.
@@ -210,9 +215,11 @@ function simulate_one(rng::AbstractRNG;
     N_centers = N_PARTICLES * C_CENTERS
     xyz_centers = rand(rng, (N_centers, 3)) .* L
     idx_center = rand(rng, 1:N_centers)
+    xyz_center = xyz_centers[idx_center, :]
+    current_index = idx_center
 
     # assign LUMO energies to hosts molecules, gaussian distribution with LUMO_mean and LUMO_std
-    LUMO_CENTER = -4.0
+    LUMO_CENTER = -5.0  # LUMO of a "CT complex" of a center
     LUMO_mean = -5.0
     LUMO_std = 0.1
     host_LUMO_energies = rand(rng, Normal(LUMO_mean, LUMO_std), N_PARTICLES)
@@ -227,57 +234,29 @@ function simulate_one(rng::AbstractRNG;
     t_first_cs = NaN
     r_esc2 = r_escape * r_escape
 
-    # scratch for polaron-step cumulative rates: [CR; hop_1 … hop_N]
-    # hop channels that land on the origin are skipped (CR handles that)
-    cum = Vector{Float64}(undef, N_OFF + 1)
-    hop_idx = Vector{Int}(undef, N_OFF)   # OFFSETS index for each hop channel
+    # # scratch for polaron-step cumulative rates: [CR; hop_1 … hop_N]
+    # # hop channels that land on the origin are skipped (CR handles that)
+    # cum = Vector{Float64}(undef, N_OFF + 1)
+    # hop_idx = Vector{Int}(undef, N_OFF)   # OFFSETS index for each hop channel
+
+    rates_cs = Vector{Float64}(undef, N_PARTICLES)
+    rates_cs_cumsum = Vector{Float64}(undef, N_PARTICLES)
 
     # precalculate the rates for center CS for all particles
     for i in 1:N_PARTICLES
-        xyz_center = xyz_centers[idx_center, :]
-        xyz_host = xyz_host[i, :]
-        r_nm = sqrt(sum((xyz_center - xyz_host).^2))
+        xyz_host_current = xyz_host[i, :]
+        r_nm = sqrt(sum((xyz_center - xyz_host_current).^2))
 
-        # calculate the Gibs energy of charge separation from the center
-        LUMO_host = host_LUMO_energies[i]
-        dE = 
-
-        Ea_cs = marcus_Ea(λ, G0 - host_LUMO_energies[i])
-        k_cs[i] = miller_abrahams(NU0, BETA_INV_NM, OFFSETS[i].r_nm, Ea_cs,  T_K)
+        dG = LUMO_CENTER - host_LUMO_energies[i]
+        Ea_cs = marcus_Ea(λ, dG)
+        rates_cs[i] = miller_abrahams(NU0, BETA_INV_NM, r_nm, Ea_cs,  T_K)
+        rates_cs_cumsum[i] = (i == 1 ? 0.0 : rates_cs_cumsum[i - 1]) + rates_cs[i]
     end
-
-    Ea_cs  = marcus_Ea(λ, G0)
-    Ea_cr  = marcus_Ea(λ, -G0)
-    Ea_hop = marcus_Ea(λ, 0.0)
-    k_decay = 1.0 / TAU_CT
-
-    k_cs  = Vector{Float64}(undef, N_OFF)
-    k_cr  = Vector{Float64}(undef, N_OFF)
-    k_hop = Vector{Float64}(undef, N_OFF)
-    cum_cs = Vector{Float64}(undef, N_OFF)
-
-    @inbounds for i in 1:N_OFF
-        r = OFFSETS[i].r_nm
-        k_cs[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cs,  T_K)
-        k_cr[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cr,  T_K)
-        k_hop[i] = miller_abrahams(NU0, BETA_INV_NM, r, Ea_hop, T_K)
-        cum_cs[i] = (i == 1 ? 0.0 : cum_cs[i - 1]) + k_cs[i]
-    end
-    k_cs_tot = cum_cs[end]
-
-
-
-
 
     @inbounds for _ in 1:max_events
         if exciton
-            xyz_center = xyz_centers[idx_center, :]
+            k_tot = k_decay + rates_cs_cumsum[end]
 
-
-
-
-
-            k_tot = k_decay + r.k_cs_tot
             t += -log(rand(rng)) / k_tot
             if t > t_max
                 return Traj(timeout, t_max, n_cs, n_cr, n_hops, r2_max, t_first_cs)
@@ -286,40 +265,54 @@ function simulate_one(rng::AbstractRNG;
                 return Traj(emitted, t, n_cs, n_cr, n_hops, r2_max, t_first_cs)
             end
             # charge separation onto a site sampled ∝ k_cs(r)
-            i = sample_cum(cum_cs, rng)
-            o = offs[i]
-            x = Int(o.dx); y = Int(o.dy); z = Int(o.dz)
+            current_index = sample_cum(rates_cs_cumsum, rng)
+
             exciton = false
             n_cs += 1
-            r2 = x * x + y * y + z * z
-            r2 > r2_max && (r2_max = r2)
+
             if isnan(t_first_cs)
                 t_first_cs = t
             end
         else
-            # --- build event list: CR (slot 1) + host hops (slots 2…) ---
-            k_cr = k_cr_from_site(r, x, y, z)
-            cum[1] = k_cr
-            nchan = 1
-            nhop = 0
-            for i in 1:N_OFF
-                o = offs[i]
-                nx = x + Int(o.dx)
-                ny = y + Int(o.dy)
-                nz = z + Int(o.dz)
-                if nx == 0 && ny == 0 && nz == 0
-                    continue   # recombination already counted
+            # --- build event list: CR to center or hop hosts ---
+            xyz_current = xyz_host[current_index, :]
+
+            rates_hop = Vector{Float64}(undef, N_PARTICLES)
+            rates_hop_cumsum = Vector{Float64}(undef, N_PARTICLES)
+
+            # rates of hopping to other hosts
+            for i in 1:N_PARTICLES
+                if i == current_index
+                    rates_hop[i] = 0.0
+                else
+                    xyz_other = xyz_host[i, :]
+    
+                    r_nm = sqrt(sum((xyz_current - xyz_other).^2))
+            
+                    dG = host_LUMO_energies[i] - host_LUMO_energies[current_index]
+                    Ea_hop = marcus_Ea(λ, dG)
+                    rates_hop[i] = miller_abrahams(NU0, BETA_INV_NM, r_nm, Ea_hop,  T_K)
                 end
-                nhop += 1
-                nchan += 1
-                hop_idx[nhop] = i
-                cum[nchan] = cum[nchan - 1] + k_hop[i]
+
+                rates_hop_cumsum[i] = (i == 1 ? 0.0 : rates_hop_cumsum[i - 1]) + rates_hop[i]
             end
-            k_tot = cum[nchan]
+
+            # rate of hopping to the center
+            dG = host_LUMO_energies[current_index] - LUMO_CENTER
+            Ea_cr = marcus_Ea(λ, dG)
+            r_nm = sqrt(sum((xyz_current - xyz_center).^2))
+            rate_cr = miller_abrahams(NU0, BETA_INV_NM, r_nm, Ea_cr,  T_K)
+
+            # rates_hop_cumsum[1] = rate_cr
+
+            k_tot = rates_hop_cumsum[end] + rate_cr
+
             t += -log(rand(rng)) / k_tot
             if t > t_max
                 return Traj(timeout, t_max, n_cs, n_cr, n_hops, r2_max, t_first_cs)
             end
+
+            # search sorted array of rates to find the event
 
             u = rand(rng) * k_tot
             j = searchsortedfirst(view(cum, 1:nchan), u)
@@ -327,19 +320,13 @@ function simulate_one(rng::AbstractRNG;
             if j == 1
                 # recombination → CT*
                 exciton = true
-                x = y = z = 0
+                current_index = idx_center
                 n_cr += 1
             else
-                o = offs[hop_idx[j - 1]]
-                x += Int(o.dx)
-                y += Int(o.dy)
-                z += Int(o.dz)
-                n_hops += 1
-                r2 = x * x + y * y + z * z
-                r2 > r2_max && (r2_max = r2)
-                if r2 > r_esc2
-                    return Traj(escaped, t, n_cs, n_cr, n_hops, r2_max, t_first_cs)
-                end
+                # hopping to other hosts
+
+
+
             end
         end
     end
