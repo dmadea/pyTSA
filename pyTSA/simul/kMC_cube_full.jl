@@ -12,8 +12,6 @@
  # Physics
 # -------
 # * One CT chromophore at the origin of a 3-D simple-cubic host lattice.
-# * No energetic disorder (yet): every host molecule has the same site energy.
-# * Hops are long-range within a cutoff radius R_HOP (lattice units), with
 #   Miller–Abrahams tunneling  exp(−2 β r) and a Marcus activation energy.
 # * t = 0: the CT is already excited (CT*).
 # * CT* can
@@ -48,12 +46,12 @@ const HOST_DENSITY = 1.332 # g/cm^3, density of PET
 const DENSITY      = HOST_DENSITY * AVOGADRO * 1e-21 / M # in units / nm3
 
 const N_TRAJ      = 200_000   # 2_000_000
-const LAMBDA_EV   = 1.0
+const LAMBDA_EV   = 0.5
 const N_PARTICLES = 2_000
 const L           = (N_PARTICLES / DENSITY)^(1/3) # in nm
 const EPS_HOST    = 3.2
-const C_CENTERS   = 0.02   # 1% conc.
-const T_K         = 100.0
+const C_CENTERS   = 0.01   # 1% conc.
+const T_K         = 300.0
 const NU0         = 1.0e13          # s⁻¹, Miller–Abrahams prefactor (as in LPLModel)
 const BETA_INV_NM = 0.5             # nm⁻¹, inverse localisation length for hopping 
 const BETA_INV_TAU_CT_NM = 1.0      # nm⁻¹, inverse localisation length for CT emission rate
@@ -61,7 +59,7 @@ const A_NM        = 1.0             # nm, lattice constant
 const TAU_LE      = 1.0e-8          # s, LE lifetime  (k_LE = 1e8 s⁻¹, LPLModel default)
 const TAU0_CT     = 1.0e-6         # s, CT* lifetime for zero separation distance
 const T_MAX       = 1.0e-2          # s
-const MAX_EVENTS  = 80_000
+const MAX_EVENTS  = 800_000
 const SEED        = 1
 const T_MIN_HIST  = 1.0e-12         # s
 const N_BINS      = 90
@@ -78,12 +76,12 @@ const HOMO_CENTER = -5.65
 const LUMO_CENTER = -2.74
 
 const HOMO_HOST = -7.11
-const LUMO_HOST = -5.8
+const LUMO_HOST = -4
 
 const OUTDIR = joinpath(@__DIR__, "kmc_cube_full_output")
 const R_MIN_NM = 0.2   # nm; floor for Coulomb / tunneling distances
-const N_RATES  = 40    # top hop channels kept per (centre, host) pair
-const LUMO_STD_HOST = 0.1
+const N_RATES  = 25    # top hop channels kept per (centre, host) pair
+const LUMO_STD_HOST = 0.15
 const LUMO_STD_CENTER = 0.0
 const HOMO_STD_CENTER = 0.0
 
@@ -132,7 +130,7 @@ struct Traj
     n_cr::Int
     n_cs::Int
     n_hops::Int
-    r2_max::Int
+    r2_max::Float64
     t_first_cs::Float64
     c_idx::Int
 end
@@ -272,7 +270,7 @@ function simulate_one(sys::System, rng::AbstractRNG;
     n_cs = 0
     n_cr = 0
     n_hops = 0
-    r2_max = 0
+    r2_max = 0.0
     t_first_cs = NaN
 
     @inbounds for _ in 1:max_events
@@ -294,7 +292,7 @@ function simulate_one(sys::System, rng::AbstractRNG;
                 t_first_cs = t
             end
             r_ct0 = sys.r_host_ct[c, h_idx]
-            r2 = round(Int, r_ct0 * r_ct0)
+            r2 = r_ct0 * r_ct0
             r2 > r2_max && (r2_max = r2)
         else
             rate_cr = sys.rates_cr[c, h_idx]
@@ -323,7 +321,7 @@ function simulate_one(sys::System, rng::AbstractRNG;
                 h_idx = sys.rate_table_indexes[c, h_idx, j]
                 n_hops += 1
                 r_ct = sys.r_host_ct[c, h_idx]
-                r2 = round(Int, r_ct * r_ct)
+                r2 = r_ct * r_ct
                 r2 > r2_max && (r2_max = r2)
             end
         end
@@ -446,6 +444,18 @@ function write_summary_csv(path, e::Ensemble)
     end
 end
 
+"""Max centre–carrier distance per trajectory, excluding LE emission (r_max = 0)."""
+function write_rmax_csv(path, e::Ensemble)
+    open(path, "w") do io
+        println(io, "outcome,r_max_nm,r2_max")
+        for tr in e.trajs
+            tr.outcome === LE_emission && continue
+            @printf(io, "%s,%.8e,%.8e\n",
+                    String(Symbol(tr.outcome)), sqrt(tr.r2_max), tr.r2_max)
+        end
+    end
+end
+
 const PLOT_PY = raw"""
 import csv
 import os
@@ -547,6 +557,30 @@ fig.savefig(os.path.join(outdir, "emission_yields.png"))
 fig.savefig(os.path.join(outdir, "emission_yields.pdf"))
 plt.close(fig)
 
+# max separation from centre (LE emission excluded: r_max = 0 by construction)
+rmax_path = os.path.join(outdir, "rmax.csv")
+if os.path.isfile(rmax_path):
+    rmax_rows = list(csv.DictReader(open(rmax_path)))
+    r_max = np.array([float(r["r_max_nm"]) for r in rmax_rows], dtype=float)
+    r_max = r_max[r_max > 0]
+    fig, ax = plt.subplots(figsize=(5.6, 4.2))
+    if r_max.size:
+        n_bins = min(60, max(12, int(np.sqrt(r_max.size))))
+        ax.hist(r_max, bins=n_bins, color="#0072b2", edgecolor="white",
+                linewidth=0.4, alpha=0.9)
+        ax.axvline(np.mean(r_max), color="#d55e00", ls="--", lw=1.4,
+                   label=rf"mean = {np.mean(r_max):.2f} nm")
+        ax.axvline(np.median(r_max), color="#333", ls=":", lw=1.3,
+                   label=rf"median = {np.median(r_max):.2f} nm")
+        ax.legend(loc="best", framealpha=0.92)
+    ax.set_xlabel(r"maximum distance from centre  $r_{\mathrm{max}}$  (nm)")
+    ax.set_ylabel("counts")
+    ax.set_title(rf"Max separation (excl. LE emission, $N={{{r_max.size}}}$)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(outdir, "rmax_hist.png"))
+    fig.savefig(os.path.join(outdir, "rmax_hist.pdf"))
+    plt.close(fig)
+
 print("wrote figures to", outdir)
 """
 
@@ -556,7 +590,7 @@ function plot_with_python(outdir::String)
     env = copy(ENV)
     env["MPLCONFIGDIR"] = joinpath(outdir, ".mplconfig")
     mkpath(env["MPLCONFIGDIR"])
-    run(setenv(`python3 $pyfile $outdir`, env))
+    run(setenv(`python $pyfile $outdir`, env))
 end
 
 function main()
@@ -590,14 +624,17 @@ function main()
 
     decay_csv = joinpath(OUTDIR, "decay_curves.csv")
     sum_csv = joinpath(OUTDIR, "summary.csv")
+    rmax_csv = joinpath(OUTDIR, "rmax.csv")
     write_decay_csv(decay_csv, e)
     write_summary_csv(sum_csv, e)
+    write_rmax_csv(rmax_csv, e)
     println("  wrote ", decay_csv)
     println("  wrote ", sum_csv)
+    println("  wrote ", rmax_csv)
 
     println("  plotting …")
     plot_with_python(OUTDIR)
-    println("  figures: emission_decay.{png,pdf}  emission_yields.{png,pdf}")
+    println("  figures: emission_decay.{png,pdf}  emission_yields.{png,pdf}  rmax_hist.{png,pdf}")
     println("============================================================")
     return e
 end

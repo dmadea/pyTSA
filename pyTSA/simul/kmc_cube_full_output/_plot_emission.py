@@ -98,4 +98,28 @@ fig.savefig(os.path.join(outdir, "emission_yields.png"))
 fig.savefig(os.path.join(outdir, "emission_yields.pdf"))
 plt.close(fig)
 
+# max separation from centre (LE emission excluded: r_max = 0 by construction)
+rmax_path = os.path.join(outdir, "rmax.csv")
+if os.path.isfile(rmax_path):
+    rmax_rows = list(csv.DictReader(open(rmax_path)))
+    r_max = np.array([float(r["r_max_nm"]) for r in rmax_rows], dtype=float)
+    r_max = r_max[r_max > 0]
+    fig, ax = plt.subplots(figsize=(5.6, 4.2))
+    if r_max.size:
+        n_bins = min(60, max(12, int(np.sqrt(r_max.size))))
+        ax.hist(r_max, bins=n_bins, color="#0072b2", edgecolor="white",
+                linewidth=0.4, alpha=0.9)
+        ax.axvline(np.mean(r_max), color="#d55e00", ls="--", lw=1.4,
+                   label=rf"mean = {np.mean(r_max):.2f} nm")
+        ax.axvline(np.median(r_max), color="#333", ls=":", lw=1.3,
+                   label=rf"median = {np.median(r_max):.2f} nm")
+        ax.legend(loc="best", framealpha=0.92)
+    ax.set_xlabel(r"maximum distance from centre  $r_{\mathrm{max}}$  (nm)")
+    ax.set_ylabel("counts")
+    ax.set_title(rf"Max separation (excl. LE emission, $N={{{r_max.size}}}$)")
+    fig.tight_layout()
+    fig.savefig(os.path.join(outdir, "rmax_hist.png"))
+    fig.savefig(os.path.join(outdir, "rmax_hist.pdf"))
+    plt.close(fig)
+
 print("wrote figures to", outdir)
