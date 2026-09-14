@@ -1,11 +1,13 @@
 #!/usr/bin/env julia
-# Run with:  julia -t auto pyTSA/simul/kMC_cube.jl
-#
+# Prefer:  julia -t auto pyTSA/simul/kMC_cube_full.jl
+# (Julia's thread count is fixed at startup; default is 1 thread.)
+# If started with 1 thread, this script re-launches itself with -t auto.
 # Kinetic Monte Carlo of geminate charge separation / hopping / recombination
 # around a single charge-transfer (CT) centre in an organic semiconductor.
 
 # generates the random positions in a box
-# then assign the centers and energies of hosts
+# then assign the centers and energies of hosts or other dopants
+# simulates the full LE emission, and CT formation and emission and CS from CT state
 #
  # Physics
 # -------
@@ -27,12 +29,10 @@
 #
 # Detailed balance at fixed r: k_CS(r) / k_CR(r) = exp(−G0 / kT).
 
-## TODO precompute nearest distance and energetic neighbors for each particle
 
 using Random
 using Printf
 using Base.Threads
-using Distributions
 
 # ---------------------------------------------------------------------------
 # User parameters
@@ -41,67 +41,51 @@ using Distributions
 const AVOGADRO = 6.02214076e23
 const KB_EV = 8.617333262145e-5     # eV / K
 const EPS_0 = 8.854187e-12
+const E_CHARGE = 1.602176634e-19
 
 const M            = 192.17  # g/mol for PET
 const HOST_DENSITY = 1.332 # g/cm^3, density of PET
 const DENSITY      = HOST_DENSITY * AVOGADRO * 1e-21 / M # in units / nm3
 
-const N_TRAJ      = 40_000
+const N_TRAJ      = 200_000   # 2_000_000
 const LAMBDA_EV   = 1.0
-const N_PARTICLES = 1_000
+const N_PARTICLES = 2_000
 const L           = (N_PARTICLES / DENSITY)^(1/3) # in nm
 const EPS_HOST    = 3.2
-const C_CENTERS   = 0.01   # 1% conc.
-const G0_LIST     = [0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00, -0.05, -0.10, -0.40]   # eV
-const T_K         = 300.0
+const C_CENTERS   = 0.02   # 1% conc.
+const T_K         = 100.0
 const NU0         = 1.0e13          # s⁻¹, Miller–Abrahams prefactor (as in LPLModel)
-const BETA_INV_NM = 0.5             # nm⁻¹, inverse localisation length
+const BETA_INV_NM = 0.5             # nm⁻¹, inverse localisation length for hopping 
+const BETA_INV_TAU_CT_NM = 1.0      # nm⁻¹, inverse localisation length for CT emission rate
 const A_NM        = 1.0             # nm, lattice constant
-const TAU_CT      = 1.0e-7          # s, CT* lifetime  (k_CT = 1e7 s⁻¹, LPLModel default)
+const TAU_LE      = 1.0e-8          # s, LE lifetime  (k_LE = 1e8 s⁻¹, LPLModel default)
+const TAU0_CT     = 1.0e-6         # s, CT* lifetime for zero separation distance
 const T_MAX       = 1.0e-2          # s
-const R_HOP       = 4               # lattice units: max hop / CS / CR distance
-const R_ESCAPE    = 40              # lattice units; beyond this the pair is free
-const MAX_EVENTS  = 800_000
+const MAX_EVENTS  = 80_000
 const SEED        = 1
-const T_MIN_HIST  = 1.0e-12         # s
 const T_MIN_HIST  = 1.0e-12         # s
 const N_BINS      = 90
 
+const COULOUMB_CONST = E_CHARGE * 1e9 / (4 * π * EPS_0 * EPS_HOST)  # in eV.nm
 
-const OUTDIR = joinpath(@__DIR__, "kmc_cube_output")
+# ('$\\alpha$NPD', -5.2, -2.1, red),
+# ('BP2DPA',	-5.65, -2.74, red),
+# ('4CzIPN',	-5.8	, -3.4, red),
+# ('HAP-3TPA',	-5.56, -3.31, red),
+# ('PET', -7.11, -3.06, blue), # band gap 306 nm
 
-# ---------------------------------------------------------------------------
-# Lattice geometry within R_HOP
-# ---------------------------------------------------------------------------
+const HOMO_CENTER = -5.65
+const LUMO_CENTER = -2.74
 
-# struct Offset
-#     dx::Int16
-#     dy::Int16
-#     dz::Int16
-#     r_nm::Float64
-# end
+const HOMO_HOST = -7.11
+const LUMO_HOST = -5.8
 
-# """All nonzero lattice vectors with |r| ≤ R_HOP (in lattice units)."""
-# function build_offsets(r_hop::Int, a_nm::Float64)
-#     offs = Offset[]
-#     r2max = r_hop * r_hop
-#     for dx in -r_hop:r_hop, dy in -r_hop:r_hop, dz in -r_hop:r_hop
-#         r2 = dx * dx + dy * dy + dz * dz
-#         (r2 == 0 || r2 > r2max) && continue
-#         push!(offs, Offset(Int16(dx), Int16(dy), Int16(dz), a_nm * sqrt(Float64(r2))))
-#     end
-#     # nearer sites first → slightly better branch prediction / early exits
-#     sort!(offs; by = o -> o.r_nm)
-#     return offs
-# end
-
-# const OFFSETS = build_offsets(R_HOP, A_NM)
-# const N_OFF   = length(OFFSETS)
-# const R_HOP_NM = A_NM * Float64(R_HOP)
-
-# ---------------------------------------------------------------------------
-# Rates
-# ---------------------------------------------------------------------------
+const OUTDIR = joinpath(@__DIR__, "kmc_cube_full_output")
+const R_MIN_NM = 0.2   # nm; floor for Coulomb / tunneling distances
+const N_RATES  = 40    # top hop channels kept per (centre, host) pair
+const LUMO_STD_HOST = 0.1
+const LUMO_STD_CENTER = 0.0
+const HOMO_STD_CENTER = 0.0
 
 """Marcus activation energy (eV)."""
 marcus_Ea(λ::Float64, ΔG::Float64) = (λ + ΔG)^2 / (4λ)
@@ -111,248 +95,258 @@ function miller_abrahams(ν0, β, r_nm, Ea, T)
     return ν0 * exp(-2 * β * r_nm - Ea / (KB_EV * T))
 end
 
-# struct Rates
-#     G0::Float64
-#     λ::Float64
-#     Ea_cs::Float64
-#     Ea_cr::Float64
-#     Ea_hop::Float64
-#     k_decay::Float64
-#     k_cs::Vector{Float64}     # CS rate onto OFFSETS[i] from the origin
-#     k_cr::Vector{Float64}     # CR rate from OFFSETS[i] back to the origin
-#     k_hop::Vector{Float64}    # host hop of displacement OFFSETS[i]
-#     k_cs_tot::Float64
-#     k_cs_nn::Float64          # one nearest-neighbour CS channel (diagnostics)
-#     k_cr_nn::Float64
-#     k_hop_nn::Float64
-#     cum_cs::Vector{Float64}   # cumulative CS rates for fast sampling
-# end
+"""Minimum-image distance (nm) between two points in a cubic box of side `Lbox`."""
+function dist_pbc(r1::AbstractVector{<:Real}, r2::AbstractVector{<:Real}, Lbox::Float64)
+    dx = r1[1] - r2[1]
+    dy = r1[2] - r2[2]
+    dz = r1[3] - r2[3]
+    dx -= Lbox * round(dx / Lbox)
+    dy -= Lbox * round(dy / Lbox)
+    dz -= Lbox * round(dz / Lbox)
+    return sqrt(dx * dx + dy * dy + dz * dz)
+end
 
-# function Rates(G0::Float64; λ::Float64 = LAMBDA_EV)
-#     Ea_cs  = marcus_Ea(λ, G0)
-#     Ea_cr  = marcus_Ea(λ, -G0)
-#     Ea_hop = marcus_Ea(λ, 0.0)
-#     k_decay = 1.0 / TAU_CT
+"""Optical LE energy of the centre (eV): E_LUMO − E_HOMO."""
+E_LE(E_LUMO_c::Float64, E_HOMO_c::Float64) = E_LUMO_c - E_HOMO_c
 
-#     k_cs  = Vector{Float64}(undef, N_OFF)
-#     k_cr  = Vector{Float64}(undef, N_OFF)
-#     k_hop = Vector{Float64}(undef, N_OFF)
-#     cum_cs = Vector{Float64}(undef, N_OFF)
+"""
+CT energy (eV) for hole on centre HOMO and electron on host LUMO:
+E_CT = −HOMO_c + LUMO_h − C/r  (IP−EA−Coulomb with orbital energies < 0).
+"""
+function E_CT_pair(E_HOMO_c::Float64, E_LUMO_h::Float64, r_nm::Float64)
+    r = max(r_nm, R_MIN_NM)
+    return -E_HOMO_c + E_LUMO_h - COULOUMB_CONST / r
+end
 
-#     @inbounds for i in 1:N_OFF
-#         r = OFFSETS[i].r_nm
-#         k_cs[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cs,  T_K)
-#         k_cr[i]  = miller_abrahams(NU0, BETA_INV_NM, r, Ea_cr,  T_K)
-#         k_hop[i] = miller_abrahams(NU0, BETA_INV_NM, r, Ea_hop, T_K)
-#         cum_cs[i] = (i == 1 ? 0.0 : cum_cs[i - 1]) + k_cs[i]
-#     end
-#     k_cs_tot = cum_cs[end]
-
-#     # first shell: r = a (six sites); OFFSETS are sorted by r so index 1 is NN
-#     k_cs_nn  = k_cs[1]
-#     k_cr_nn  = k_cr[1]
-#     k_hop_nn = k_hop[1]
-
-#     return Rates(G0, λ, Ea_cs, Ea_cr, Ea_hop, k_decay,
-#                  k_cs, k_cr, k_hop, k_cs_tot, k_cs_nn, k_cr_nn, k_hop_nn, cum_cs)
-# end
-
-"""CR rate from lattice site (x,y,z) to the origin, or 0 if out of R_HOP."""
-# function k_cr_from_site(r::Rates, x::Int, y::Int, z::Int)
-#     r2 = x * x + y * y + z * z
-#     r2 == 0 && return 0.0
-#     r2 > R_HOP * R_HOP && return 0.0
-#     r_nm = A_NM * sqrt(Float64(r2))
-#     return miller_abrahams(NU0, BETA_INV_NM, r_nm, r.Ea_cr, T_K)
-# end
 
 # ---------------------------------------------------------------------------
-# Single-trajectory Gillespie kMC
+# Shared morphology + precomputed rates (built once per ensemble)
 # ---------------------------------------------------------------------------
 
-@enum Outcome emitted escaped timeout steplimit
+@enum Outcome LE_emission CT_emission timeout steplimit
+@enum State LE hopping
 
 struct Traj
     outcome::Outcome
     t::Float64
-    n_cs::Int
     n_cr::Int
+    n_cs::Int
     n_hops::Int
     r2_max::Int
     t_first_cs::Float64
+    c_idx::Int
 end
 
-"""Sample index i with probability ∝ weights, given cumulative sums `cum` (cum[end] = total)."""
-function sample_cum(cum::Vector{Float64}, rng)
+"""
+Precomputed disordered box used by all trajectories.
+
+Hop / CS / CR rates depend on which centre holds the hole (Coulomb), so tables
+are stored per centre. Each trajectory only draws `c_idx` and runs Gillespie.
+"""
+struct System
+    Lbox::Float64
+    n_host::Int
+    n_centers::Int
+    xyz_host::Matrix{Float64}          # (N, 3)
+    xyz_centers::Matrix{Float64}       # (Nc, 3)
+    host_LUMO::Vector{Float64}
+    center_LUMO::Vector{Float64}
+    center_HOMO::Vector{Float64}
+    E_le::Vector{Float64}              # (Nc,)
+    r_host_ct::Matrix{Float64}         # (Nc, N)  centre–host distance
+    rates_ct::Matrix{Float64}          # (Nc, N)  LE → CT onto host
+    rates_ct_cum::Matrix{Float64}      # (Nc, N)
+    rates_cr::Matrix{Float64}          # (Nc, N)  CT → LE from host
+    rates_ct_emit::Matrix{Float64}     # (Nc, N)  CT emission from host
+    rate_table::Array{Float64,3}       # (Nc, N, N_RATES)
+    rate_table_cumsums::Array{Float64,3}
+    rate_table_indexes::Array{Int,3}
+    k_LE::Float64
+end
+
+"""Sample index i with probability ∝ weights, given cumulative sums `cum`."""
+function sample_cum(cum::AbstractVector{Float64}, rng)
     u = rand(rng) * cum[end]
     return searchsortedfirst(cum, u)
 end
 
+"""Build one periodic box and precompute rates for every centre."""
+function build_system(rng::AbstractRNG;
+                      n_host::Int = N_PARTICLES,
+                      Lbox::Float64 = Float64(L))
+    n_centers = max(1, round(Int, n_host * C_CENTERS))
+    k_LE = 1.0 / TAU_LE
+    k_CT0 = 1.0 / TAU0_CT
 
+    xyz_host = rand(rng, n_host, 3) .* Lbox
+    xyz_centers = rand(rng, n_centers, 3) .* Lbox
+    host_LUMO = LUMO_HOST .+ LUMO_STD_HOST .* randn(rng, n_host)
+    center_LUMO = LUMO_CENTER .+ LUMO_STD_CENTER .* randn(rng, n_centers)
+    center_HOMO = HOMO_CENTER .+ HOMO_STD_CENTER .* randn(rng, n_centers)
+    E_le = E_LE.(center_LUMO, center_HOMO)
 
+    # host–host distances (symmetric, diagonal unused)
+    r_hh = Matrix{Float64}(undef, n_host, n_host)
+    @inbounds for i in 1:n_host
+        r_hh[i, i] = 0.0
+        xi = @view xyz_host[i, :]
+        for j in (i + 1):n_host
+            rij = max(dist_pbc(xi, @view(xyz_host[j, :]), Lbox), R_MIN_NM)
+            r_hh[i, j] = rij
+            r_hh[j, i] = rij
+        end
+    end
+
+    r_host_ct = Matrix{Float64}(undef, n_centers, n_host)
+    rates_ct = Matrix{Float64}(undef, n_centers, n_host)
+    rates_ct_cum = Matrix{Float64}(undef, n_centers, n_host)
+    rates_cr = Matrix{Float64}(undef, n_centers, n_host)
+    rates_ct_emit = Matrix{Float64}(undef, n_centers, n_host)
+    rate_table = Array{Float64,3}(undef, n_centers, n_host, N_RATES)
+    rate_table_cumsums = Array{Float64,3}(undef, n_centers, n_host, N_RATES)
+    rate_table_indexes = Array{Int,3}(undef, n_centers, n_host, N_RATES)
+
+    # fill per-centre tables (threaded over centres)
+    @threads for c in 1:n_centers
+        rates_hop_full = Vector{Float64}(undef, n_host)
+        xc = @view xyz_centers[c, :]
+        Ele = E_le[c]
+        EHc = center_HOMO[c]
+
+        # CS and CR rates
+        @inbounds for i in 1:n_host
+            r_nm = max(dist_pbc(xc, @view(xyz_host[i, :]), Lbox), R_MIN_NM)
+            r_host_ct[c, i] = r_nm
+            E_ct = E_CT_pair(EHc, host_LUMO[i], r_nm)
+            dG_cs = E_ct - Ele
+            rates_ct[c, i] = miller_abrahams(NU0, BETA_INV_NM, r_nm,
+                                             marcus_Ea(LAMBDA_EV, dG_cs), T_K)
+            rates_cr[c, i] = miller_abrahams(NU0, BETA_INV_NM, r_nm,
+                                             marcus_Ea(LAMBDA_EV, -dG_cs), T_K)
+            rates_ct_emit[c, i] = k_CT0 * exp(-BETA_INV_TAU_CT_NM * r_nm)
+            rates_ct_cum[c, i] = (i == 1 ? 0.0 : rates_ct_cum[c, i - 1]) + rates_ct[c, i]
+        end
+
+        # hopping rates
+        @inbounds for i in 1:n_host
+            r_i = r_host_ct[c, i]
+            E_i = host_LUMO[i] - COULOUMB_CONST / r_i
+            for j in 1:n_host
+                if i == j
+                    rates_hop_full[j] = 0.0
+                else
+                    dG = (host_LUMO[j] - COULOUMB_CONST / r_host_ct[c, j]) - E_i
+                    rates_hop_full[j] = miller_abrahams(NU0, BETA_INV_NM, r_hh[i, j],
+                                                        marcus_Ea(LAMBDA_EV, dG), T_K)
+                end
+            end
+            top = partialsortperm(rates_hop_full, 1:N_RATES; rev=true)
+            for k in 1:N_RATES
+                dest = top[k]
+                rate_table_indexes[c, i, k] = dest
+                rate_table[c, i, k] = rates_hop_full[dest]
+                rate_table_cumsums[c, i, k] = (k == 1 ? 0.0 : rate_table_cumsums[c, i, k - 1]) + rate_table[c, i, k]
+            end
+        end
+    end
+
+    return System(Lbox, n_host, n_centers, xyz_host, xyz_centers,
+                  host_LUMO, center_LUMO, center_HOMO, E_le, r_host_ct,
+                  rates_ct, rates_ct_cum, rates_cr, rates_ct_emit,
+                  rate_table, rate_table_cumsums, rate_table_indexes, k_LE)
+end
 
 """
-One geminate pair, starting as CT*.
-
-Long-range hops: every lattice site within R_HOP of the current position is a
-possible destination. Landing on the origin is recombination (Marcus Ea_cr);
-all other destinations are isoenergetic host hops (Ea_hop).
+One trajectory on a shared `System`: pick a random centre, start as LE, Gillespie.
 """
-function simulate_one(rng::AbstractRNG;
+function simulate_one(sys::System, rng::AbstractRNG;
                       t_max::Float64 = T_MAX,
-                      r_escape::Int = R_ESCAPE,
                       max_events::Int = MAX_EVENTS)
+    c = rand(rng, 1:sys.n_centers)
+    k_LE = sys.k_LE
+    rates_cum = Vector{Float64}(undef, N_RATES + 2)
 
-    # assuming the exciton is already the CT state with the host molecule
-
-    # CT binding energy = E_HOMO_center - E_LUMO_host + 
-
-    # generate random positions in a box
-    xyz_host = rand(rng, (N_PARTICLES, 3)) .* L
-    G0 = 0.2
-
-    # assign centers
-    N_centers = N_PARTICLES * C_CENTERS
-    xyz_centers = rand(rng, (N_centers, 3)) .* L
-    idx_center = rand(rng, 1:N_centers)
-    xyz_center = xyz_centers[idx_center, :]
-    current_index = idx_center
-
-    # assign LUMO energies to hosts molecules, gaussian distribution with LUMO_mean and LUMO_std
-    LUMO_CENTER = -5.0  # LUMO of a "CT complex" of a center
-    LUMO_mean = -5.0
-    LUMO_std = 0.1
-    host_LUMO_energies = rand(rng, Normal(LUMO_mean, LUMO_std), N_PARTICLES)
-
-    exciton = true
-    x = y = z = 0
+    state = LE
+    h_idx = 1
     t = 0.0
     n_cs = 0
     n_cr = 0
     n_hops = 0
     r2_max = 0
     t_first_cs = NaN
-    r_esc2 = r_escape * r_escape
-
-    # # scratch for polaron-step cumulative rates: [CR; hop_1 … hop_N]
-    # # hop channels that land on the origin are skipped (CR handles that)
-    # cum = Vector{Float64}(undef, N_OFF + 1)
-    # hop_idx = Vector{Int}(undef, N_OFF)   # OFFSETS index for each hop channel
-
-    rates_cs = Vector{Float64}(undef, N_PARTICLES)
-    rates_cs_cumsum = Vector{Float64}(undef, N_PARTICLES)
-
-    # precalculate the rates for center CS for all particles
-    for i in 1:N_PARTICLES
-        xyz_host_current = xyz_host[i, :]
-        r_nm = sqrt(sum((xyz_center - xyz_host_current).^2))
-
-        dG = LUMO_CENTER - host_LUMO_energies[i]
-        Ea_cs = marcus_Ea(λ, dG)
-        rates_cs[i] = miller_abrahams(NU0, BETA_INV_NM, r_nm, Ea_cs,  T_K)
-        rates_cs_cumsum[i] = (i == 1 ? 0.0 : rates_cs_cumsum[i - 1]) + rates_cs[i]
-    end
 
     @inbounds for _ in 1:max_events
-        if exciton
-            k_tot = k_decay + rates_cs_cumsum[end]
-
+        if state === LE
+            k_tot = k_LE + sys.rates_ct_cum[c, end]
             t += -log(rand(rng)) / k_tot
             if t > t_max
-                return Traj(timeout, t_max, n_cs, n_cr, n_hops, r2_max, t_first_cs)
+                return Traj(timeout, t_max, n_cr, n_cs, n_hops, r2_max, t_first_cs, c)
             end
-            if rand(rng) * k_tot < k_decay
-                return Traj(emitted, t, n_cs, n_cr, n_hops, r2_max, t_first_cs)
+            if rand(rng) * k_tot < k_LE
+                return Traj(LE_emission, t, n_cr, n_cs, n_hops, r2_max, t_first_cs, c)
             end
-            # charge separation onto a site sampled ∝ k_cs(r)
-            current_index = sample_cum(rates_cs_cumsum, rng)
-
-            exciton = false
+            # sample host from this centre's CS cumsum
+            u = rand(rng) * sys.rates_ct_cum[c, end]
+            h_idx = searchsortedfirst(@view(sys.rates_ct_cum[c, :]), u)
+            state = hopping
             n_cs += 1
-
             if isnan(t_first_cs)
                 t_first_cs = t
             end
+            r_ct0 = sys.r_host_ct[c, h_idx]
+            r2 = round(Int, r_ct0 * r_ct0)
+            r2 > r2_max && (r2_max = r2)
         else
-            # --- build event list: CR to center or hop hosts ---
-            xyz_current = xyz_host[current_index, :]
+            rate_cr = sys.rates_cr[c, h_idx]
+            rate_CT_emit = sys.rates_ct_emit[c, h_idx]
 
-            rates_hop = Vector{Float64}(undef, N_PARTICLES)
-            rates_hop_cumsum = Vector{Float64}(undef, N_PARTICLES)
-
-            # rates of hopping to other hosts
-            for i in 1:N_PARTICLES
-                if i == current_index
-                    rates_hop[i] = 0.0
-                else
-                    xyz_other = xyz_host[i, :]
-    
-                    r_nm = sqrt(sum((xyz_current - xyz_other).^2))
-            
-                    dG = host_LUMO_energies[i] - host_LUMO_energies[current_index]
-                    Ea_hop = marcus_Ea(λ, dG)
-                    rates_hop[i] = miller_abrahams(NU0, BETA_INV_NM, r_nm, Ea_hop,  T_K)
-                end
-
-                rates_hop_cumsum[i] = (i == 1 ? 0.0 : rates_hop_cumsum[i - 1]) + rates_hop[i]
+            copyto!(rates_cum, 1, @view(sys.rate_table_cumsums[c, h_idx, :]), 1, N_RATES)
+            rates_cum[N_RATES + 1] = rates_cum[N_RATES] + rate_cr
+            rates_cum[N_RATES + 2] = rates_cum[N_RATES + 1] + rate_CT_emit
+            k_tot = rates_cum[end]
+            if k_tot <= 0
+                return Traj(timeout, t, n_cr, n_cs, n_hops, r2_max, t_first_cs, c)
             end
-
-            # rate of hopping to the center
-            dG = host_LUMO_energies[current_index] - LUMO_CENTER
-            Ea_cr = marcus_Ea(λ, dG)
-            r_nm = sqrt(sum((xyz_current - xyz_center).^2))
-            rate_cr = miller_abrahams(NU0, BETA_INV_NM, r_nm, Ea_cr,  T_K)
-
-            # rates_hop_cumsum[1] = rate_cr
-
-            k_tot = rates_hop_cumsum[end] + rate_cr
 
             t += -log(rand(rng)) / k_tot
             if t > t_max
-                return Traj(timeout, t_max, n_cs, n_cr, n_hops, r2_max, t_first_cs)
+                return Traj(timeout, t_max, n_cr, n_cs, n_hops, r2_max, t_first_cs, c)
             end
 
-            # search sorted array of rates to find the event
-
-            u = rand(rng) * k_tot
-            j = searchsortedfirst(view(cum, 1:nchan), u)
-
-            if j == 1
-                # recombination → CT*
-                exciton = true
-                current_index = idx_center
+            j = sample_cum(rates_cum, rng)
+            if j == N_RATES + 1
+                state = LE
                 n_cr += 1
+            elseif j == N_RATES + 2
+                return Traj(CT_emission, t, n_cr, n_cs, n_hops, r2_max, t_first_cs, c)
             else
-                # hopping to other hosts
-
-
-
+                h_idx = sys.rate_table_indexes[c, h_idx, j]
+                n_hops += 1
+                r_ct = sys.r_host_ct[c, h_idx]
+                r2 = round(Int, r_ct * r_ct)
+                r2 > r2_max && (r2_max = r2)
             end
         end
     end
-    return Traj(steplimit, t, n_cs, n_cr, n_hops, r2_max, t_first_cs)
+    return Traj(steplimit, t, n_cr, n_cs, n_hops, r2_max, t_first_cs, c)
 end
 
 # ---------------------------------------------------------------------------
-# Ensemble
+# Ensemble + decay histograms
 # ---------------------------------------------------------------------------
 
 struct Ensemble
-    rates::Rates
     trajs::Vector{Traj}
-    t_edges::Vector{Float64}
     t_cent::Vector{Float64}
-    I_all::Vector{Float64}
-    I_prompt::Vector{Float64}
-    I_delayed::Vector{Float64}
-    n_emitted::Int
-    n_prompt::Int
-    n_delayed::Int
-    n_escaped::Int
+    I_LE::Vector{Float64}
+    I_CT::Vector{Float64}
+    I_total::Vector{Float64}
+    n_LE::Int
+    n_CT::Int
     n_timeout::Int
-    phi_em::Float64
-    phi_cs::Float64
-    phi_escape::Float64
+    n_steplimit::Int
+    phi_LE::Float64
+    phi_CT::Float64
     mean_n_cs::Float64
     mean_n_cr::Float64
     mean_n_hops::Float64
@@ -377,140 +371,80 @@ function histogram_times!(counts, edges, times)
     return counts
 end
 
-function run_ensemble(r::Rates; n_traj::Int = N_TRAJ, seed::Int = SEED)
+function run_ensemble(sys::System; n_traj::Int = N_TRAJ, seed::Int = SEED)
     trajs = Vector{Traj}(undef, n_traj)
     @threads for i in 1:n_traj
-        rng = Xoshiro(seed + 1_000_003 * i)
-        trajs[i] = simulate_one(r, rng)
+        trajs[i] = simulate_one(sys, Xoshiro(seed + 1_000_003 * i))
     end
 
-    t_emit_all     = Float64[]
-    t_emit_prompt  = Float64[]
-    t_emit_delayed = Float64[]
-    sizehint!(t_emit_all, n_traj)
-    n_emitted = 0
-    n_prompt = 0
-    n_delayed = 0
-    n_escaped = 0
+    t_LE = Float64[]
+    t_CT = Float64[]
+    sizehint!(t_LE, n_traj ÷ 10)
+    sizehint!(t_CT, n_traj)
+    n_LE = 0
+    n_CT = 0
     n_timeout = 0
+    n_steplimit = 0
     n_cs_sum = 0
     n_cr_sum = 0
     n_hops_sum = 0
-    n_did_cs = 0
 
     for tr in trajs
         n_cs_sum += tr.n_cs
         n_cr_sum += tr.n_cr
         n_hops_sum += tr.n_hops
-        tr.n_cs > 0 && (n_did_cs += 1)
-        if tr.outcome === emitted
-            n_emitted += 1
-            push!(t_emit_all, tr.t)
-            if tr.n_cs == 0
-                n_prompt += 1
-                push!(t_emit_prompt, tr.t)
-            else
-                n_delayed += 1
-                push!(t_emit_delayed, tr.t)
-            end
-        elseif tr.outcome === escaped
-            n_escaped += 1
-        else
+        if tr.outcome === LE_emission
+            n_LE += 1
+            push!(t_LE, tr.t)
+        elseif tr.outcome === CT_emission
+            n_CT += 1
+            push!(t_CT, tr.t)
+        elseif tr.outcome === timeout
             n_timeout += 1
+        else
+            n_steplimit += 1
         end
     end
 
     edges, cent = log_bins(T_MIN_HIST, T_MAX, N_BINS)
     dt = diff(edges)
-    c_all = zeros(Int, N_BINS)
-    c_pr  = zeros(Int, N_BINS)
-    c_de  = zeros(Int, N_BINS)
-    histogram_times!(c_all, edges, t_emit_all)
-    histogram_times!(c_pr,  edges, t_emit_prompt)
-    histogram_times!(c_de,  edges, t_emit_delayed)
+    c_LE = zeros(Int, N_BINS)
+    c_CT = zeros(Int, N_BINS)
+    histogram_times!(c_LE, edges, t_LE)
+    histogram_times!(c_CT, edges, t_CT)
     norm = Float64(n_traj)
-    I_all     = c_all ./ (norm .* dt)
-    I_prompt  = c_pr  ./ (norm .* dt)
-    I_delayed = c_de  ./ (norm .* dt)
+    I_LE = c_LE ./ (norm .* dt)
+    I_CT = c_CT ./ (norm .* dt)
+    I_total = I_LE .+ I_CT
 
-    return Ensemble(r, trajs, edges, cent, I_all, I_prompt, I_delayed,
-                    n_emitted, n_prompt, n_delayed, n_escaped, n_timeout,
-                    n_emitted / n_traj,
-                    n_did_cs / n_traj,
-                    n_escaped / n_traj,
-                    n_cs_sum / n_traj,
-                    n_cr_sum / n_traj,
-                    n_hops_sum / n_traj)
+    return Ensemble(trajs, cent, I_LE, I_CT, I_total,
+                    n_LE, n_CT, n_timeout, n_steplimit,
+                    n_LE / n_traj, n_CT / n_traj,
+                    n_cs_sum / n_traj, n_cr_sum / n_traj, n_hops_sum / n_traj)
 end
 
-# ---------------------------------------------------------------------------
-# I/O
-# ---------------------------------------------------------------------------
-
-function g0_tag(G0::Float64)
-    s = @sprintf("%+.2f", G0)
-    return replace(s, "+" => "p", "-" => "m", "." => "p")
-end
-
-function write_decay_csv(path, ensembles::Vector{Ensemble})
+function write_decay_csv(path, e::Ensemble)
     open(path, "w") do io
-        print(io, "t_s")
-        for e in ensembles
-            tag = g0_tag(e.rates.G0)
-            print(io, ",I_all_G0$(tag),I_prompt_G0$(tag),I_delayed_G0$(tag)")
-        end
-        print(io, "\n")
-        n = length(ensembles[1].t_cent)
-        for i in 1:n
-            @printf(io, "%.8e", ensembles[1].t_cent[i])
-            for e in ensembles
-                @printf(io, ",%.8e,%.8e,%.8e", e.I_all[i], e.I_prompt[i], e.I_delayed[i])
-            end
-            print(io, "\n")
+        println(io, "t_s,I_LE,I_CT,I_total")
+        for i in eachindex(e.t_cent)
+            @printf(io, "%.8e,%.8e,%.8e,%.8e\n",
+                    e.t_cent[i], e.I_LE[i], e.I_CT[i], e.I_total[i])
         end
     end
 end
 
-function write_summary_csv(path, ensembles::Vector{Ensemble})
+function write_summary_csv(path, e::Ensemble)
     open(path, "w") do io
-        println(io, "G0_eV,lambda_eV,Ea_cs_eV,Ea_cr_eV,Ea_hop_eV,k_decay,k_cs_nn,k_cr_nn,k_hop_nn,k_cs_tot,n_offsets,R_hop,phi_prompt_theory,phi_em,phi_prompt,phi_delayed,phi_cs,phi_escape,mean_n_cs,mean_n_cr,mean_n_hops,n_emitted,n_prompt,n_delayed,n_escaped,n_timeout")
-        for e in ensembles
-            r = e.rates
-            k_exc = r.k_decay + r.k_cs_tot
-            phi_pr_th = r.k_decay / k_exc
-            @printf(io,
-                "%.5f,%.5f,%.6f,%.6f,%.6f,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%d,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%.6e,%d,%d,%d,%d,%d\n",
-                r.G0, r.λ, r.Ea_cs, r.Ea_cr, r.Ea_hop,
-                r.k_decay, r.k_cs_nn, r.k_cr_nn, r.k_hop_nn, r.k_cs_tot, N_OFF, R_HOP, phi_pr_th,
-                e.phi_em, e.n_prompt / length(e.trajs), e.n_delayed / length(e.trajs),
-                e.phi_cs, e.phi_escape, e.mean_n_cs, e.mean_n_cr, e.mean_n_hops,
-                e.n_emitted, e.n_prompt, e.n_delayed, e.n_escaped, e.n_timeout)
-        end
+        println(io, "N_traj,N_host,L_nm,lambda_eV,beta_nm,tau_LE_s,tau0_CT_s,T_K,C_eVnm,HOMO_c,LUMO_c,LUMO_h,phi_LE,phi_CT,n_LE,n_CT,n_timeout,n_steplimit,mean_n_cs,mean_n_cr,mean_n_hops")
+        @printf(io,
+            "%d,%d,%.6f,%.4f,%.4f,%.6e,%.6e,%.1f,%.6f,%.3f,%.3f,%.3f,%.6e,%.6e,%d,%d,%d,%d,%.6e,%.6e,%.6e\n",
+            length(e.trajs), N_PARTICLES, L, LAMBDA_EV, BETA_INV_NM,
+            TAU_LE, TAU0_CT, T_K, COULOUMB_CONST,
+            HOMO_CENTER, LUMO_CENTER, LUMO_HOST,
+            e.phi_LE, e.phi_CT, e.n_LE, e.n_CT, e.n_timeout, e.n_steplimit,
+            e.mean_n_cs, e.mean_n_cr, e.mean_n_hops)
     end
 end
-
-function print_rates(r::Rates)
-    k_exc = r.k_decay + r.k_cs_tot
-    @printf("  G0 = %+5.2f eV   Ea_CS = %.3f eV   Ea_CR = %.3f eV   Ea_hop = %.3f eV\n",
-            r.G0, r.Ea_cs, r.Ea_cr, r.Ea_hop)
-    @printf("    k_decay = %.3e   k_CS(NN) = %.3e   Σ k_CS (%d sites) = %.3e\n",
-            r.k_decay, r.k_cs_nn, N_OFF, r.k_cs_tot)
-    @printf("    k_CR(NN) = %.3e   k_hop(NN) = %.3e   φ_prompt(th) = %.3e\n",
-            r.k_cr_nn, r.k_hop_nn, r.k_decay / k_exc)
-    @printf("    k_CS(NN)/k_CR(NN) = %.3e  (exp(-G0/kT)=%.3e)\n",
-            r.k_cs_nn / r.k_cr_nn, exp(-r.G0 / (KB_EV * T_K)))
-end
-
-function print_ensemble(e::Ensemble)
-    @printf("    emitted %d  (prompt %d, delayed %d)   escaped %d   timeout/limit %d\n",
-            e.n_emitted, e.n_prompt, e.n_delayed, e.n_escaped, e.n_timeout)
-    @printf("    φ_em = %.4f   φ_CS = %.4f   φ_escape = %.4f   ⟨n_CS⟩ = %.3f   ⟨n_CR⟩ = %.3f   ⟨n_hops⟩ = %.1f\n",
-            e.phi_em, e.phi_cs, e.phi_escape, e.mean_n_cs, e.mean_n_cr, e.mean_n_hops)
-end
-
-# ---------------------------------------------------------------------------
-# Plotting (matplotlib via Python — already a dependency of pyTSA)
-# ---------------------------------------------------------------------------
 
 const PLOT_PY = raw"""
 import csv
@@ -522,186 +456,102 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 outdir = sys.argv[1]
-decay_path = os.path.join(outdir, "decay_curves.csv")
-sum_path = os.path.join(outdir, "summary.csv")
+decay = list(csv.DictReader(open(os.path.join(outdir, "decay_curves.csv"))))
+summary = list(csv.DictReader(open(os.path.join(outdir, "summary.csv"))))[0]
 
-def read_csv(path):
-    with open(path, newline="") as f:
-        return list(csv.DictReader(f))
+t = np.array([float(r["t_s"]) for r in decay])
+I_LE = np.array([float(r["I_LE"]) for r in decay])
+I_CT = np.array([float(r["I_CT"]) for r in decay])
+I_tot = np.array([float(r["I_total"]) for r in decay])
 
-def g0_tag(g0):
-    s = f"{float(g0):+.2f}"
-    return s.replace("+", "p").replace("-", "m").replace(".", "p")
-
-decay_rows = read_csv(decay_path)
-sum_rows = read_csv(sum_path)
-t = np.array([float(r["t_s"]) for r in decay_rows])
-
-def col(g0, prefix):
-    key = f"{prefix}G0{g0_tag(g0)}"
-    return np.array([float(r[key]) for r in decay_rows])
-
-cmap = plt.get_cmap("coolwarm")
-g0s = [float(r["G0_eV"]) for r in sum_rows]
-g0_min, g0_max = min(g0s), max(g0s)
-if g0_max <= g0_min:
-    g0_min, g0_max = g0_min - 0.1, g0_max + 0.1
-
-def color_of(g0):
-    # uphill CS (positive G0) = warm; downhill = cool
-    x = (g0 - g0_min) / (g0_max - g0_min)
-    return cmap(np.clip(x, 0, 1))
-
-k_decay = float(sum_rows[0]["k_decay"])
-r_hop = int(float(sum_rows[0]["R_hop"]))
-n_off = int(float(sum_rows[0]["n_offsets"]))
-t_ref = np.logspace(-12, -5, 400)
+k_LE = 1.0 / float(summary["tau_LE_s"])
+phi_LE = float(summary["phi_LE"])
+phi_CT = float(summary["phi_CT"])
+n_traj = int(float(summary["N_traj"]))
 
 plt.rcParams.update({
     "font.size": 11,
     "axes.labelsize": 12,
-    "legend.fontsize": 7.5,
+    "legend.fontsize": 9,
     "figure.dpi": 140,
     "savefig.bbox": "tight",
     "axes.grid": True,
     "grid.alpha": 0.35,
 })
 
-def prompt_theory(r, tt):
-    kexc = float(r["k_decay"]) + float(r["k_cs_tot"])
-    return float(r["k_decay"]) * np.exp(-kexc * tt)
-
-# ---- Figure 1: emission decay (main result) ----
 fig, axes = plt.subplots(1, 2, figsize=(11.4, 4.7))
 
 ax = axes[0]
-for r in sum_rows:
-    g0 = float(r["G0_eV"])
-    I = col(g0, "I_all_")
-    c = color_of(g0)
-    m = I > 0
-    if np.any(m):
-        ax.loglog(t[m], I[m], "-", lw=1.7, color=c, label=rf"$\Delta G_0 = {g0:+.2f}$ eV")
-    else:
-        tt = np.logspace(-13, -9, 80)
-        Ip = prompt_theory(r, tt)
-        ax.loglog(tt, Ip, ":", lw=1.4, color=c, alpha=0.85,
-                  label=rf"$\Delta G_0 = {g0:+.2f}$ eV  (theory, $\phi\sim 0$)")
-ax.loglog(t_ref, k_decay * np.exp(-k_decay * t_ref), "k--", lw=1.0, alpha=0.7,
-          label=r"isolated CT*  $k e^{-kt}$")
+m = I_tot > 0
+if np.any(I_LE > 0):
+    ax.loglog(t[I_LE > 0], I_LE[I_LE > 0], "-", color="#d55e00", lw=2.0, label=rf"LE emission  ($\phi={phi_LE:.3f}$)")
+if np.any(I_CT > 0):
+    ax.loglog(t[I_CT > 0], I_CT[I_CT > 0], "-", color="#0072b2", lw=2.0, label=rf"CT emission  ($\phi={phi_CT:.3f}$)")
+if np.any(m):
+    ax.loglog(t[m], I_tot[m], "--", color="#333", lw=1.2, alpha=0.8, label="total")
+t_ref = np.logspace(-12, -6, 300)
+# ax.loglog(t_ref, k_LE * np.exp(-k_LE * t_ref), ":", color="0.4", lw=1.2,
+#           label=r"isolated LE  $k e^{-kt}$")
 ax.set_xlabel("time (s)")
 ax.set_ylabel(r"emission rate  $I(t)$  (s$^{-1}$ / trajectory)")
-ax.set_title("CT-centre emission decay")
-ax.set_xlim(1e-13, 1e-2)
-ax.set_ylim(1e-2, 3e8)
-ax.legend(loc="lower left", framealpha=0.92, fontsize=6.8)
+ax.set_title("Emission decay (log–log)")
+ax.set_xlim(1e-12, float(summary.get("t_max", 1e-2)) if False else 1e-2)
+ax.legend(loc="lower left", framealpha=0.92)
 
 ax = axes[1]
-for r in sum_rows:
-    g0 = float(r["G0_eV"])
-    I = col(g0, "I_all_")
-    m = (t >= 1e-12) & (t <= 2e-6) & (I > 0)
-    if np.any(m):
-        ax.semilogy(t[m] * 1e9, I[m], "-", lw=1.7, color=color_of(g0),
-                    label=rf"$\Delta G_0 = {g0:+.2f}$ eV")
-ax.semilogy(t_ref * 1e9, k_decay * np.exp(-k_decay * t_ref), "k--", lw=1.0, alpha=0.7)
+# prompt window on a linear time axis (ns)
+tmax_ns = 200.0
+mask = (t > 0) & (t <= tmax_ns * 1e-9)
+if np.any((I_LE > 0) & mask):
+    m = mask & (I_LE > 0)
+    ax.semilogy(t[m] * 1e9, I_LE[m], "-", color="#d55e00", lw=2.0, label="LE")
+if np.any((I_CT > 0) & mask):
+    m = mask & (I_CT > 0)
+    ax.semilogy(t[m] * 1e9, I_CT[m], "-", color="#0072b2", lw=2.0, label="CT")
+if np.any((I_tot > 0) & mask):
+    m = mask & (I_tot > 0)
+    ax.semilogy(t[m] * 1e9, I_tot[m], "--", color="#333", lw=1.2, label="total")
+tt = np.linspace(0, tmax_ns, 400) * 1e-9
+ax.semilogy(tt * 1e9, k_LE * np.exp(-k_LE * tt), ":", color="0.4", lw=1.2, label="isolated LE")
 ax.set_xlabel("time (ns)")
 ax.set_ylabel(r"emission rate  $I(t)$  (s$^{-1}$ / trajectory)")
 ax.set_title("Prompt window")
-ax.set_xlim(0, 800)
-ax.set_ylim(1e2, 3e8)
+ax.set_xlim(0, tmax_ns)
+ax.set_ylim(1e0, 1e9)
+ax.legend(loc="best", framealpha=0.92)
+
 fig.suptitle(
-    rf"kMC long-range hops  |  $R_{{\mathrm{{hop}}}}={r_hop}$ ({n_off} sites)  |  "
-    rf"$\lambda=1$ eV, $T=300$ K, $\tau_{{\mathrm{{CT}}}}=100$ ns",
-    y=1.03)
+    rf"LE / CT emission  |  $N={{{n_traj}}}$  |  "
+    rf"$N_{{\mathrm{{host}}}}={{{int(float(summary['N_host']))}}}$, "
+    rf"$L={{{float(summary['L_nm']):.1f}}}$ nm, "
+    rf"$\tau_{{\mathrm{{LE}}}}={{{float(summary['tau_LE_s'])*1e9:.0f}}}$ ns, "
+    rf"$\tau^{{0}}_{{\mathrm{{CT}}}}={{{float(summary['tau0_CT_s'])*1e9:.0f}}}$ ns",
+    y=1.02,
+)
 fig.tight_layout()
-fig.savefig(os.path.join(outdir, "decay_curves.png"))
-fig.savefig(os.path.join(outdir, "decay_curves.pdf"))
+fig.savefig(os.path.join(outdir, "emission_decay.png"))
+fig.savefig(os.path.join(outdir, "emission_decay.pdf"))
 plt.close(fig)
 
-# ---- Figure 2: prompt vs delayed + yields ----
-fig, axes = plt.subplots(1, 2, figsize=(11.4, 4.7))
-ax = axes[0]
-for r in sum_rows:
-    g0 = float(r["G0_eV"])
-    Ip = col(g0, "I_prompt_")
-    Id = col(g0, "I_delayed_")
-    c = color_of(g0)
-    mp, md = Ip > 0, Id > 0
-    if np.any(mp):
-        ax.loglog(t[mp], Ip[mp], "-", lw=1.5, color=c,
-                  label=rf"prompt  $\Delta G_0={g0:+.2f}$")
-    if np.any(md):
-        ax.loglog(t[md], Id[md], "--", lw=1.5, color=c,
-                  label=rf"delayed $\Delta G_0={g0:+.2f}$")
-ax.set_xlabel("time (s)")
-ax.set_ylabel(r"emission rate  $I(t)$  (s$^{-1}$ / trajectory)")
-ax.set_title("Prompt (no hop) vs delayed (after CS/CR)")
-ax.set_xlim(1e-12, 1e-2)
-ax.legend(loc="lower left", ncol=2, fontsize=6.2, framealpha=0.92)
-
-ax = axes[1]
-g0a = np.array([float(r["G0_eV"]) for r in sum_rows])
-phi_em = np.array([float(r["phi_em"]) for r in sum_rows])
-phi_pr = np.array([float(r["phi_prompt"]) for r in sum_rows])
-phi_de = np.array([float(r["phi_delayed"]) for r in sum_rows])
-phi_cs = np.array([float(r["phi_cs"]) for r in sum_rows])
-phi_esc = np.array([float(r["phi_escape"]) for r in sum_rows])
-phi_pr_th = np.array([float(r["phi_prompt_theory"]) for r in sum_rows])
-order = np.argsort(g0a)
-ax.plot(g0a[order], phi_em[order], "o-", color="#222", lw=1.8, label=r"emission $\phi_{\mathrm{em}}$")
-ax.plot(g0a[order], phi_pr[order], "s--", color="#d55e00", lw=1.4, label="prompt emission")
-ax.plot(g0a[order], phi_de[order], "^--", color="#0072b2", lw=1.4, label="delayed emission")
-ax.plot(g0a[order], phi_cs[order], "D-.", color="#009e73", lw=1.4, label="ever separated")
-ax.plot(g0a[order], phi_esc[order], "v:", color="#882255", lw=1.4, label="escaped as free charges")
-ax.plot(g0a[order], phi_pr_th[order], "k:", lw=1.0, alpha=0.7, label=r"$\phi_{\mathrm{prompt}}^{\mathrm{th}}$")
-ax.set_xlabel(r"$\Delta G_0$ of charge separation (eV)")
-ax.set_ylabel("yield  (per trajectory)")
-ax.set_title(rf"Yields vs $\Delta G_0$  ($\lambda=1$ eV, $R_{{\mathrm{{hop}}}}={r_hop}$)")
-ax.set_ylim(-0.05, 1.12)
-ax.legend(loc="center left", fontsize=8)
+# separate panel: yields bar + mean hop stats text-free simple plot
+fig, ax = plt.subplots(figsize=(5.2, 4.0))
+ax.bar([0, 1], [phi_LE, phi_CT], color=["#d55e00", "#0072b2"], width=0.55)
+ax.set_xticks([0, 1], ["LE emission", "CT emission"])
+ax.set_ylabel("yield per trajectory")
+ax.set_ylim(0, 1.05)
+ax.set_title("Emission branching")
+for i, v in enumerate([phi_LE, phi_CT]):
+    ax.text(i, v + 0.03, f"{v:.3f}", ha="center", fontsize=10)
 fig.tight_layout()
-fig.savefig(os.path.join(outdir, "yields_prompt_delayed.png"))
-fig.savefig(os.path.join(outdir, "yields_prompt_delayed.pdf"))
-plt.close(fig)
-
-# ---- Figure 3: rates + hopping statistics ----
-fig, axes = plt.subplots(1, 2, figsize=(11.4, 4.7))
-ax = axes[0]
-k_cs_tot = np.array([float(r["k_cs_tot"]) for r in sum_rows])[order]
-k_cr_nn = np.array([float(r["k_cr_nn"]) for r in sum_rows])[order]
-k_hop_nn = np.array([float(r["k_hop_nn"]) for r in sum_rows])[order]
-g = g0a[order]
-ax.semilogy(g, k_cs_tot, "o-", color="#d55e00", lw=1.6, label=r"$\sum k_{\mathrm{CS}}$  (all sites $\leq R_{\mathrm{hop}}$)")
-ax.semilogy(g, k_cr_nn, "s-", color="#0072b2", lw=1.6, label=r"$k_{\mathrm{CR}}$(NN)")
-ax.semilogy(g, k_hop_nn, "D--", color="#009e73", lw=1.4, label=r"$k_{\mathrm{hop}}$(NN)")
-ax.axhline(k_decay, color="k", ls=":", lw=1.2, label=r"$k_{\mathrm{decay}} = 1/\tau$")
-ax.set_xlabel(r"$\Delta G_0$ of charge separation (eV)")
-ax.set_ylabel(r"rate (s$^{-1}$)")
-ax.set_title("Marcus / Miller–Abrahams rates")
-ax.legend(loc="best", fontsize=8)
-
-ax = axes[1]
-mean_cs = np.array([float(r["mean_n_cs"]) for r in sum_rows])[order]
-mean_cr = np.array([float(r["mean_n_cr"]) for r in sum_rows])[order]
-mean_h = np.array([float(r["mean_n_hops"]) for r in sum_rows])[order]
-ax.semilogy(g, np.maximum(mean_cs, 1e-4), "o-", color="#d55e00", lw=1.6, label=r"$\langle n_{\mathrm{CS}}\rangle$")
-ax.semilogy(g, np.maximum(mean_cr, 1e-4), "s-", color="#0072b2", lw=1.6, label=r"$\langle n_{\mathrm{CR}}\rangle$")
-ax.semilogy(g, np.maximum(mean_h, 1e-4), "D--", color="#009e73", lw=1.4, label=r"$\langle n_{\mathrm{hops}}\rangle$")
-ax.set_xlabel(r"$\Delta G_0$ of charge separation (eV)")
-ax.set_ylabel("mean count per trajectory")
-ax.set_title("Separation, recombination, host hops")
-ax.legend(loc="best", fontsize=8)
-fig.tight_layout()
-fig.savefig(os.path.join(outdir, "rates_and_hops.png"))
-fig.savefig(os.path.join(outdir, "rates_and_hops.pdf"))
+fig.savefig(os.path.join(outdir, "emission_yields.png"))
+fig.savefig(os.path.join(outdir, "emission_yields.pdf"))
 plt.close(fig)
 
 print("wrote figures to", outdir)
 """
 
 function plot_with_python(outdir::String)
-    pyfile = joinpath(outdir, "_plot_kmc.py")
+    pyfile = joinpath(outdir, "_plot_emission.py")
     write(pyfile, PLOT_PY)
     env = copy(ENV)
     env["MPLCONFIGDIR"] = joinpath(outdir, ".mplconfig")
@@ -709,54 +559,56 @@ function plot_with_python(outdir::String)
     run(setenv(`python3 $pyfile $outdir`, env))
 end
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 function main()
     mkpath(OUTDIR)
     println("============================================================")
-    println("  kMC hopping around a single CT centre  (long-range)")
+    println("  kMC LE / CT hopping in a periodic disordered box")
     println("============================================================")
-    @printf("  λ = %.2f eV    T = %.0f K    τ_CT = %.2e s    a = %.1f nm    β = %.1f nm⁻¹\n",
-            LAMBDA_EV, T_K, TAU_CT, A_NM, BETA_INV_NM)
-    @printf("  ν0 = %.2e s⁻¹    N_traj = %d    threads = %d\n",
-            NU0, N_TRAJ, nthreads())
-    @printf("  R_hop = %d  (%d sites)    R_escape = %d\n", R_HOP, N_OFF, R_ESCAPE)
-    println()
-    println("  Marcus barriers  Ea = (λ + ΔG)² / 4λ")
-    println("    CS:  ΔG = +G0      CR:  ΔG = −G0      host hop: ΔG = 0")
-    println("  Rate k(r) = ν0 exp(−2 β r − Ea/kT)  for all |r| ≤ R_hop")
+    @printf("  N_host = %d    L = %.2f nm    β = %.2f nm⁻¹    λ = %.2f eV\n",
+            N_PARTICLES, L, BETA_INV_NM, LAMBDA_EV)
+    @printf("  τ_LE = %.2e s    τ0_CT = %.2e s    T = %.0f K\n", TAU_LE, TAU0_CT, T_K)
+    @printf("  Coulomb C = %.3f eV·nm    N_traj = %d    threads = %d\n",
+            COULOUMB_CONST, N_TRAJ, nthreads())
     println()
 
-    ensembles = Ensemble[]
-    for G0 in G0_LIST
-        r = Rates(Float64(G0))
-        print_rates(r)
-        print("  running … ")
-        flush(stdout)
-        t0 = time()
-        e = run_ensemble(r)
-        @printf("done in %.1f s\n", time() - t0)
-        print_ensemble(e)
-        println()
-        push!(ensembles, e)
-    end
+    print("  building shared box + rate tables … ")
+    flush(stdout)
+    t_build = time()
+    sys = build_system(Xoshiro(SEED))
+    @printf("done in %.2f s  (%d centres, top-%d hops)\n",
+            time() - t_build, sys.n_centers, N_RATES)
+
+    print("  running ensemble … ")
+    flush(stdout)
+    t0 = time()
+    e = run_ensemble(sys)
+    @printf("done in %.1f s\n", time() - t0)
+    @printf("  LE_emission=%d (φ=%.4f)   CT_emission=%d (φ=%.4f)\n",
+            e.n_LE, e.phi_LE, e.n_CT, e.phi_CT)
+    @printf("  timeout=%d  steplimit=%d   ⟨n_CS⟩=%.3f  ⟨n_CR⟩=%.3f  ⟨n_hops⟩=%.1f\n",
+            e.n_timeout, e.n_steplimit, e.mean_n_cs, e.mean_n_cr, e.mean_n_hops)
 
     decay_csv = joinpath(OUTDIR, "decay_curves.csv")
-    sum_csv   = joinpath(OUTDIR, "summary.csv")
-    write_decay_csv(decay_csv, ensembles)
-    write_summary_csv(sum_csv, ensembles)
+    sum_csv = joinpath(OUTDIR, "summary.csv")
+    write_decay_csv(decay_csv, e)
+    write_summary_csv(sum_csv, e)
     println("  wrote ", decay_csv)
     println("  wrote ", sum_csv)
 
     println("  plotting …")
     plot_with_python(OUTDIR)
-    println("  figures: decay_curves.{png,pdf}  yields_prompt_delayed.{png,pdf}  rates_and_hops.{png,pdf}")
+    println("  figures: emission_decay.{png,pdf}  emission_yields.{png,pdf}")
     println("============================================================")
-    return ensembles
+    return e
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
+    # Thread count cannot be raised after Julia has started. Default is 1.
+    if nthreads() == 1 && get(ENV, "KMC_NO_REEXEC", "") != "1"
+        println("note: Julia started with 1 thread; re-launching with -t auto …")
+        flush(stdout)
+        p = run(ignorestatus(`$(Base.julia_cmd()) -t auto $(PROGRAM_FILE) $ARGS`))
+        exit(p.exitcode)
+    end
     main()
 end
