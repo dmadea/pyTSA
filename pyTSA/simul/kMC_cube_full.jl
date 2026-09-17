@@ -45,7 +45,7 @@ const M            = 192.17  # g/mol for PET
 const HOST_DENSITY = 1.332 # g/cm^3, density of PET
 const DENSITY      = HOST_DENSITY * AVOGADRO * 1e-21 / M # in units / nm3
 
-const N_TRAJ      = 400_000   # 2_000_000
+const N_TRAJ      = 200_000   # 2_000_000
 const LAMBDA_EV   = 0.4
 const N_PARTICLES = 5_000
 const L           = (N_PARTICLES / DENSITY)^(1/3) # in nm
@@ -54,7 +54,7 @@ const C_CENTERS   = 0.01   # 1% conc.
 const T_K         = 300.0
 const NU0         = 1.0e13          # s⁻¹, Miller–Abrahams prefactor (as in LPLModel)
 const BETA_INV_NM = 1               # nm⁻¹, inverse localisation length for hopping 
-const BETA_INV_TAU_CT_NM = 1.0      # nm⁻¹, inverse localisation length for CT emission rate
+const BETA_INV_TAU_CT_NM = 20.0      # nm⁻¹, inverse localisation length for CT emission rate
 const A_NM        = 1.0             # nm, lattice constant
 const TAU_LE      = 1.0e-8          # s, LE lifetime  (k_LE = 1e8 s⁻¹, LPLModel default)
 const TAU0_CT     = 1.0e-6         # s, CT* lifetime for zero separation distance
@@ -77,10 +77,16 @@ const HOMO_CENTER = -5.65
 const LUMO_CENTER = -2.74
  
 const HOMO_HOST = -7.11
-const LUMO_HOST = -4.5
+const LUMO_HOST = -3.85
 
-const OUTDIR = joinpath(@__DIR__, "kmc_sigma=0.00")
-const R_MIN_NM = 0.2   # nm; floor for Coulomb / tunneling distances
+if Sys.iswindows()
+    dir = "C:\\Users\\domin\\OneDrive - OIST\\Projects\\LPL model and chemiluminiescence project\\kMC"
+elseif Sys.isapple()
+    dir = "/home/domin/OneDrive - OIST/Projects/LPL model and chemiluminiescence project/kMC"
+end
+
+const OUTDIR = joinpath(dir, "test20")
+const R_MIN_NM = 0.1   # nm; floor for Coulomb / tunneling distances
 const N_RATES  = 25    # top hop channels kept per (centre, host) pair
 const LUMO_STD_HOST = 0.00
 const LUMO_STD_CENTER = 0.0

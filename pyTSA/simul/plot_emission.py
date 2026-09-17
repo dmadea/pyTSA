@@ -306,23 +306,28 @@ def plot_trajectories_3d(rundir: str, outdir: str, summary: dict) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if len(argv) < 2:
-        print(
-            "Usage: python3 plot_emission.py OUTDIR RUN_NAME [RUN_NAME ...]",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    argv = list(sys.argv if argv is None else argv)
+    # if len(argv) < 2:
+    #     print(
+    #         "Usage: python3 plot_emission.py OUTDIR RUN_NAME [RUN_NAME ...]",
+    #         file=sys.stderr,
+    #     )
+    #     sys.exit(1)
 
-    plot_outdir = argv[0]
+    if sys.platform == "win32":
+        plot_outdir = r"C:\Users\domin\OneDrive - OIST\Projects\LPL model and chemiluminiescence project\kMC"
+    else:
+        plot_outdir = "/home/domin/OneDrive - OIST/Projects/LPL model and chemiluminiescence project/kMC/test"
+
     run_names = argv[1:]
     run_dirs: list[str] = []
     for name in run_names:
         # Names are folders inside OUTDIR (allow accidental absolute paths too).
-        d = name if os.path.isabs(name) else os.path.join(plot_outdir, name)
+        d = os.path.join(plot_outdir, name)
         if not os.path.isdir(d):
-            print(f"error: not a directory: {d}", file=sys.stderr)
-            sys.exit(1)
+            continue
+            # print(f"error: not a directory: {d}", file=sys.stderr)
+            # sys.exit(1)
         if not os.path.isfile(os.path.join(d, "summary.csv")):
             print(f"error: missing summary.csv in {d}", file=sys.stderr)
             sys.exit(1)
