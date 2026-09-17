@@ -50,7 +50,7 @@ const LAMBDA_EV   = 0.4
 const N_PARTICLES = 5_000
 const L           = (N_PARTICLES / DENSITY)^(1/3) # in nm
 const EPS_HOST    = 3.2
-const C_CENTERS   = 0.005   # 1% conc.
+const C_CENTERS   = 0.01   # 1% conc.
 const T_K         = 300.0
 const NU0         = 1.0e13          # s⁻¹, Miller–Abrahams prefactor (as in LPLModel)
 const BETA_INV_NM = 1               # nm⁻¹, inverse localisation length for hopping 
@@ -59,7 +59,7 @@ const A_NM        = 1.0             # nm, lattice constant
 const TAU_LE      = 1.0e-8          # s, LE lifetime  (k_LE = 1e8 s⁻¹, LPLModel default)
 const TAU0_CT     = 1.0e-6         # s, CT* lifetime for zero separation distance
 const T_MAX       = 1.0e-2          # s
-const MAX_EVENTS  = 800_000
+const MAX_EVENTS  = 300_000
 const SEED        = 1
 const T_MIN_HIST  = 1.0e-12         # s
 const N_BINS      = 90
@@ -75,14 +75,14 @@ const COULOUMB_CONST = E_CHARGE * 1e9 / (4 * π * EPS_0 * EPS_HOST)  # in eV.nm
 
 const HOMO_CENTER = -5.65
 const LUMO_CENTER = -2.74
-
+ 
 const HOMO_HOST = -7.11
-const LUMO_HOST = -4.0
+const LUMO_HOST = -4.5
 
-const OUTDIR = joinpath(@__DIR__, "kmc_cube_full_output")
+const OUTDIR = joinpath(@__DIR__, "kmc_sigma=0.25")
 const R_MIN_NM = 0.2   # nm; floor for Coulomb / tunneling distances
 const N_RATES  = 25    # top hop channels kept per (centre, host) pair
-const LUMO_STD_HOST = 0.05
+const LUMO_STD_HOST = 0.25
 const LUMO_STD_CENTER = 0.0
 const HOMO_STD_CENTER = 0.0
 const MAX_PATH_STEPS = 25_000   # cap recorded steps for sample 3D paths
@@ -703,9 +703,10 @@ function save_sample_trajectories(sys::System, trajs::Vector{Traj}, outdir::Stri
 end
 
 
-function plot_with_python(outdir::String)
-    pyfile = joinpath(outdir, "_plot_emission.py")
-    run(`python3 $pyfile $outdir`)
+function plot_with_python(outdir::String, run_names::AbstractVector{<:AbstractString})
+    # First CLI arg = parent output dir; remaining args = subdirectory names under it.
+    pyfile = joinpath(@__DIR__, "plot_emission.py")
+    run(`python3 $pyfile $outdir $(run_names...)`)
 end
 
 function main()
@@ -758,7 +759,7 @@ function main()
     save_sample_trajectories(sys, e.trajs)
 
     println("  plotting …")
-    plot_with_python(OUTDIR)
+    # plot_with_python(OUTDIR)
     println("  figures: emission_decay.png  rmax_hist.png  ct_emission_r_hist.png  hop_r_hist.png  trajectories_3d.png")
     println("============================================================")
     return e
