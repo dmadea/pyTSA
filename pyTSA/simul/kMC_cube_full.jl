@@ -45,7 +45,7 @@ const M            = 192.17  # g/mol for PET
 const HOST_DENSITY = 1.332 # g/cm^3, density of PET
 const DENSITY      = HOST_DENSITY * AVOGADRO * 1e-21 / M # in units / nm3
 
-const N_TRAJ      = 200_000   # 2_000_000
+const N_TRAJ      = 400_000   # 2_000_000
 const LAMBDA_EV   = 0.4
 const N_PARTICLES = 5_000
 const L           = (N_PARTICLES / DENSITY)^(1/3) # in nm
@@ -59,7 +59,7 @@ const A_NM        = 1.0             # nm, lattice constant
 const TAU_LE      = 1.0e-8          # s, LE lifetime  (k_LE = 1e8 s⁻¹, LPLModel default)
 const TAU0_CT     = 1.0e-6         # s, CT* lifetime for zero separation distance
 const T_MAX       = 1.0e-2          # s
-const MAX_EVENTS  = 300_000
+const MAX_EVENTS  = 800_000
 const SEED        = 1
 const T_MIN_HIST  = 1.0e-12         # s
 const N_BINS      = 90
@@ -79,10 +79,10 @@ const LUMO_CENTER = -2.74
 const HOMO_HOST = -7.11
 const LUMO_HOST = -4.5
 
-const OUTDIR = joinpath(@__DIR__, "kmc_sigma=0.25")
+const OUTDIR = joinpath(@__DIR__, "kmc_sigma=0.00")
 const R_MIN_NM = 0.2   # nm; floor for Coulomb / tunneling distances
 const N_RATES  = 25    # top hop channels kept per (centre, host) pair
-const LUMO_STD_HOST = 0.25
+const LUMO_STD_HOST = 0.00
 const LUMO_STD_CENTER = 0.0
 const HOMO_STD_CENTER = 0.0
 const MAX_PATH_STEPS = 25_000   # cap recorded steps for sample 3D paths
