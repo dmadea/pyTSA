@@ -77,15 +77,15 @@ const HOMO_CENTER = -5.65
 const LUMO_CENTER = -2.74
  
 const HOMO_HOST = -7.11
-const LUMO_HOST = -3.85
+const LUMO_HOST = -1.6
 
 if Sys.iswindows()
     dir = "C:\\Users\\domin\\OneDrive - OIST\\Projects\\LPL model and chemiluminiescence project\\kMC"
 elseif Sys.isapple()
-    dir = "/home/domin/OneDrive - OIST/Projects/LPL model and chemiluminiescence project/kMC"
+    dir = "/Users/dominik/Library/CloudStorage/OneDrive-OIST/Projects/LPL model and chemiluminiescence project/kMC"
 end
 
-const OUTDIR = joinpath(dir, "test20")
+const OUTDIR = joinpath(dir, "lumo=-1.6,beta_CT=20")
 const R_MIN_NM = 0.1   # nm; floor for Coulomb / tunneling distances
 const N_RATES  = 25    # top hop channels kept per (centre, host) pair
 const LUMO_STD_HOST = 0.00

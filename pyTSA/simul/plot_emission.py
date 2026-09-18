@@ -92,14 +92,14 @@ def plot_decay(runs: list[dict], outdir: str) -> None:
         phi_CT = float(run["summary"]["phi_CT"])
         lab = run["label"]
         if np.any(I_LE > 0):
-            ax.loglog(t[I_LE > 0], I_LE[I_LE > 0], "-", color=c, lw=1.8,
+            ax.loglog(t[I_LE > 0], I_LE[I_LE > 0], ":", color=c, lw=1,
                       label=rf"{lab}  LE ($\phi={phi_LE:.3f}$)")
         if np.any(I_CT > 0):
-            ax.loglog(t[I_CT > 0], I_CT[I_CT > 0], "--", color=c, lw=1.8,
+            ax.loglog(t[I_CT > 0], I_CT[I_CT > 0], "--", color=c, lw=1,
                       label=rf"{lab}  CT ($\phi={phi_CT:.3f}$)")
         m = I_tot > 0
         if np.any(m):
-            ax.loglog(t[m], I_tot[m], ":", color=c, lw=1.1, alpha=0.75)
+            ax.loglog(t[m], I_tot[m], "-", color=c, lw=1.5, alpha=1)
     ax.set_xlabel("time (s)")
     ax.set_ylabel(r"emission rate  $I(t)$  (s$^{-1}$ / trajectory)")
     ax.set_title("Emission decay (log–log)")
@@ -115,7 +115,8 @@ def plot_rmax(runs: list[dict], outdir: str) -> None:
     if not datasets:
         return
     all_r = np.concatenate([d for _, d in datasets])
-    n_bins = min(60, max(12, int(np.sqrt(all_r.size / max(len(datasets), 1)))))
+    # n_bins = min(60, max(12, int(np.sqrt(all_r.size / max(len(datasets), 1)))))
+    n_bins = int(np.sqrt(all_r.size / max(len(datasets), 1)))
     bins = np.histogram_bin_edges(all_r, bins=n_bins)
     fig, ax = plt.subplots(figsize=(5.8, 4.3))
     for i, (run, r) in enumerate(datasets):
@@ -317,7 +318,7 @@ def main(argv: list[str] | None = None) -> None:
     if sys.platform == "win32":
         plot_outdir = r"C:\Users\domin\OneDrive - OIST\Projects\LPL model and chemiluminiescence project\kMC"
     else:
-        plot_outdir = "/home/domin/OneDrive - OIST/Projects/LPL model and chemiluminiescence project/kMC/test"
+        plot_outdir = "/Users/dominik/Library/CloudStorage/OneDrive-OIST/Projects/LPL model and chemiluminiescence project/kMC"
 
     run_names = argv[1:]
     run_dirs: list[str] = []
