@@ -86,12 +86,11 @@ class LPLModel(KineticModel):
         self.Es: np.ndarray = None
         self.rs: np.ndarray = None
         self.t_acum: np.ndarray = None
+        self.t_lpl: np.ndarray = None  # time points for lpl decay phase/TL phase
         self.accum_phase_solution: None | np.ndarray = None
         self.lpl_phase_solution: None | np.ndarray = None
 
         self.pair_conc: None | np.ndarray = None
-
-        self.ridge_alpha = 0.0001
 
         self.initial_state: None | Callable = None
         self.temp_fun: Callable | None = None  # takes time as argument
@@ -116,8 +115,8 @@ class LPLModel(KineticModel):
             params.add('rho_exp_amp', value=1, min=0, max=np.inf, vary=True)
             params.add('rho_exp_lambda', value=10, min=0, max=np.inf, vary=True)
 
-        params.add('s0', value=1e13, min=0, max=np.inf, vary=False)
-        params.add('beta', value=1, min=0, max=np.inf, vary=False)
+        params.add('log_s0', value=13, min=0, max=np.inf, vary=False)
+        params.add('beta', value=1, min=0, max=np.inf, vary=False)  # for Miller-Abraham rate constant
 
         return params
 
@@ -212,6 +211,8 @@ class LPLModel(KineticModel):
     def simulate(self, params: Parameters | None = None, times: np.ndarray | None = None) -> np.ndarray:
         params = self.params if params is None else params
 
+        # if exposure_time_s is 0 or None, accumulation phase is skipped
+
         if self.initial_state is None:
             u0 = np.zeros(self.n_ode_states)
         else:
@@ -221,23 +222,26 @@ class LPLModel(KineticModel):
 
         self.I0 = self.P_irr_mW * 1e-3 * self.lambda_irr_nm * 1e-9 / (sc.h * sc.c) # light intensity in photons / s
 
-        # --- accumulation phase: constant illumination I0 at temperature T ---
-        rhs_acc, jac_acc = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: self.I0)
-        self.t_acum = np.linspace(0, self.exposure_time_s, 100)
-        sol_acc = solve_ivp(rhs_acc, (0, self.exposure_time_s), u0, **ivp_kw, jac=jac_acc, t_eval=self.t_acum)
-        if not sol_acc.success:
-            raise RuntimeError(f"accumulation integration failed: {sol_acc.message}")
+        do_acc = self.exposure_time_s is not None and self.exposure_time_s > 0
+
+        if do_acc:
+            # --- accumulation phase: constant illumination I0 at temperature T ---
+            rhs_acc, jac_acc = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: self.I0)
+            self.t_acum = np.linspace(0, self.exposure_time_s, 100)
+            sol_acc = solve_ivp(rhs_acc, (0, self.exposure_time_s), u0, **ivp_kw, jac=jac_acc, t_eval=self.t_acum)
+            if not sol_acc.success:
+                raise RuntimeError(f"accumulation integration failed: {sol_acc.message}")
+            self.accum_phase_solution = sol_acc.y
 
         # --- LPL decay phase: light off ---
         rhs_dec, jac_dec = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: 0.0)
-        t_lpl = self.dataset.times if self.dataset is not None else times
-        if t_lpl is None:
+        self.t_lpl = self.dataset.times if self.dataset is not None else times
+        if self.t_lpl is None:
             raise ValueError("times are not provided")
-        sol_dec = solve_ivp(rhs_dec, (0, t_lpl[-1]), sol_acc.y[:, -1], **ivp_kw, jac=jac_dec, t_eval=t_lpl)
+        sol_dec = solve_ivp(rhs_dec, (0, self.t_lpl[-1]), sol_acc.y[:, -1] if do_acc else u0, **ivp_kw, jac=jac_dec, t_eval=self.t_lpl)
         if not sol_dec.success:
             raise RuntimeError(f"LPL integration failed: {sol_dec.message}")
 
-        self.accum_phase_solution = sol_acc.y
         self.lpl_phase_solution = sol_dec.y
 
         self.process_solution(params)
@@ -293,8 +297,8 @@ class LPLModel(KineticModel):
         if n == 0:
             return
 
-        if self.dataset is None:
-            raise TypeError("There is no dataset assigned to the model")
+        # if self.dataset is None:
+        #     raise TypeError("There is no dataset assigned to the model")
 
         if nrows is None and ncols is None:
             ncols = int(np.floor(n ** 0.5))
@@ -347,25 +351,43 @@ class LPLModel(KineticModel):
                     self._require_simulation()
                     update_kwargs("decay-curve", kws)
 
-                    times = self.dataset.times
+                    assert self.t_lpl is not None, "t_lpl must be provided either in dataset or in simulate() method"
+
+                    x = self.t_lpl
                     y_fit = self.matrix_opt[:, 0] if self.matrix_opt.ndim > 1 else self.matrix_opt
-                    ax.plot(times, y_fit, label='Fit')
+
+                    T_x_axis = kws.pop('T_x_axis', False)
+
+                    if T_x_axis:
+                        # if True, the x-axis is the temperature instead of time
+                        # only for TL-ramp type data
+                        assert self.temp_fun is not None, "temp_fun must be provided in simulate() method"
+                        x = self.temp_fun(self.t_lpl)
+                        assert np.abs(np.diff(x)).min() > 0, "Temperature values must be changing"
+
+                    ax.plot(x, y_fit, label='Fit')
 
                     if kws.pop('show_data', True):
                         single_dim = self.dataset.matrix_fac.shape[1] == 1
                         y_data = self.dataset.matrix_fac[:, 0] if single_dim else self.dataset.matrix_fac.sum(axis=1)
-                        ax.plot(times, y_data, ls='--', label='Data')
+                        ax.plot(x, y_data, ls='--', label='Data')
 
                     if kws.pop('show_trap_integral', False):
                         ax_t = ax.twinx()
                         pair = self.pair_conc[:, 0] if self.pair_conc.ndim > 1 else self.pair_conc
-                        ax_t.plot(times, pair, ls='--', color='C1')
+                        ax_t.plot(x, pair, ls='--', color='C1')
                         ax_t.set_yscale('log')
                         ax_t.set_ylabel(r'$\int\rho\,dE$ (dashed)')
 
-                    ax.set_xscale('log')
-                    ax.set_yscale('log')
-                    ax.set_xlabel('Time after irradiation [s]')
+                    if T_x_axis:
+                        ax.set_xscale('linear')
+                        ax.set_yscale('linear')
+                        ax.set_xlabel('Temperature (K)')
+                    else:
+                        ax.set_xscale('log')
+                        ax.set_yscale('log')
+                        ax.set_xlabel('Time (s)')
+
                     ax.set_ylabel(r'$n_{CT*}$')
                     ax.set_title(kws.pop('title', 'Recombination (LPL)'))
                     ax.legend(frameon=False)
@@ -376,7 +398,7 @@ class LPLModel(KineticModel):
 
                     dim: Literal['E', 'r'] = 'r' if p.lower().endswith('-r') else 'E'
                     is_acum = 'acum' in p.lower()
-                    times = self.t_acum if is_acum else self.dataset.times
+                    times = self.t_acum if is_acum else self.t_lpl
                     sol = self.accum_phase_solution if is_acum else self.lpl_phase_solution
                     step = kws.pop('step', 5)
                     idxs = np.arange(0, len(times), step)
@@ -399,11 +421,11 @@ class LPLModel(KineticModel):
                         ax.set_ylabel(r'$\int\rho(r,E)\,dr$' if is_2d else r'$\rho(E)$')
                         expr = r'\int\rho(r,E,t)\,dr' if is_2d else r'\rho(E,t)'
                     else:
-                        ax.set_xlabel('r [nm]')
+                        ax.set_xlabel('r (nm)')
                         ax.set_ylabel(r'$\int\rho(r,E)\,dE$')
                         expr = r'\int\rho(r,E,t)\,dE'
                     ax.set_title(kws.pop('title', rf'{phase}: ${expr}$'))
-                    cbar_label = 't [s]' if is_acum else 't after irr. [s]'
+                    cbar_label = 'Time (s)'
                     fig.colorbar(plt.cm.ScalarMappable(cmap=cmap, norm=norm), ax=ax, label=cbar_label)
 
                 case "dist-decay-2d" | "dist-acum-2d":
@@ -411,7 +433,7 @@ class LPLModel(KineticModel):
                     update_kwargs(p.lower(), kws)
 
                     is_acum = 'acum' in p.lower()
-                    times = self.t_acum if is_acum else self.dataset.times
+                    times = self.t_acum if is_acum else self.t_lpl
                     sol = self.accum_phase_solution if is_acum else self.lpl_phase_solution
                     if not self._is_2d_trap_grid(sol[n:, 0]):
                         raise ValueError("2D trap heatmap requires a 2D (r, E) trap grid.")
@@ -437,8 +459,8 @@ class LPLModel(KineticModel):
                         norm_hm = Normalize(vmin=vmin, vmax=vmax)
 
                     mesh = ax.pcolormesh(self.Es, self.rs, rho, shading='auto', cmap=cmap_hm, norm=norm_hm)
-                    ax.set_xlabel('E [eV]')
-                    ax.set_ylabel('r [nm]')
+                    ax.set_xlabel('E (eV)')
+                    ax.set_ylabel('r (nm)')
                     phase = 'Charging' if is_acum else 'Recombination'
                     ax.set_title(kws.pop('title', rf'{phase}: $\rho(r,E)$ at $t={times[j]:.3g}$ s'))
                     fig.colorbar(mesh, ax=ax, label=r'$\rho(r,E)$')
@@ -478,7 +500,7 @@ class LPLModelCT(LPLModel):
 
     """
 
-    name = "LPL model with single CT state"
+    name = "LPL model with single CT state 1D"
 
 
     def init_params(self) -> Parameters:
@@ -508,7 +530,7 @@ class LPLModelCT(LPLModel):
         N_tot = np.trapezoid(rho_0, self.Es)
         w_E = self.trapezoid_weights(self.Es)
 
-        s0 = params['s0'].value
+        s0 = 10 ** params['log_s0'].value
         k_sep = params['k_sep'].value
         k_rnr = params['k_CT_rnr'].value
 
@@ -588,7 +610,7 @@ class LPLModelCT2D(LPLModel):
             params.add('rho_exp_amp_r', value=1, min=0, max=np.inf, vary=True)
             params.add('rho_exp_lambda_r', value=10, min=0, max=np.inf, vary=True)
 
-        params.add('s0', value=1e13, min=0, max=np.inf, vary=False)
+        params.add('log_s0', value=13, min=0, max=np.inf, vary=False)
         params.add('beta', value=1, min=0, max=np.inf, vary=True)
 
         params.add('amp_CT', value=1, min=0, max=np.inf, vary=True)
@@ -602,7 +624,7 @@ class LPLModelCT2D(LPLModel):
         *saturable* trapping term (Pauli blocking) on a (r, E) grid.
 
         Recombination uses the Miller–Abrahams rate
-        ``k(r,E,T) = s0 * exp(-2 β r - E / k_B T)``.
+        ``k(r,E,T) = 10**log_s0 * exp(-2 β r - E / k_B T)``.
 
         T_fun(t), I_fun(t): temperature and generation-rate protocols, which
         lets the same system serve isothermal charging, LPL decay, and TL ramps.
@@ -618,7 +640,7 @@ class LPLModelCT2D(LPLModel):
         w = self.trapezoid_weights_2D(self.rs, self.Es)
         N_tot = np.sum(w * rho_0)
 
-        s0 = params['s0'].value
+        s0 = 10 ** params['log_s0'].value
         beta = params['beta'].value
         k_sep = params['k_sep'].value
         k_rnr = params['k_CT_rnr'].value
@@ -667,7 +689,7 @@ class LPLModelCTiso2D(LPLModelCT2D):
     Uses the same separable ``(r, E)`` distribution parameters as
     ``LPLModelCT2D``. At the temperature ``T_fun(0)`` the 2D capacity
     ``w ρ0(r,E)`` is histogrammed onto ``n_k`` log-spaced rate bins
-    ``k = s0 exp(-2 β r - E / k_B T)``. The ODE then has ``n_k + 1``
+    ``k = 10**log_s0 exp(-2 β r - E / k_B T)``. The ODE then has ``n_k + 1``
     states (CT + iso-k groups) instead of ``n_r n_E + 1``.
 
     Valid only for isothermal charging/decay: group rates are frozen at
@@ -695,7 +717,7 @@ class LPLModelCTiso2D(LPLModelCT2D):
         cap = self.trapezoid_weights_2D(self.rs, self.Es) * rho_0
         N_tot = float(cap.sum())
 
-        s0 = params['s0'].value
+        s0 = 10 ** params['log_s0'].value
         beta = params['beta'].value
         k = np.maximum(
             self.miller_abraham_rate(self.rs[:, None], self.Es[None, :], T, beta, s0),
@@ -830,7 +852,7 @@ class LPLModelST(LPLModel):
         N_tot = np.trapezoid(rho_0, self.Es)
         w_E = self.trapezoid_weights(self.Es)
 
-        s0 = params['s0'].value
+        s0 = 10 ** params['log_s0'].value
         k_sep = params['k_sep'].value
         k_S_rnr = params['k_S_rnr'].value
         k_T_rnr = params['k_T_rnr'].value
@@ -978,7 +1000,7 @@ class LPLModelSTDispersion(LPLModel):
         w_z = self.kST_weights
         p = self._population_pdf()
 
-        s0 = params['s0'].value
+        s0 = 10 ** params['log_s0'].value
         k_sep = params['k_sep'].value
         fS = 1 / 4
         fT = 3 / 4
