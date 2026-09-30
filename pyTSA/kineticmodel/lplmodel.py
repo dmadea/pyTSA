@@ -120,6 +120,18 @@ class LPLModel(KineticModel):
 
         return params
 
+    def pre_simulate(self):
+        """
+        Runs before the simulation method.
+        """
+        pass
+
+    def post_simulate(self):
+        """
+        Runs after the simulation method.
+        """
+        pass
+
     @staticmethod
     def arrhenius(E: np.ndarray, T: np.ndarray) -> np.ndarray:
         """Boltzmann factor exp(-E / kB*T); E in eV, T in K."""
@@ -209,6 +221,7 @@ class LPLModel(KineticModel):
 
 
     def simulate(self, params: Parameters | None = None, times: np.ndarray | None = None) -> np.ndarray:
+        self.pre_simulate()
         params = self.params if params is None else params
 
         # if exposure_time_s is 0 or None, accumulation phase is skipped
@@ -243,6 +256,8 @@ class LPLModel(KineticModel):
             raise RuntimeError(f"LPL integration failed: {sol_dec.message}")
 
         self.lpl_phase_solution = sol_dec.y
+
+        self.post_simulate()
 
         self.process_solution(params)
 
@@ -357,6 +372,7 @@ class LPLModel(KineticModel):
                     y_fit = self.matrix_opt[:, 0] if self.matrix_opt.ndim > 1 else self.matrix_opt
 
                     T_x_axis = kws.pop('T_x_axis', False)
+                    lin_x = kws.pop('lin_x', False)
 
                     if T_x_axis:
                         # if True, the x-axis is the temperature instead of time
@@ -388,6 +404,9 @@ class LPLModel(KineticModel):
                         ax.set_yscale('log')
                         ax.set_xlabel('Time (s)')
 
+                    if lin_x:
+                        ax.set_xscale('linear')
+
                     ax.set_ylabel(r'$n_{CT*}$')
                     ax.set_title(kws.pop('title', 'Recombination (LPL)'))
                     ax.legend(frameon=False)
@@ -395,6 +414,7 @@ class LPLModel(KineticModel):
                 case "dist-acum-e" | "dist-acum-r" | "dist-decay-e" | "dist-decay-r":
                     self._require_simulation()
                     update_kwargs(p.lower(), kws)
+                    lin_x = kws.pop('lin_x', False)
 
                     dim: Literal['E', 'r'] = 'r' if p.lower().endswith('-r') else 'E'
                     is_acum = 'acum' in p.lower()
@@ -402,7 +422,7 @@ class LPLModel(KineticModel):
                     sol = self.accum_phase_solution if is_acum else self.lpl_phase_solution
                     step = kws.pop('step', 5)
                     idxs = np.arange(0, len(times), step)
-                    norm = Normalize(times[0], times[-1]) if is_acum else LogNorm(times[0], times[-1])
+                    norm = Normalize(times[0], times[-1]) if is_acum or lin_x else LogNorm(times[0], times[-1])
                     is_2d = self._is_2d_trap_grid(sol[n:, 0])
 
                     x, _, rho0_m = self.get_trap_marginal(sol[n:, 0], dim)

@@ -24,6 +24,38 @@ sqpi = np.sqrt(np.pi)
 # from scipy.linalg import lstsq
 
 
+def step_smooth_function(t: np.ndarray, step_width: float = 3600, step_height: float = 20, smoothness: float = 20, initial: float = 300) -> np.ndarray:
+    """
+    Continuous (smooth) staircase function. The value stays at `initial` for t < step_width and then
+    increases by `step_height` every `step_width`, the transitions are centered at t = k * step_width, k = 1, 2, ...
+
+    Parameters
+    ----------
+        t : time array
+        step_width : duration of each step
+        step_height : change of the value at each step
+        smoothness : steepness of the transitions, higher values give sharper steps,
+            values close to 0 approach a linear ramp
+        initial : value for t < step_width
+
+    Returns
+    -------
+        np.ndarray of the same shape as t
+    """
+    t = np.asarray(t, dtype=np.float64)
+
+    # plateaus are at integer x, transitions at half-integer x, i.e. at t = k * step_width
+    x = np.maximum(t / step_width - 0.5, 0)
+    n = np.floor(x)
+    frac = x - n
+
+    # tanh transition normalized so that g(0) = 0 and g(1) = 1, keeps the function continuous
+    k = max(smoothness, 1e-6)
+    g = 0.5 * (1 + np.tanh(k * (frac - 0.5)) / np.tanh(k / 2))
+
+    return initial + step_height * (n + g)
+
+
 ## inspiration from https://github.com/Tillsten/skultrafast/blob/9544c3cc3c3c3fa46b728156198807e2b21ba24b/skultrafast/base_funcs/pytorch_fitter.py
 def blstsq(A: np.ndarray, B: np.ndarray, alpha: float = 0.001, w: np.ndarray | None = None) -> np.ndarray:
     """

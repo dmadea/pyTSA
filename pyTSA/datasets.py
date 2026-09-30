@@ -25,7 +25,7 @@ class Datasets(object):
     def __init__(self):
         self._datasets: list[dict[Dataset, int | str]] = []
         self.df_params = None
-        self.model: KineticModel = FirstOrderModel()
+        # self.model: KineticModel = FirstOrderModel()
 
         # for augmented model
 
@@ -45,7 +45,7 @@ class Datasets(object):
         if index is not None:
             self._datasets[index]['dataset'].model = model
 
-        self.model = model
+        # self.model = model
         self[0].set_model(model)
 
     def __copy__(self):
@@ -540,19 +540,6 @@ class Datasets(object):
                 d.model.simulate()
                 res_list.append(d.model.weighted_residuals())
 
-            # find common dimension, and concatenate, if no common dimension, concatenate flat arrays
-            # axis_0_shapes = np.asarray([m.shape[0] for m in res_list])
-            # axis_1_shapes = np.asarray([m.shape[1] for m in res_list])
-
-            # axis_0_same = np.all(axis_0_shapes == axis_0_shapes[0])
-            # axis_1_same = np.all(axis_1_shapes == axis_1_shapes[0])
-
-            # if axis_0_same:
-            #     return np.concatenate(res_list, axis=1)
-
-            # if axis_1_same:
-            #     return np.concatenate(res_list, axis=0)
-            
             # flat stack arrays
             return np.concatenate([ar.flat for ar in res_list], axis=0)
 
