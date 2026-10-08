@@ -216,7 +216,7 @@ class Dataset(object):
 
     
     @classmethod
-    def from_file(cls, fname: str, transpose: bool = False, load_TRE_ICCD = False, log_resample: bool = False, **kwargs):
+    def from_file(cls, fname: str, transpose: bool = False, load_TRE_ICCD = False, log_resample: bool = False, remove_negative_rows: bool = False, **kwargs):
 
         if load_TRE_ICCD:
             t, w, mat = Dataset.load_TRE_ICCD(fname)
@@ -226,6 +226,11 @@ class Dataset(object):
             t = data[1:, 0]
             w = data[0, 1:]
             mat = data[1:, 1:]
+
+        if remove_negative_rows:
+            mask = np.all(mat >= 0, axis=1)
+            mat = mat[mask]
+            t = t[mask]
 
         if log_resample:
             assert mat.shape[1] == 1, "Log-binning is only supported for single-channel data."

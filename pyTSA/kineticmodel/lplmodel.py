@@ -82,6 +82,7 @@ class LPLModel(KineticModel):
         self.n_gaussians_tunneling: int = 1
         self.add_exp_distribution_trap_depth: bool = False
         self.add_exp_distribution_tunneling: bool = False
+        self.post_simulate_callback: Callable | None = None
 
         self.Es: np.ndarray = None
         self.rs: np.ndarray = None
@@ -92,7 +93,7 @@ class LPLModel(KineticModel):
 
         self.pair_conc: None | np.ndarray = None
 
-        self.initial_state: None | Callable = None
+        self.initial_state: None | np.ndarray = None
         self.temp_fun: Callable | None = None  # takes time as argument
 
         super(LPLModel, self).__init__(dataset, n_species, set_model)
@@ -123,12 +124,6 @@ class LPLModel(KineticModel):
     def pre_simulate(self):
         """
         Runs before the simulation method.
-        """
-        pass
-
-    def post_simulate(self):
-        """
-        Runs after the simulation method.
         """
         pass
 
@@ -229,7 +224,7 @@ class LPLModel(KineticModel):
         if self.initial_state is None:
             u0 = np.zeros(self.n_ode_states)
         else:
-            u0 = self.initial_state()
+            u0 = self.initial_state
 
         ivp_kw = dict(method="BDF", rtol=1e-6, atol=1e-10)  # , first_step=1e-14
 
@@ -257,7 +252,8 @@ class LPLModel(KineticModel):
 
         self.lpl_phase_solution = sol_dec.y
 
-        self.post_simulate()
+        if self.post_simulate_callback is not None:
+            self.post_simulate_callback(self)
 
         self.process_solution(params)
 
