@@ -150,7 +150,7 @@ class KineticModel(object):
         self.noise_floor_estimation_from_data: bool = False
         self.noise_range: tuple[float, float] = []   # wavelengths range from which the noise will be taken
 
-        # PROP_NOISE_FLOOR: w from variance (k * |D|^Exp)^2 + noise_floor^2; PROP_THRESH: w_ij = |D_ij| > thresh ? 1/|D_ij| : 0
+        # PROP_NOISE_FLOOR: w from variance (k * |D|^Exp)^2 + noise_floor^2; PROP_THRESH: w_ij = |D_ij| > thresh ? 1/|D_ij|^2 : 0
         self.weight_type: WeightType | None = None
         self.calc_weights_from_fit_matrix = False
 
@@ -268,7 +268,8 @@ class KineticModel(object):
 
             tresh = self.weighting_thresh
 
-            weights *= np.where(mat > tresh, 1 / mat, 0)
+            # weights are 1/sigma^2 with sigma ~ |D|, so weighted residuals are relative: R / |D|
+            weights *= np.divide(1, mat ** 2, out=np.zeros_like(mat), where=mat > tresh)
 
         for *rng, w in self._weights:
             i, j = fi(self.dataset.wavelengths, rng)    

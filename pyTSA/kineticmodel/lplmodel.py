@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import warnings
 from typing import Callable, Literal
 
 import numpy as np
@@ -67,7 +68,7 @@ class LPLModel(KineticModel):
         self.I0 = self.P_irr_mW * 1e-3 * self.lambda_irr_nm * 1e-9 / (sc.h * sc.c) # light intensity in photons / s
         self.data_type: Literal['LPL', 'PMA'] = 'LPL'
         # self.temp_dep_rates: list[str] = []
-        self.n_E: int = 50  # number of points to simulate the gaussian distribution of trap depths
+        self.n_E: int = 80  # number of points to simulate the gaussian distribution of trap depths
         self.n_r: int = 50  # number of points to simulate the radial distribution for tunneling
         self.E_min = 0.01  #  minimum trap depth in eV
         self.E_max = 2  #  maximum trap depth in eV
@@ -83,6 +84,7 @@ class LPLModel(KineticModel):
         self.add_exp_distribution_trap_depth: bool = False
         self.add_exp_distribution_tunneling: bool = False
         self.post_simulate_callback: Callable | None = None
+        self.penalize_failed_integration: bool = True  # during fitting, failed ODE solves give penalty residuals instead of raising
 
         self.Es: np.ndarray = None
         self.rs: np.ndarray = None
@@ -107,7 +109,7 @@ class LPLModel(KineticModel):
         params = super(LPLModel, self).init_params()
 
         for i in range(self.n_gaussians):
-            params.add(f'rho_amp_{i}', value=1, min=0, max=np.inf, vary=True)
+            params.add(f'log_rho_amp_{i}', value=0, min=-30, max=30, vary=True)
             params.add(f'rho_loc_{i}', value=1, min=0.3, max=self.E_max, vary=True)
             params.add(f'rho_scale_{i}', value=0.2, min=0.001, max=self.E_max, vary=True)
             params.add(f'rho_skew_{i}', value=0, min=-20, max=20, vary=True)
@@ -116,7 +118,7 @@ class LPLModel(KineticModel):
             params.add('rho_exp_amp', value=1, min=0, max=np.inf, vary=True)
             params.add('rho_exp_lambda', value=10, min=0, max=np.inf, vary=True)
 
-        params.add('log_s0', value=13, min=0, max=np.inf, vary=False)
+        params.add('log_s0', value=13, min=5, max=20, vary=False)
         params.add('beta', value=1, min=0, max=np.inf, vary=False)  # for Miller-Abraham rate constant
 
         return params
@@ -168,7 +170,7 @@ class LPLModel(KineticModel):
 
         rho_0 = np.zeros(self.n_E)
         for i in range(self.n_gaussians):
-            rho_0 += params[f'rho_amp_{i}'].value * skewnorm.pdf(
+            rho_0 += 10 ** params[f'log_rho_amp_{i}'].value * skewnorm.pdf(
                 Es, params[f'rho_skew_{i}'].value,
                 loc=params[f'rho_loc_{i}'].value,
                 scale=params[f'rho_scale_{i}'].value,
@@ -190,7 +192,7 @@ class LPLModel(KineticModel):
         rho_0_E = np.zeros(self.n_E)
         rho_0_r = np.zeros(self.n_r)
         for i in range(self.n_gaussians_trap_depth):
-            rho_0_E += params[f'rho_amp_E_{i}'].value * skewnorm.pdf(
+            rho_0_E += 10 ** params[f'log_rho_amp_E_{i}'].value * skewnorm.pdf(
                 Es, params[f'rho_skew_E_{i}'].value,
                 loc=params[f'rho_loc_E_{i}'].value,
                 scale=params[f'rho_scale_E_{i}'].value,
@@ -200,7 +202,7 @@ class LPLModel(KineticModel):
             rho_0_E += params['rho_exp_amp_E'].value * np.exp(-Es / params['rho_exp_lambda_E'].value)
 
         for i in range(self.n_gaussians_tunneling):
-            rho_0_r += params[f'rho_amp_r_{i}'].value * skewnorm.pdf(
+            rho_0_r += 10 ** params[f'log_rho_amp_r_{i}'].value * skewnorm.pdf(
                 rs, params[f'rho_skew_r_{i}'].value,
                 loc=params[f'rho_loc_r_{i}'].value,
                 scale=params[f'rho_scale_r_{i}'].value,
@@ -226,29 +228,39 @@ class LPLModel(KineticModel):
         else:
             u0 = self.initial_state
 
-        ivp_kw = dict(method="BDF", rtol=1e-6, atol=1e-10)  # , first_step=1e-14
+        ivp_kw = dict(method="BDF", rtol=1e-7, atol=1e-10)  # , first_step=1e-14
 
         self.I0 = self.P_irr_mW * 1e-3 * self.lambda_irr_nm * 1e-9 / (sc.h * sc.c) # light intensity in photons / s
 
         do_acc = self.exposure_time_s is not None and self.exposure_time_s > 0
 
-        if do_acc:
-            # --- accumulation phase: constant illumination I0 at temperature T ---
-            rhs_acc, jac_acc = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: self.I0)
-            self.t_acum = np.linspace(0, self.exposure_time_s, 100)
-            sol_acc = solve_ivp(rhs_acc, (0, self.exposure_time_s), u0, **ivp_kw, jac=jac_acc, t_eval=self.t_acum)
-            if not sol_acc.success:
-                raise RuntimeError(f"accumulation integration failed: {sol_acc.message}")
-            self.accum_phase_solution = sol_acc.y
-
-        # --- LPL decay phase: light off ---
-        rhs_dec, jac_dec = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: 0.0)
         self.t_lpl = self.dataset.times if self.dataset is not None else times
         if self.t_lpl is None:
             raise ValueError("times are not provided")
-        sol_dec = solve_ivp(rhs_dec, (0, self.t_lpl[-1]), sol_acc.y[:, -1] if do_acc else u0, **ivp_kw, jac=jac_dec, t_eval=self.t_lpl)
-        if not sol_dec.success:
-            raise RuntimeError(f"LPL integration failed: {sol_dec.message}")
+
+        try:
+            if do_acc:
+                # --- accumulation phase: constant illumination I0 at temperature T ---
+                rhs_acc, jac_acc = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: self.I0)
+                self.t_acum = np.linspace(0, self.exposure_time_s, 100)
+                sol_acc = solve_ivp(rhs_acc, (0, self.exposure_time_s), u0, **ivp_kw, jac=jac_acc, t_eval=self.t_acum)
+                if not sol_acc.success:
+                    raise RuntimeError(f"accumulation integration failed: {sol_acc.message}")
+                self.accum_phase_solution = sol_acc.y
+
+            # --- LPL decay phase: light off ---
+            rhs_dec, jac_dec = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: 0.0)
+            sol_dec = solve_ivp(rhs_dec, (0, self.t_lpl[-1]), sol_acc.y[:, -1] if do_acc else u0, **ivp_kw, jac=jac_dec, t_eval=self.t_lpl)
+            if not sol_dec.success:
+                raise RuntimeError(f"LPL integration failed: {sol_dec.message}")
+        except RuntimeError as e:
+            if not self.penalize_failed_integration or self.dataset is None:
+                raise
+            # large finite residual lets the optimizer reject the step instead of aborting the whole fit
+            warnings.warn(f"{e}; returning penalty residuals.")
+            data = self.dataset.matrix_fac
+            self.matrix_opt = np.full_like(data, -1e3 * np.nanmax(np.abs(data)))
+            return
 
         self.lpl_phase_solution = sol_dec.y
 
@@ -352,15 +364,23 @@ class LPLModel(KineticModel):
             if i >= nrows * ncols:
                 break
 
-            ax = fig.add_subplot(ig)
+            ax_res = None
+            if p.lower() == 'decay-curve-r':
+                ii_grid = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=ig, hspace=0.1, height_ratios=(3, 1))
+                ax = fig.add_subplot(ii_grid[0])  # ax is necessary for potential figure label
+                ax_res = fig.add_subplot(ii_grid[1], sharex=ax)
+            else:
+                ax = fig.add_subplot(ig)
             kws = kwargs.copy()
 
             n = self.n_species
 
             match p.lower():
-                case "decay-curve":
+                case "decay-curve" | "decay-curve-r":
                     self._require_simulation()
                     update_kwargs("decay-curve", kws)
+                    if ax_res is not None:
+                        update_kwargs("decay-curve-r", kws)
 
                     assert self.t_lpl is not None, "t_lpl must be provided either in dataset or in simulate() method"
 
@@ -377,12 +397,12 @@ class LPLModel(KineticModel):
                         x = self.temp_fun(self.t_lpl)
                         assert np.abs(np.diff(x)).min() > 0, "Temperature values must be changing"
 
-                    ax.plot(x, y_fit, label='Fit')
+                    ax.plot(x, y_fit, label='Fit', color='r', lw=1, ls='--')
 
                     if kws.pop('show_data', True):
                         single_dim = self.dataset.matrix_fac.shape[1] == 1
                         y_data = self.dataset.matrix_fac[:, 0] if single_dim else self.dataset.matrix_fac.sum(axis=1)
-                        ax.plot(x, y_data, ls='--', label='Data')
+                        ax.plot(x, y_data, ls='-', label='Data', color='k', lw=1)
 
                     if kws.pop('show_trap_integral', False):
                         ax_t = ax.twinx()
@@ -394,11 +414,11 @@ class LPLModel(KineticModel):
                     if T_x_axis:
                         ax.set_xscale('linear')
                         ax.set_yscale('linear')
-                        ax.set_xlabel('Temperature (K)')
+                        x_label = 'Temperature (K)'
                     else:
                         ax.set_xscale('log')
                         ax.set_yscale('log')
-                        ax.set_xlabel('Time (s)')
+                        x_label = 'Time (s)'
 
                     if lin_x:
                         ax.set_xscale('linear')
@@ -406,6 +426,18 @@ class LPLModel(KineticModel):
                     ax.set_ylabel(r'$n_{CT*}$')
                     ax.set_title(kws.pop('title', 'Recombination (LPL)'))
                     ax.legend(frameon=False)
+
+                    if ax_res is None:
+                        ax.set_xlabel(x_label)
+                    else:
+                        res = self.weighted_residuals()
+                        res = res[:, 0] if res.shape[1] == 1 else res.sum(axis=1)
+                        ax_res.axhline(0, ls='--', color='black', lw=0.5)
+                        ax_res.plot(x, res, lw=1, color='black')
+                        ax_res.set_ylim(*kws.pop('y_lim_residuals', (None, None)))
+                        ax_res.set_ylabel('res.')
+                        ax_res.set_xlabel(x_label)
+                        ax.tick_params(labelbottom=False)
 
                 case "dist-acum-e" | "dist-acum-r" | "dist-decay-e" | "dist-decay-r":
                     self._require_simulation()
@@ -523,7 +555,7 @@ class LPLModelCT(LPLModel):
         params = super().init_params()
 
         # global amplitude for multi-experiment fit
-        params.add('amp_CT', value=1, min=0, max=np.inf, vary=True) 
+        params.add('log_amp_CT', value=-10, min=-30, max=30, vary=True) 
         params.add('k_sep', value=1e5, min=0, max=1e10, vary=True) 
         params.add('k_CT_rnr', value=1e7, min=0, max=1e10, vary=True)  
 
@@ -544,6 +576,8 @@ class LPLModelCT(LPLModel):
         NE = len(self.Es)
         idx = np.arange(1, NE + 1)
         N_tot = np.trapezoid(rho_0, self.Es)
+        if not np.isfinite(N_tot) or N_tot <= 0:
+            raise RuntimeError(f"trap distribution integrates to {N_tot}; peak is probably narrower than the E grid")
         w_E = self.trapezoid_weights(self.Es)
 
         s0 = 10 ** params['log_s0'].value
@@ -581,7 +615,7 @@ class LPLModelCT(LPLModel):
         self.pair_conc = np.trapezoid(self.lpl_phase_solution[1:, :], self.Es, axis=0)[:, None]
 
         # fill matrix_opt
-        amp = params['amp_CT'].value
+        amp = 10 ** params['log_amp_CT'].value
         self.matrix_opt = amp * exc_state
 
 
@@ -607,7 +641,7 @@ class LPLModelCT2D(LPLModel):
         params = super(LPLModel, self).init_params()
 
         for i in range(self.n_gaussians_trap_depth):
-            params.add(f'rho_amp_E_{i}', value=1, min=0, max=np.inf, vary=True)
+            params.add(f'log_rho_amp_E_{i}', value=0, min=-30, max=30, vary=True)
             params.add(f'rho_loc_E_{i}', value=1, min=0.3, max=self.E_max, vary=True)
             params.add(f'rho_scale_E_{i}', value=0.2, min=0.001, max=self.E_max, vary=True)
             params.add(f'rho_skew_E_{i}', value=0, min=-20, max=20, vary=True)
@@ -617,7 +651,7 @@ class LPLModelCT2D(LPLModel):
             params.add('rho_exp_lambda_E', value=10, min=0, max=np.inf, vary=True)
 
         for i in range(self.n_gaussians_tunneling):
-            params.add(f'rho_amp_r_{i}', value=1, min=0, max=np.inf, vary=True)
+            params.add(f'log_rho_amp_r_{i}', value=0, min=-30, max=30, vary=True)
             params.add(f'rho_loc_r_{i}', value=5, min=self.r_min, max=self.r_max, vary=True)
             params.add(f'rho_scale_r_{i}', value=2, min=0.001, max=self.r_max, vary=True)
             params.add(f'rho_skew_r_{i}', value=0, min=-20, max=20, vary=True)
@@ -626,7 +660,7 @@ class LPLModelCT2D(LPLModel):
             params.add('rho_exp_amp_r', value=1, min=0, max=np.inf, vary=True)
             params.add('rho_exp_lambda_r', value=10, min=0, max=np.inf, vary=True)
 
-        params.add('log_s0', value=13, min=0, max=np.inf, vary=False)
+        params.add('log_s0', value=13, min=5, max=20, vary=False)
         params.add('beta', value=1, min=0, max=np.inf, vary=True)
 
         params.add('amp_CT', value=1, min=0, max=np.inf, vary=True)
@@ -655,6 +689,8 @@ class LPLModelCT2D(LPLModel):
         idx = np.arange(1, N + 1)
         w = self.trapezoid_weights_2D(self.rs, self.Es)
         N_tot = np.sum(w * rho_0)
+        if not np.isfinite(N_tot) or N_tot <= 0:
+            raise RuntimeError(f"trap distribution integrates to {N_tot}; peak is probably narrower than the (r, E) grid")
 
         s0 = 10 ** params['log_s0'].value
         beta = params['beta'].value
@@ -866,6 +902,8 @@ class LPLModelST(LPLModel):
         n = self.n_species
         idx = np.arange(n, NE + n)
         N_tot = np.trapezoid(rho_0, self.Es)
+        if not np.isfinite(N_tot) or N_tot <= 0:
+            raise RuntimeError(f"trap distribution integrates to {N_tot}; peak is probably narrower than the E grid")
         w_E = self.trapezoid_weights(self.Es)
 
         s0 = 10 ** params['log_s0'].value
@@ -1012,6 +1050,8 @@ class LPLModelSTDispersion(LPLModel):
         n = self.n_species
         n_disp = self.n_disp
         N_tot = np.trapezoid(rho_0, self.Es)
+        if not np.isfinite(N_tot) or N_tot <= 0:
+            raise RuntimeError(f"trap distribution integrates to {N_tot}; peak is probably narrower than the E grid")
         w_E = self.trapezoid_weights(self.Es)
         w_z = self.kST_weights
         p = self._population_pdf()
