@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+import time
 import warnings
 from typing import Callable, Literal
 
@@ -45,6 +46,58 @@ def save_matrix(dim0: np.iterable, dim1: np.iterable, matrix: np.ndarray, fname=
         f.write(buffer)
 
 
+def _phi1(x: np.ndarray) -> np.ndarray:
+    """(1 - exp(-x)) / x for x >= 0, with the x -> 0 limit."""
+    x = np.asarray(x, dtype=float)
+    small = x < 1e-8
+    xs = np.where(small, 1.0, x)
+    return np.where(small, 1 - 0.5 * x, -np.expm1(-xs) / xs)
+
+
+def _phi2(x: np.ndarray) -> np.ndarray:
+    """(x - 1 + exp(-x)) / x**2 for x >= 0, with the x -> 0 limit."""
+    x = np.asarray(x, dtype=float)
+    small = x < 1e-3
+    xs = np.where(small, 1.0, x)
+    series = 0.5 - x / 6 + x ** 2 / 24 - x ** 3 / 120
+    return np.where(small, series, (xs + np.expm1(-xs)) / xs ** 2)
+
+
+def _exp_convolution(lam: np.ndarray, kappa: np.ndarray, h: float) -> np.ndarray:
+    """int_0^h exp(-lam (h - s)) exp(-kappa s) ds for all (lam, kappa) pairs, shape (n_lam, n_kappa).
+
+    Uses the symmetric form exp(-min h) * h * phi1(|lam - kappa| h) so neither factor overflows.
+    """
+    lam = lam[:, None]
+    kappa = kappa[None, :]
+    return np.exp(-np.minimum(lam, kappa) * h) * h * _phi1(np.abs(lam - kappa) * h)
+
+
+def _exp_convolutions(lam: np.ndarray, kappa: np.ndarray, h: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Broadcast K0 = int_0^h exp(-lam (h - s)) exp(-kappa s) ds and K1 = int_0^h exp(-lam (h - s)) (s / h) exp(-kappa s) ds."""
+    d = np.abs(lam - kappa) * h
+    e_lo_h = np.exp(-np.minimum(lam, kappa) * h) * h
+    p1, p2 = _phi1(d), _phi2(d)
+    return e_lo_h * p1, e_lo_h * np.where(lam >= kappa, p2, p1 - p2)
+
+
+@dataclass
+class EmitterSystem:
+    """Linear dynamics of the fast (emissive) species used by the semi-analytical simulation.
+
+    dn/dt = -M n + g I(t) + f R(t),  R(t) = int k(E, T) rho(E, t) dE   (trap release)
+    capture flux into traps = k_sep * (c . n) * (rho_0 - rho) / N_tot  (charging only); the states with
+    c != 0 lose population at rate int k_sep (rho_0 - rho) dE / N_tot while charging.
+
+    ``k_sep`` may be a scalar or an array over the trap-depth grid.
+    """
+    M: np.ndarray
+    g: np.ndarray
+    f: np.ndarray
+    c: np.ndarray
+    k_sep: float | np.ndarray
+
+
 
 class LPLModel(KineticModel):
     """
@@ -85,6 +138,10 @@ class LPLModel(KineticModel):
         self.add_exp_distribution_tunneling: bool = False
         self.post_simulate_callback: Callable | None = None
         self.penalize_failed_integration: bool = True  # during fitting, failed ODE solves give penalty residuals instead of raising
+        # 'ode': stiff BDF integration of the full model; 'semianalytical': exact propagation assuming negligible
+        # retrapping during the decay (see build_semianalytical_emitter)
+        self.simulation_method: Literal['ode', 'semianalytical'] = 'ode'
+        self.semianalytical_n_steps: int = 2000  # uniform sub-steps added to the time grid when T(t) is not constant
 
         self.Es: np.ndarray = None
         self.rs: np.ndarray = None
@@ -216,6 +273,18 @@ class LPLModel(KineticModel):
     def build_saturable_rhs_jac(self, params: Parameters, T_fun: Callable, I_fun: Callable):
         raise NotImplementedError("This method is not implemented for the base LPLModel class.")
 
+    def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
+        """Linear system of the emissive species at temperature ``T`` for ``simulation_method='semianalytical'``.
+
+        The state layout of ``n`` must match the first ``n_species`` ODE states of ``build_saturable_rhs_jac``.
+        Capture (trapping) is only applied while illuminated; during the decay released pairs never retrap, which
+        is accurate when ``k_sep`` is small compared to the emitter decay rates.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not implement the semi-analytical simulation.")
+
+    def trap_release_rates(self, params: Parameters, T: float | np.ndarray) -> np.ndarray:
+        """Release rate of each trap-depth bin at temperature ``T``; ``T`` may be a column (n, 1) giving (n, n_E)."""
+        return 10 ** params['log_s0'].value * self.arrhenius(self.Es, T)
 
     def simulate(self, params: Parameters | None = None, times: np.ndarray | None = None) -> np.ndarray:
         self.pre_simulate()
@@ -228,8 +297,6 @@ class LPLModel(KineticModel):
         else:
             u0 = self.initial_state
 
-        ivp_kw = dict(method="BDF", rtol=1e-7, atol=1e-10)  # , first_step=1e-14
-
         self.I0 = self.P_irr_mW * 1e-3 * self.lambda_irr_nm * 1e-9 / (sc.h * sc.c) # light intensity in photons / s
 
         do_acc = self.exposure_time_s is not None and self.exposure_time_s > 0
@@ -238,23 +305,14 @@ class LPLModel(KineticModel):
         if self.t_lpl is None:
             raise ValueError("times are not provided")
 
-        try:
-            if do_acc:
-                # --- accumulation phase: constant illumination I0 at temperature T ---
-                rhs_acc, jac_acc = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: self.I0)
-                self.t_acum = np.linspace(0, self.exposure_time_s, 100)
-                sol_acc = solve_ivp(rhs_acc, (0, self.exposure_time_s), u0, **ivp_kw, jac=jac_acc, t_eval=self.t_acum)
-                if not sol_acc.success:
-                    raise RuntimeError(f"accumulation integration failed: {sol_acc.message}")
-                self.accum_phase_solution = sol_acc.y
+        simulators = {'ode': self._simulate_ode, 'semianalytical': self._simulate_semianalytical}
+        if self.simulation_method not in simulators:
+            raise ValueError(f"Unknown simulation_method {self.simulation_method!r}; use one of {list(simulators)}.")
 
-            # --- LPL decay phase: light off ---
-            rhs_dec, jac_dec = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: 0.0)
-            sol_dec = solve_ivp(rhs_dec, (0, self.t_lpl[-1]), sol_acc.y[:, -1] if do_acc else u0, **ivp_kw, jac=jac_dec, t_eval=self.t_lpl)
-            if not sol_dec.success:
-                raise RuntimeError(f"LPL integration failed: {sol_dec.message}")
+        try:
+            acc_solution, dec_solution = simulators[self.simulation_method](params, u0, do_acc)
         except RuntimeError as e:
-            if not self.penalize_failed_integration or self.dataset is None:
+            if isinstance(e, NotImplementedError) or not self.penalize_failed_integration or self.dataset is None:
                 raise
             # large finite residual lets the optimizer reject the step instead of aborting the whole fit
             warnings.warn(f"{e}; returning penalty residuals.")
@@ -262,12 +320,263 @@ class LPLModel(KineticModel):
             self.matrix_opt = np.full_like(data, -1e3 * np.nanmax(np.abs(data)))
             return
 
-        self.lpl_phase_solution = sol_dec.y
+        if acc_solution is not None:
+            self.accum_phase_solution = acc_solution
+        self.lpl_phase_solution = dec_solution
 
         if self.post_simulate_callback is not None:
             self.post_simulate_callback(self)
 
         self.process_solution(params)
+
+    def _simulate_ode(self, params: Parameters, u0: np.ndarray, do_acc: bool) -> tuple[np.ndarray | None, np.ndarray]:
+        ivp_kw = dict(method="BDF", rtol=1e-7, atol=1e-10)  # , first_step=1e-14
+
+        acc_solution = None
+        if do_acc:
+            # --- accumulation phase: constant illumination I0 at temperature T ---
+            rhs_acc, jac_acc = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: self.I0)
+            self.t_acum = np.linspace(0, self.exposure_time_s, 100)
+            sol_acc = solve_ivp(rhs_acc, (0, self.exposure_time_s), u0, **ivp_kw, jac=jac_acc, t_eval=self.t_acum)
+            if not sol_acc.success:
+                raise RuntimeError(f"accumulation integration failed: {sol_acc.message}")
+            acc_solution = sol_acc.y
+            u0 = sol_acc.y[:, -1]
+
+        # --- LPL decay phase: light off ---
+        rhs_dec, jac_dec = self.build_saturable_rhs_jac(params, T_fun=lambda t: self.temp_fun(t), I_fun=lambda t: 0.0)
+        sol_dec = solve_ivp(rhs_dec, (0, self.t_lpl[-1]), u0, **ivp_kw, jac=jac_dec, t_eval=self.t_lpl)
+        if not sol_dec.success:
+            raise RuntimeError(f"LPL integration failed: {sol_dec.message}")
+
+        return acc_solution, sol_dec.y
+
+    def _simulate_semianalytical(self, params: Parameters, u0: np.ndarray, do_acc: bool) -> tuple[np.ndarray | None, np.ndarray]:
+        """Charging and decay without retrapping during the decay; trap bins then evolve independently.
+
+        The decay is exact for isothermal phases on any time grid; non-isothermal phases (TL ramps) are refined
+        with ``semianalytical_n_steps`` uniform steps.
+        """
+        n_sp = self.n_species
+        if self.n_ode_states != n_sp + self.n_E:
+            raise NotImplementedError("The semi-analytical simulation is implemented only for 1D trap-depth grids.")
+        rho_0 = self.get_rho_0(params)
+
+        w_E = self.trapezoid_weights(self.Es)
+        N_tot = np.dot(w_E, rho_0)
+        if not np.isfinite(N_tot) or N_tot <= 0:
+            raise RuntimeError(f"trap distribution integrates to {N_tot}; peak is probably narrower than the E grid")
+
+        n, rho = u0[:n_sp], u0[n_sp:]
+        acc_solution = None
+        if do_acc:
+            self.t_acum = np.linspace(0, self.exposure_time_s, 100)
+            acc_solution = self._charge_semianalytical(params, self.t_acum, n, rho, rho_0, w_E, N_tot)
+            n, rho = acc_solution[:n_sp, -1], acc_solution[n_sp:, -1]
+
+        dec_solution = self._decay_semianalytical(params, self.t_lpl, n, rho, w_E)
+        return acc_solution, dec_solution
+
+    def _eval_temperature(self, t: np.ndarray) -> np.ndarray:
+        if self.temp_fun is None:
+            raise ValueError("temp_fun must be set before simulating")
+        try:
+            T = np.asarray(self.temp_fun(t), dtype=float)
+        except (TypeError, ValueError):
+            T = None
+        if T is None or T.shape not in (t.shape, ()):
+            T = np.array([float(self.temp_fun(ti)) for ti in t])
+        return np.broadcast_to(T, t.shape).astype(float)
+
+    def _semianalytical_grid(self, t_record: np.ndarray, refine: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Integration grid starting at 0 containing all ``t_record`` points, its temperatures, and record indices.
+
+        With ``refine``, ``semianalytical_n_steps`` uniform points are added when the temperature is not constant.
+        """
+        t_record = np.asarray(t_record, dtype=float)
+        t_grid = np.union1d(0.0, t_record)
+        if refine:
+            t_fine = np.linspace(0.0, t_grid[-1], self.semianalytical_n_steps)
+            if np.ptp(self._eval_temperature(np.union1d(t_grid, t_fine))) > 0:
+                t_grid = np.union1d(t_grid, t_fine)
+        return t_grid, self._eval_temperature(t_grid), np.searchsorted(t_grid, t_record)
+
+    @staticmethod
+    def _emitter_eigensystem(M: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Eigenvalues, eigenvectors and inverse eigenvectors of one or a stack (..., m, m) of rate matrices."""
+        lam, V = np.linalg.eig(M)
+        V_norm = np.max(np.sum(np.abs(V), axis=-1), axis=-1)
+        V_inv_norm = np.max(np.sum(np.abs(np.linalg.inv(V)), axis=-1), axis=-1)
+        defective = V_norm * V_inv_norm > 1e8  # infinity-norm condition number
+        if np.any(defective):
+            # (nearly) defective rate matrix, e.g. two equal total decay rates; split the degenerate eigenvalues
+            m = M.shape[-1]
+            scale = np.max(np.abs(np.diagonal(M, axis1=-2, axis2=-1)), axis=-1, keepdims=True)
+            split = np.where(scale > 0, scale, 1.0)[..., None] * 1e-7 * np.diag(np.arange(m))
+            lam_s, V_s = np.linalg.eig(M + split)
+            lam = np.where(defective[..., None], lam_s, lam)
+            V = np.where(defective[..., None, None], V_s, V)
+        if np.iscomplexobj(lam):
+            if np.max(np.abs(lam.imag)) > 1e-9 * np.max(np.abs(lam)):
+                raise ValueError("Emitter rate matrix has complex eigenvalues; not supported by the semi-analytical simulation.")
+            lam, V = lam.real, V.real
+        return np.maximum(lam, 0.0), V, np.linalg.inv(V)
+
+    def _charge_semianalytical(self, params: Parameters, t_record: np.ndarray, n_start: np.ndarray,
+                               rho_start: np.ndarray, rho_0: np.ndarray, w_E: np.ndarray, N_tot: float) -> np.ndarray:
+        """Charging under constant illumination I0; returns states (n_species + n_E, len(t_record)).
+
+        Emitter states are propagated in the eigenbasis of M (including their capture loss), so their own decay
+        and the convolution with the trap release are exact within a step. Each bin relaxes towards
+        a rho_0 / (a + k) at rate a + k, a = k_sep (c . n) / N_tot, using the step-averaged emitter population.
+        The temperature of each step of the ``t_record`` grid is its midpoint value (no refinement).
+        """
+        t_grid, T_nodes, rec_idx = self._semianalytical_grid(t_record, refine=False)
+        T_steps = 0.5 * (T_nodes[1:] + T_nodes[:-1])
+        n_sp = self.n_species
+        I = self.I0
+
+        states = np.empty((n_sp + rho_0.size, t_grid.size))
+        rho = np.array(rho_start, dtype=float)
+        n = np.array(n_start, dtype=float)
+        states[:n_sp, 0], states[n_sp:, 0] = n, rho
+
+        T_prev = M_prev = None
+        for i in range(1, t_grid.size):
+            h = t_grid[i] - t_grid[i - 1]
+            T = T_steps[i - 1]
+            new_system = T != T_prev
+            if new_system:
+                k = self.trap_release_rates(params, T)
+                system = self.build_semianalytical_emitter(params, T)
+                capturing = system.c != 0
+                T_prev = T
+
+            # capture loss of the capturing states, with the vacancies at the start of the step
+            vacant = np.dot(w_E, system.k_sep * np.maximum(rho_0 - rho, 0.0)) / N_tot
+            M = system.M + np.diag(vacant * capturing)
+            if M_prev is None or not np.array_equal(M, M_prev):
+                if M_prev is not None:
+                    n = V @ y
+                lam, V, V_inv = self._emitter_eigensystem(M)
+                y = V_inv @ n
+                M_prev = M
+                new_system = True
+            if new_system:
+                gm, fm, cm = V_inv @ system.g, V_inv @ system.f, system.c @ V
+
+            x = lam * h
+            p1 = _phi1(x)
+            wk = w_E * k
+
+            src = gm * I + fm * np.dot(wk, rho)
+            y_mean = y * p1 + src * h * _phi2(x)
+            a = system.k_sep * max(np.dot(cm, y_mean), 0.0) / N_tot
+            kappa = a + k
+            rho_eq = np.divide(a * rho_0, kappa, out=np.zeros_like(rho_0), where=kappa > 0)
+
+            delta = rho - rho_eq
+            release = h * p1 * np.dot(wk, rho_eq) + _exp_convolution(lam, kappa, h) @ (wk * delta)
+            y = np.exp(-x) * y + gm * I * h * p1 + fm * release
+            rho = rho_eq + delta * np.exp(-kappa * h)
+
+            states[:n_sp, i] = V @ y
+            states[n_sp:, i] = rho
+
+        return states[:, rec_idx]
+
+    def _decay_emitters(self, params: Parameters, T_steps: np.ndarray):
+        """Eigensystems and return vectors f of the emitters for each step, broadcastable over steps.
+
+        Emitter rates are treated as temperature independent when the systems at the lowest and highest step
+        temperature coincide; otherwise one system is built per step.
+        """
+        lo = self.build_semianalytical_emitter(params, T_steps.min())
+        hi = self.build_semianalytical_emitter(params, T_steps.max())
+        if np.array_equal(lo.M, hi.M) and np.array_equal(lo.f, hi.f):
+            lam, V, V_inv = self._emitter_eigensystem(lo.M)
+            return lam[None], V[None], V_inv[None], lo.f[None]
+        systems = [self.build_semianalytical_emitter(params, T) for T in T_steps]
+        lam, V, V_inv = self._emitter_eigensystem(np.stack([s.M for s in systems]))
+        return lam, V, V_inv, np.stack([s.f for s in systems])
+
+    def _decay_semianalytical(self, params: Parameters, t_record: np.ndarray, n_start: np.ndarray,
+                              rho_start: np.ndarray, w_E: np.ndarray) -> np.ndarray:
+        """Light-off decay without retrapping; returns states (n_species + n_E, len(t_record)).
+
+        Trap bins decay independently, rho(E, t) = rho(E, 0) exp(-int k dt), with the midpoint rate per step.
+        The release flux k rho is linear in k within a step and convolved exactly with the emitter eigenmodes,
+        which gives the (mono-/multi-exponential) decay of the emitter states. Exact for isothermal decays and
+        second order in the step for temperature ramps.
+        """
+        t_grid, T_nodes, rec_idx = self._semianalytical_grid(t_record)
+        T_steps = 0.5 * (T_nodes[1:] + T_nodes[:-1])
+        h = np.diff(t_grid)
+        n_steps = h.size
+
+        k_nodes = self.trap_release_rates(params, T_nodes[:, None])  # (n_steps + 1, n_E)
+        k_mid = self.trap_release_rates(params, T_steps[:, None])    # (n_steps, n_E)
+        log_surv = np.cumsum(k_mid * h[:, None], axis=0)
+        rho_nodes = np.vstack((rho_start, rho_start * np.exp(-log_surv)))
+
+        lam, V, V_inv, f = self._decay_emitters(params, T_steps)
+        n_modes = lam.shape[-1]
+        const = lam.shape[0] == 1
+
+        # release convolved with each eigenmode over each step, (n_steps, n_modes); chunked to bound memory
+        release = np.empty((n_steps, n_modes))
+        wr = w_E * rho_nodes[:-1]
+        k_a, dk = k_nodes[:-1], np.diff(k_nodes, axis=0)
+        chunk = max(1, int(4e6 // (n_modes * w_E.size)))
+        for s in range(0, n_steps, chunk):
+            sl = slice(s, s + chunk)
+            lam_c = lam if const else lam[sl]
+            K0, K1 = _exp_convolutions(lam_c[:, :, None], k_mid[sl][:, None, :], h[sl][:, None, None])
+            release[sl] = (np.einsum('ce,cme->cm', wr[sl] * k_a[sl], K0)
+                           + np.einsum('ce,cme->cm', wr[sl] * dk[sl], K1))
+
+        decay = np.exp(-lam * h[:, None])
+        n_nodes = np.empty((n_steps + 1, n_modes))
+        n_nodes[0] = n_start
+        if const:
+            src = (V_inv[0] @ f[0]) * release
+            y = V_inv[0] @ n_start
+            Y = np.empty_like(n_nodes)
+            Y[0] = y
+            for j in range(n_steps):
+                y = decay[j] * y + src[j]
+                Y[j + 1] = y
+            n_nodes = Y @ V[0].T
+        else:
+            fm = np.einsum('jmn,jn->jm', V_inv, f)
+            n = np.array(n_start, dtype=float)
+            for j in range(n_steps):
+                n = V[j] @ (decay[j] * (V_inv[j] @ n) + fm[j] * release[j])
+                n_nodes[j + 1] = n
+
+        return np.vstack((n_nodes.T, rho_nodes.T))[:, rec_idx]
+
+    def compare_simulation_methods(self, params: Parameters | None = None, times: np.ndarray | None = None) -> dict:
+        """Simulate with the stiff ODE and the semi-analytical method; returns both signals and the deviation.
+
+        ``max_rel_dev`` is max |semi - ode| / max |ode| over the simulated signal. The model is left in the
+        state of the semi-analytical simulation.
+        """
+        method = self.simulation_method
+        result = {}
+        try:
+            for m in ('ode', 'semianalytical'):
+                self.simulation_method = m
+                t0 = time.perf_counter()
+                self.simulate(params, times)
+                result[f'{m}_time_s'] = time.perf_counter() - t0
+                result[m] = np.array(self.matrix_opt, copy=True)
+        finally:
+            self.simulation_method = method
+
+        result['t'] = self.t_lpl
+        result['max_rel_dev'] = np.max(np.abs(result['semianalytical'] - result['ode'])) / np.max(np.abs(result['ode']))
+        return result
 
     def process_solution(self, params: Parameters | None = None):
         raise NotImplementedError("This method is not implemented for the base LPLModel class.")
@@ -607,6 +916,12 @@ class LPLModelCT(LPLModel):
             return J
 
         return rhs, jac
+
+    def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
+        # dn/dt = I - k_rnr n + R; mono-exponential decay of the CT state
+        one = np.ones(1)
+        return EmitterSystem(M=np.array([[params['k_CT_rnr'].value]]), g=one, f=one, c=one,
+                             k_sep=params['k_sep'].value)
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
@@ -951,6 +1266,15 @@ class LPLModelST(LPLModel):
 
         return rhs, jac
 
+    def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
+        # singlet/triplet with ISC/RISC; bi-exponential decay of the emitter states
+        k_S = params['k_S_rnr'].value + params['k_isc'].value
+        k_T = params['k_T_rnr'].value + params['k_risc'].value
+        M = np.array([[k_S, -params['k_risc'].value],
+                      [-params['k_isc'].value, k_T]])
+        return EmitterSystem(M=M, g=np.array([1.0, 0.0]), f=np.array([1 / 4, 3 / 4]), c=np.array([1.0, 0.0]),
+                             k_sep=params['k_sep'].value)
+
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
 
@@ -1109,6 +1433,26 @@ class LPLModelSTDispersion(LPLModel):
             return J
 
         return rhs, jac
+
+    def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
+        nd = self.n_disp
+        p = self._population_pdf()
+        corr = self.rate_z_corr
+        k_S_rnr = self._lognormal_rates(params['k_S_rnr'].value, params['k_S_rnr_sigma'].value, corr['k_S_rnr'])
+        k_T_rnr = self._lognormal_rates(params['k_T_rnr'].value, params['k_T_rnr_sigma'].value, corr['k_T_rnr'])
+        k_isc = self._lognormal_rates(params['k_isc'].value, params['k_isc_sigma'].value, corr['k_isc'])
+        k_risc = self._lognormal_rates(params['k_risc'].value, params['k_risc_sigma'].value, corr['k_risc'])
+
+        # per-node singlet/triplet blocks; states ordered [nS_0..nS_nd-1, nT_0..nT_nd-1]
+        i = np.arange(nd)
+        M = np.zeros((2 * nd, 2 * nd))
+        M[i, i] = k_S_rnr + k_isc
+        M[i, nd + i] = -k_risc
+        M[nd + i, i] = -k_isc
+        M[nd + i, nd + i] = k_T_rnr + k_risc
+        zeros = np.zeros(nd)
+        return EmitterSystem(M=M, g=np.concatenate((p, zeros)), f=np.concatenate((p / 4, 3 * p / 4)),
+                             c=np.concatenate((self.kST_weights, zeros)), k_sep=params['k_sep'].value)
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
