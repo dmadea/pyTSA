@@ -1,5 +1,5 @@
 
-from typing import Any
+from typing import Any, Literal
 import numpy as np
 from scipy.linalg import svd
 from scipy.interpolate import interp1d
@@ -216,9 +216,10 @@ class Dataset(object):
 
     
     @classmethod
-    def from_file(cls, fname: str, transpose: bool = False, load_TRE_ICCD = False, log_resample: bool = False, remove_negative_rows: bool = False, **kwargs):
+    def from_file(cls, fname: str, transpose: bool = False, log_resample: bool = False, 
+                       remove_negative_rows: bool = False, dataset_type: Literal['normal', 'TSL', 'ICCD'] = 'normal', **kwargs):
 
-        if load_TRE_ICCD:
+        if dataset_type == 'ICCD':
             t, w, mat = Dataset.load_TRE_ICCD(fname)
         else:
             data = np.genfromtxt(fname, dtype=np.float64, filling_values=np.nan,  **kwargs)
@@ -241,7 +242,16 @@ class Dataset(object):
             [t, w] = [w, t]
             mat = mat.T
 
-        return cls(mat, t, w, filepath=fname)
+        if dataset_type == 'TSL':
+            tempA = mat[:, 1] 
+            tempB = mat[:, 2]
+            obj = cls(mat[:, 0].reshape(-1, 1), t, np.array([w[0]]), filepath=fname)
+            obj.tempA = tempA
+            obj.tempB = tempB
+        else:
+            obj = cls(mat, t, w, filepath=fname)
+
+        return obj
     
     @staticmethod
     def load_TRE_ICCD(filename):

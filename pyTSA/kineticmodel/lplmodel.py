@@ -34,8 +34,6 @@ from scipy.constants import Boltzmann
 
 KB_EV = Boltzmann / sc.e
 
-# TODO log parametrization of rates
-
 
 def save_matrix(dim0: np.iterable, dim1: np.iterable, matrix: np.ndarray, fname='output.txt', delimiter='\t', encoding='utf8', transpose=False):
     mat = np.vstack((dim0, matrix.T)) if transpose else np.vstack((dim1, matrix))
@@ -126,7 +124,7 @@ class LPLModel(KineticModel):
         self.E_min = 0.01  #  minimum trap depth in eV
         self.E_max = 2  #  maximum trap depth in eV
         self.r_min = 0.1  #  minimum tunneling distance in nm
-        self.r_max = 50  #  maximum tunneling distance in nm
+        self.r_max = 25  #  maximum tunneling distance in nm
 
         # trap-depth distribution (all models) and tunneling-distance distribution (2D (r, E) models)
         self.n_gaussians_trap_depth: int = 1
@@ -168,12 +166,6 @@ class LPLModel(KineticModel):
         params.add('beta', value=1, min=0, max=np.inf, vary=False)  # for Miller-Abraham rate constant
 
         return params
-
-    def pre_simulate(self):
-        """
-        Runs before the simulation method.
-        """
-        pass
 
     @staticmethod
     def arrhenius(E: np.ndarray, T: np.ndarray) -> np.ndarray:
@@ -279,7 +271,6 @@ class LPLModel(KineticModel):
         return 10 ** params['log_s0'].value * self.arrhenius(self.Es, T)
 
     def simulate(self, params: Parameters | None = None, times: np.ndarray | None = None) -> np.ndarray:
-        self.pre_simulate()
         params = self.params if params is None else params
 
         # if exposure_time_s is 0 or None, accumulation phase is skipped
@@ -864,7 +855,8 @@ class LPLModelCT(LPLModel):
 
         # global amplitude for multi-experiment fit
         params.add('log_amp_CT', value=-10, min=-30, max=30, vary=True) 
-        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True) 
+        params.add('k_sep_0', value=1e5, min=0, max=1e10, vary=True)
+        params.add('xi_sep', value=0, min=0, max=np.inf, vary=False)  # thermally-activated trap-filling parameter
         params.add('k_CT_rnr', value=1e7, min=0, max=1e10, vary=True)  
 
         return params
@@ -889,11 +881,16 @@ class LPLModelCT(LPLModel):
         w_E = self.trapezoid_weights(self.Es)
 
         s0 = 10 ** params['log_s0'].value
-        k_sep = params['k_sep'].value
+        k_sep_0 = params['k_sep_0'].value
+        xi_sep = params['xi_sep'].value
         k_rnr = params['k_CT_rnr'].value
 
+        Ea_sep = xi_sep * self.Es  # activation energy for trap-filling
+
         def rhs(t, u):
-            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            T = T_fun(t)
+            k_sep = k_sep_0 * self.arrhenius(Ea_sep, T)
+            kE = s0 * self.arrhenius(self.Es, T)
             nS, rho = u[0], u[1:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
             CS = k_sep * nS * q
@@ -902,13 +899,15 @@ class LPLModelCT(LPLModel):
             return np.concatenate(([dn], CS - CR))
 
         def jac(t, u):
-            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            T = T_fun(t)
+            k_sep = k_sep_0 * self.arrhenius(Ea_sep, T)
+            kE = s0 * self.arrhenius(self.Es, T)
             nS, rho = u[0], u[1:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot
             # d(capture)/d(rho) = -k_sep*nS/N_tot, only where not clipped full
             blocking = np.where(q > 0, k_sep * nS / N_tot, 0.0)
             J = np.zeros((NE + 1, NE + 1))
-            J[0, 0] = -k_rnr - k_sep * np.sum(w_E * q)
+            J[0, 0] = -k_rnr - np.sum(w_E * k_sep * q)
             J[0, 1:] = w_E * (kE + blocking)
             J[1:, 0] = k_sep * q
             J[idx, idx] = -kE - blocking
@@ -919,8 +918,12 @@ class LPLModelCT(LPLModel):
     def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
         # dn/dt = I - k_rnr n + R; mono-exponential decay of the CT state
         one = np.ones(1)
+        k_sep_0 = params['k_sep_0'].value
+        xi_sep = params['xi_sep'].value
+        Ea_sep = xi_sep * self.Es
+        k_sep = k_sep_0 * self.arrhenius(Ea_sep, T)
         return EmitterSystem(M=np.array([[params['k_CT_rnr'].value]]), g=one, f=one, c=one,
-                             k_sep=params['k_sep'].value)
+                             k_sep=k_sep)
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
@@ -1016,7 +1019,11 @@ class LPLModelCT2D(LPLModel):
 
         return rhs, jac
 
-    build_semianalytical_emitter = LPLModelCT.build_semianalytical_emitter
+    def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
+        # dn/dt = I - k_rnr n + R; mono-exponential decay of the CT state
+        one = np.ones(1)
+        return EmitterSystem(M=np.array([[params['k_CT_rnr'].value]]), g=one, f=one, c=one,
+                             k_sep=params['k_sep'].value)
 
     def semianalytical_traps(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
         rho_0_r, rho_0_E = self.get_rho_0_2D(params)
