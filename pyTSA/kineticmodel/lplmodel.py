@@ -919,8 +919,12 @@ class LPLModelCT(LPLModel):
     def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
         # dn/dt = I - k_rnr n + R; mono-exponential decay of the CT state
         one = np.ones(1)
+        k_sep_0 = params['k_sep_0'].value
+        xi_sep = params['xi_sep'].value
+        Ea_sep = xi_sep * self.Es
+        k_sep = k_sep_0 * self.arrhenius(Ea_sep, T)
         return EmitterSystem(M=np.array([[params['k_CT_rnr'].value]]), g=one, f=one, c=one,
-                             k_sep=params['k_sep'].value)
+                             k_sep=k_sep)
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
@@ -952,7 +956,7 @@ class LPLModelCT2D(LPLModel):
 
     def init_params(self) -> Parameters:
         # Skip LPLModel 1-D trap params; use separable (r, E) distributions.
-        params = super(LPLModel, self).init_params()
+        params = super().init_params()
 
         for i in range(self.n_gaussians_trap_depth):
             params.add(f'log_rho_amp_E_{i}', value=0, min=-30, max=30, vary=True)
