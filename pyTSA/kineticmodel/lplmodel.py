@@ -89,7 +89,7 @@ class EmitterSystem:
     capture flux into traps = k_sep * (c . n) * (rho_0 - rho) / N_tot  (charging only); the states with
     c != 0 lose population at rate int k_sep (rho_0 - rho) dE / N_tot while charging.
 
-    ``k_sep`` may be a scalar or an array over the trap-depth grid.
+    ``k_sep`` may be a scalar or an array over the (flattened) trap bins.
     """
     M: np.ndarray
     g: np.ndarray
@@ -128,10 +128,7 @@ class LPLModel(KineticModel):
         self.r_min = 0.1  #  minimum tunneling distance in nm
         self.r_max = 50  #  maximum tunneling distance in nm
 
-        # 1D trap-depth distribution (LPLModelCT / ST / ...)
-        self.n_gaussians: int = 1
-        self.add_exp_distribution: bool = False
-        # 2D separable (r, E) distributions (LPLModelCT2D)
+        # trap-depth distribution (all models) and tunneling-distance distribution (2D (r, E) models)
         self.n_gaussians_trap_depth: int = 1
         self.n_gaussians_tunneling: int = 1
         self.add_exp_distribution_trap_depth: bool = False
@@ -165,15 +162,7 @@ class LPLModel(KineticModel):
     def init_params(self) -> Parameters:
         params = super(LPLModel, self).init_params()
 
-        for i in range(self.n_gaussians):
-            params.add(f'log_rho_amp_{i}', value=0, min=-30, max=30, vary=True)
-            params.add(f'rho_loc_{i}', value=1, min=0.3, max=self.E_max, vary=True)
-            params.add(f'rho_scale_{i}', value=0.2, min=0.001, max=self.E_max, vary=True)
-            params.add(f'rho_skew_{i}', value=0, min=-20, max=20, vary=True)
-
-        if self.add_exp_distribution:
-            params.add('rho_exp_amp', value=1, min=0, max=np.inf, vary=True)
-            params.add('rho_exp_lambda', value=10, min=0, max=np.inf, vary=True)
+        self._add_distribution_params(params, 'E')
 
         params.add('log_s0', value=13, min=5, max=20, vary=False)
         params.add('beta', value=1, min=0, max=np.inf, vary=False)  # for Miller-Abraham rate constant
@@ -219,56 +208,54 @@ class LPLModel(KineticModel):
         y[-1] /= 2
         return np.outer(x, y)
 
-    def get_rho_0(self, params: Parameters | None = None) -> np.ndarray:
-        params = self.params if params is None else params
+    def _distribution_options(self, axis: Literal['E', 'r']) -> tuple[int, bool]:
+        if axis == 'E':
+            return self.n_gaussians_trap_depth, self.add_exp_distribution_trap_depth
+        return self.n_gaussians_tunneling, self.add_exp_distribution_tunneling
 
-        Es = np.linspace(self.E_min, self.E_max, self.n_E)
-        self.Es = Es
+    def _add_distribution_params(self, params: Parameters, axis: Literal['E', 'r']):
+        """Skew-normal components (+ optional exponential) of the trap-depth ('E') or tunneling ('r') distribution."""
+        n_gaussians, add_exp = self._distribution_options(axis)
+        if axis == 'E':
+            loc, scale, x_min, x_max = 1, 0.2, 0.3, self.E_max
+        else:
+            loc, scale, x_min, x_max = 5, 2, self.r_min, self.r_max
 
-        rho_0 = np.zeros(self.n_E)
-        for i in range(self.n_gaussians):
-            rho_0 += 10 ** params[f'log_rho_amp_{i}'].value * skewnorm.pdf(
-                Es, params[f'rho_skew_{i}'].value,
-                loc=params[f'rho_loc_{i}'].value,
-                scale=params[f'rho_scale_{i}'].value,
+        for i in range(n_gaussians):
+            params.add(f'log_rho_amp_{axis}_{i}', value=0, min=-30, max=30, vary=True)
+            params.add(f'rho_loc_{axis}_{i}', value=loc, min=x_min, max=x_max, vary=True)
+            params.add(f'rho_scale_{axis}_{i}', value=scale, min=0.001, max=x_max, vary=True)
+            params.add(f'rho_skew_{axis}_{i}', value=0, min=-20, max=20, vary=True)
+
+        if add_exp:
+            params.add(f'rho_exp_amp_{axis}', value=1, min=0, max=np.inf, vary=True)
+            params.add(f'rho_exp_lambda_{axis}', value=10, min=0, max=np.inf, vary=True)
+
+    def _distribution(self, params: Parameters, axis: Literal['E', 'r'], xs: np.ndarray) -> np.ndarray:
+        n_gaussians, add_exp = self._distribution_options(axis)
+        rho = np.zeros(xs.size)
+        for i in range(n_gaussians):
+            rho += 10 ** params[f'log_rho_amp_{axis}_{i}'].value * skewnorm.pdf(
+                xs, params[f'rho_skew_{axis}_{i}'].value,
+                loc=params[f'rho_loc_{axis}_{i}'].value,
+                scale=params[f'rho_scale_{axis}_{i}'].value,
             )
 
-        if self.add_exp_distribution:
-            rho_0 += params['rho_exp_amp'].value * np.exp(-Es / params['rho_exp_lambda'].value)
+        if add_exp:
+            rho += params[f'rho_exp_amp_{axis}'].value * np.exp(-xs / params[f'rho_exp_lambda_{axis}'].value)
 
-        return rho_0
+        return rho
+
+    def get_rho_0(self, params: Parameters | None = None) -> np.ndarray:
+        params = self.params if params is None else params
+        self.Es = np.linspace(self.E_min, self.E_max, self.n_E)
+        return self._distribution(params, 'E', self.Es)
 
     def get_rho_0_2D(self, params: Parameters | None = None) -> tuple[np.ndarray, np.ndarray]:
         params = self.params if params is None else params
-
-        Es = np.linspace(self.E_min, self.E_max, self.n_E)
-        rs = np.linspace(self.r_min, self.r_max, self.n_r)
-        self.Es = Es
-        self.rs = rs
-
-        rho_0_E = np.zeros(self.n_E)
-        rho_0_r = np.zeros(self.n_r)
-        for i in range(self.n_gaussians_trap_depth):
-            rho_0_E += 10 ** params[f'log_rho_amp_E_{i}'].value * skewnorm.pdf(
-                Es, params[f'rho_skew_E_{i}'].value,
-                loc=params[f'rho_loc_E_{i}'].value,
-                scale=params[f'rho_scale_E_{i}'].value,
-            )
-
-        if self.add_exp_distribution_trap_depth:
-            rho_0_E += params['rho_exp_amp_E'].value * np.exp(-Es / params['rho_exp_lambda_E'].value)
-
-        for i in range(self.n_gaussians_tunneling):
-            rho_0_r += 10 ** params[f'log_rho_amp_r_{i}'].value * skewnorm.pdf(
-                rs, params[f'rho_skew_r_{i}'].value,
-                loc=params[f'rho_loc_r_{i}'].value,
-                scale=params[f'rho_scale_r_{i}'].value,
-            )
-
-        if self.add_exp_distribution_tunneling:
-            rho_0_r += params['rho_exp_amp_r'].value * np.exp(-rs / params['rho_exp_lambda_r'].value)
-
-        return rho_0_r, rho_0_E
+        self.Es = np.linspace(self.E_min, self.E_max, self.n_E)
+        self.rs = np.linspace(self.r_min, self.r_max, self.n_r)
+        return self._distribution(params, 'r', self.rs), self._distribution(params, 'E', self.Es)
 
     def build_saturable_rhs_jac(self, params: Parameters, T_fun: Callable, I_fun: Callable):
         raise NotImplementedError("This method is not implemented for the base LPLModel class.")
@@ -282,8 +269,13 @@ class LPLModel(KineticModel):
         """
         raise NotImplementedError(f"{type(self).__name__} does not implement the semi-analytical simulation.")
 
+    def semianalytical_traps(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
+        """Empty-trap density and quadrature weights of the trap bins, flattened in the ODE state order."""
+        rho_0 = self.get_rho_0(params)
+        return rho_0, self.trapezoid_weights(self.Es)
+
     def trap_release_rates(self, params: Parameters, T: float | np.ndarray) -> np.ndarray:
-        """Release rate of each trap-depth bin at temperature ``T``; ``T`` may be a column (n, 1) giving (n, n_E)."""
+        """Release rate of each trap bin at temperature ``T``; ``T`` may be a column (n, 1) giving (n, n_bins)."""
         return 10 ** params['log_s0'].value * self.arrhenius(self.Es, T)
 
     def simulate(self, params: Parameters | None = None, times: np.ndarray | None = None) -> np.ndarray:
@@ -358,23 +350,22 @@ class LPLModel(KineticModel):
         with ``semianalytical_n_steps`` uniform steps.
         """
         n_sp = self.n_species
-        if self.n_ode_states != n_sp + self.n_E:
-            raise NotImplementedError("The semi-analytical simulation is implemented only for 1D trap-depth grids.")
-        rho_0 = self.get_rho_0(params)
+        rho_0, w = self.semianalytical_traps(params)
+        if self.n_ode_states != n_sp + rho_0.size:
+            raise NotImplementedError(f"semianalytical_traps of {type(self).__name__} does not match its ODE states.")
 
-        w_E = self.trapezoid_weights(self.Es)
-        N_tot = np.dot(w_E, rho_0)
+        N_tot = np.dot(w, rho_0)
         if not np.isfinite(N_tot) or N_tot <= 0:
-            raise RuntimeError(f"trap distribution integrates to {N_tot}; peak is probably narrower than the E grid")
+            raise RuntimeError(f"trap distribution integrates to {N_tot}; peak is probably narrower than the trap grid")
 
         n, rho = u0[:n_sp], u0[n_sp:]
         acc_solution = None
         if do_acc:
             self.t_acum = np.linspace(0, self.exposure_time_s, 100)
-            acc_solution = self._charge_semianalytical(params, self.t_acum, n, rho, rho_0, w_E, N_tot)
+            acc_solution = self._charge_semianalytical(params, self.t_acum, n, rho, rho_0, w, N_tot)
             n, rho = acc_solution[:n_sp, -1], acc_solution[n_sp:, -1]
 
-        dec_solution = self._decay_semianalytical(params, self.t_lpl, n, rho, w_E)
+        dec_solution = self._decay_semianalytical(params, self.t_lpl, n, rho, w)
         return acc_solution, dec_solution
 
     def _eval_temperature(self, t: np.ndarray) -> np.ndarray:
@@ -423,8 +414,8 @@ class LPLModel(KineticModel):
         return np.maximum(lam, 0.0), V, np.linalg.inv(V)
 
     def _charge_semianalytical(self, params: Parameters, t_record: np.ndarray, n_start: np.ndarray,
-                               rho_start: np.ndarray, rho_0: np.ndarray, w_E: np.ndarray, N_tot: float) -> np.ndarray:
-        """Charging under constant illumination I0; returns states (n_species + n_E, len(t_record)).
+                               rho_start: np.ndarray, rho_0: np.ndarray, w: np.ndarray, N_tot: float) -> np.ndarray:
+        """Charging under constant illumination I0; returns states (n_species + n_bins, len(t_record)).
 
         Emitter states are propagated in the eigenbasis of M (including their capture loss), so their own decay
         and the convolution with the trap release are exact within a step. Each bin relaxes towards
@@ -453,7 +444,7 @@ class LPLModel(KineticModel):
                 T_prev = T
 
             # capture loss of the capturing states, with the vacancies at the start of the step
-            vacant = np.dot(w_E, system.k_sep * np.maximum(rho_0 - rho, 0.0)) / N_tot
+            vacant = np.dot(w, system.k_sep * np.maximum(rho_0 - rho, 0.0)) / N_tot
             M = system.M + np.diag(vacant * capturing)
             if M_prev is None or not np.array_equal(M, M_prev):
                 if M_prev is not None:
@@ -467,7 +458,7 @@ class LPLModel(KineticModel):
 
             x = lam * h
             p1 = _phi1(x)
-            wk = w_E * k
+            wk = w * k
 
             src = gm * I + fm * np.dot(wk, rho)
             y_mean = y * p1 + src * h * _phi2(x)
@@ -501,39 +492,47 @@ class LPLModel(KineticModel):
         return lam, V, V_inv, np.stack([s.f for s in systems])
 
     def _decay_semianalytical(self, params: Parameters, t_record: np.ndarray, n_start: np.ndarray,
-                              rho_start: np.ndarray, w_E: np.ndarray) -> np.ndarray:
-        """Light-off decay without retrapping; returns states (n_species + n_E, len(t_record)).
+                              rho_start: np.ndarray, w: np.ndarray) -> np.ndarray:
+        """Light-off decay without retrapping; returns states (n_species + n_bins, len(t_record)).
 
-        Trap bins decay independently, rho(E, t) = rho(E, 0) exp(-int k dt), with the midpoint rate per step.
+        Trap bins decay independently, rho(t) = rho(0) exp(-int k dt), with the midpoint rate per step.
         The release flux k rho is linear in k within a step and convolved exactly with the emitter eigenmodes,
         which gives the (mono-/multi-exponential) decay of the emitter states. Exact for isothermal decays and
-        second order in the step for temperature ramps.
+        second order in the step for temperature ramps. Steps are processed in chunks to bound memory.
         """
         t_grid, T_nodes, rec_idx = self._semianalytical_grid(t_record)
         T_steps = 0.5 * (T_nodes[1:] + T_nodes[:-1])
         h = np.diff(t_grid)
         n_steps = h.size
 
-        k_nodes = self.trap_release_rates(params, T_nodes[:, None])  # (n_steps + 1, n_E)
-        k_mid = self.trap_release_rates(params, T_steps[:, None])    # (n_steps, n_E)
-        log_surv = np.cumsum(k_mid * h[:, None], axis=0)
-        rho_nodes = np.vstack((rho_start, rho_start * np.exp(-log_surv)))
-
         lam, V, V_inv, f = self._decay_emitters(params, T_steps)
         n_modes = lam.shape[-1]
         const = lam.shape[0] == 1
 
-        # release convolved with each eigenmode over each step, (n_steps, n_modes); chunked to bound memory
+        # release convolved with each eigenmode over each step, (n_steps, n_modes)
         release = np.empty((n_steps, n_modes))
-        wr = w_E * rho_nodes[:-1]
-        k_a, dk = k_nodes[:-1], np.diff(k_nodes, axis=0)
-        chunk = max(1, int(4e6 // (n_modes * w_E.size)))
+        rho_rec = np.empty((rec_idx.size, rho_start.size))
+        rho_rec[rec_idx == 0] = rho_start
+        log_surv_a = np.zeros(rho_start.size)
+        k_a0 = self.trap_release_rates(params, T_nodes[0])
+        chunk = max(1, int(4e6 // (n_modes * rho_start.size)))
         for s in range(0, n_steps, chunk):
             sl = slice(s, s + chunk)
+            k_b = self.trap_release_rates(params, T_nodes[s + 1:s + 1 + chunk, None])  # (c, n_bins) at step ends
+            k_a = np.vstack((k_a0, k_b[:-1]))
+            k_mid = self.trap_release_rates(params, T_steps[sl, None])
+            log_surv_b = log_surv_a + np.cumsum(k_mid * h[sl, None], axis=0)
+            wr = w * rho_start * np.exp(-np.vstack((log_surv_a, log_surv_b[:-1])))  # weighted bins at step starts
+
             lam_c = lam if const else lam[sl]
-            K0, K1 = _exp_convolutions(lam_c[:, :, None], k_mid[sl][:, None, :], h[sl][:, None, None])
-            release[sl] = (np.einsum('ce,cme->cm', wr[sl] * k_a[sl], K0)
-                           + np.einsum('ce,cme->cm', wr[sl] * dk[sl], K1))
+            K0, K1 = _exp_convolutions(lam_c[:, :, None], k_mid[:, None, :], h[sl][:, None, None])
+            release[sl] = np.einsum('ce,cme->cm', wr * k_a, K0)
+            if np.ptp(T_nodes[s:s + 1 + chunk]) > 0:
+                release[sl] += np.einsum('ce,cme->cm', wr * (k_b - k_a), K1)
+
+            in_chunk = (rec_idx > s) & (rec_idx <= s + k_b.shape[0])
+            rho_rec[in_chunk] = rho_start * np.exp(-log_surv_b[rec_idx[in_chunk] - s - 1])
+            log_surv_a, k_a0 = log_surv_b[-1], k_b[-1]
 
         decay = np.exp(-lam * h[:, None])
         n_nodes = np.empty((n_steps + 1, n_modes))
@@ -554,7 +553,7 @@ class LPLModel(KineticModel):
                 n = V[j] @ (decay[j] * (V_inv[j] @ n) + fm[j] * release[j])
                 n_nodes[j + 1] = n
 
-        return np.vstack((n_nodes.T, rho_nodes.T))[:, rec_idx]
+        return np.vstack((n_nodes[rec_idx].T, rho_rec.T))
 
     def compare_simulation_methods(self, params: Parameters | None = None, times: np.ndarray | None = None) -> dict:
         """Simulate with the stiff ODE and the semi-analytical method; returns both signals and the deviation.
@@ -952,31 +951,10 @@ class LPLModelCT2D(LPLModel):
         return self.n_E * self.n_r + self.n_species
 
     def init_params(self) -> Parameters:
-        # Skip LPLModel 1-D trap params; use separable (r, E) distributions.
-        params = super(LPLModel, self).init_params()
-
-        for i in range(self.n_gaussians_trap_depth):
-            params.add(f'log_rho_amp_E_{i}', value=0, min=-30, max=30, vary=True)
-            params.add(f'rho_loc_E_{i}', value=1, min=0.3, max=self.E_max, vary=True)
-            params.add(f'rho_scale_E_{i}', value=0.2, min=0.001, max=self.E_max, vary=True)
-            params.add(f'rho_skew_E_{i}', value=0, min=-20, max=20, vary=True)
-
-        if self.add_exp_distribution_trap_depth:
-            params.add('rho_exp_amp_E', value=1, min=0, max=np.inf, vary=True)
-            params.add('rho_exp_lambda_E', value=10, min=0, max=np.inf, vary=True)
-
-        for i in range(self.n_gaussians_tunneling):
-            params.add(f'log_rho_amp_r_{i}', value=0, min=-30, max=30, vary=True)
-            params.add(f'rho_loc_r_{i}', value=5, min=self.r_min, max=self.r_max, vary=True)
-            params.add(f'rho_scale_r_{i}', value=2, min=0.001, max=self.r_max, vary=True)
-            params.add(f'rho_skew_r_{i}', value=0, min=-20, max=20, vary=True)
-
-        if self.add_exp_distribution_tunneling:
-            params.add('rho_exp_amp_r', value=1, min=0, max=np.inf, vary=True)
-            params.add('rho_exp_lambda_r', value=10, min=0, max=np.inf, vary=True)
-
-        params.add('log_s0', value=13, min=5, max=20, vary=False)
-        params.add('beta', value=1, min=0, max=np.inf, vary=True)
+        # trap-depth params, log_s0, beta from LPLModel; separable (r, E) distribution
+        params = super().init_params()
+        self._add_distribution_params(params, 'r')
+        params['beta'].vary = True
 
         params.add('amp_CT', value=1, min=0, max=np.inf, vary=True)
         params.add('k_sep', value=1e5, min=0, max=1e10, vary=True)
@@ -1037,6 +1015,19 @@ class LPLModelCT2D(LPLModel):
             return J
 
         return rhs, jac
+
+    build_semianalytical_emitter = LPLModelCT.build_semianalytical_emitter
+
+    def semianalytical_traps(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
+        rho_0_r, rho_0_E = self.get_rho_0_2D(params)
+        return np.outer(rho_0_r, rho_0_E).ravel(), self.trapezoid_weights_2D(self.rs, self.Es).ravel()
+
+    def trap_release_rates(self, params: Parameters, T: float | np.ndarray) -> np.ndarray:
+        # Miller–Abrahams k(r, E, T) = s0 exp(-2 β r) exp(-E / k_B T), flattened r-major like the ODE states
+        tunneling = 10 ** params['log_s0'].value * np.exp(-2 * params['beta'].value * self.rs)  # (n_r,)
+        thermal = self.arrhenius(self.Es, T)                                                    # (..., n_E)
+        k = tunneling[:, None] * thermal[..., None, :]                                         # (..., n_r, n_E)
+        return k.reshape(*thermal.shape[:-1], -1)
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
@@ -1162,6 +1153,9 @@ class LPLModelCTiso2D(LPLModelCT2D):
             return J
 
         return rhs, jac
+
+    def semianalytical_traps(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
+        raise NotImplementedError("Use LPLModelCT2D with simulation_method='semianalytical' instead of the rate-binned model.")
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
