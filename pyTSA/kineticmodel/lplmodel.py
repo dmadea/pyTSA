@@ -165,6 +165,10 @@ class LPLModel(KineticModel):
         params.add('log_s0', value=13, min=5, max=20, vary=False)
         params.add('beta', value=1, min=0, max=np.inf, vary=False)  # for Miller-Abraham rate constant
 
+        # trap filling k_sep(E, T) = k_sep_0 exp(-xi_sep E / k_B T); xi_sep = 0 gives a constant k_sep_0
+        params.add('k_sep_0', value=1e5, min=0, max=1e10, vary=True)
+        params.add('xi_sep', value=0, min=0, max=np.inf, vary=False)
+
         return params
 
     @staticmethod
@@ -237,6 +241,10 @@ class LPLModel(KineticModel):
             rho += params[f'rho_exp_amp_{axis}'].value * np.exp(-xs / params[f'rho_exp_lambda_{axis}'].value)
 
         return rho
+
+    def capture_rates(self, params: Parameters, T: float) -> np.ndarray:
+        """Thermally activated trap-filling rate k_sep(E, T) on the trap-depth grid ``self.Es``."""
+        return params['k_sep_0'].value * self.arrhenius(params['xi_sep'].value * self.Es, T)
 
     def get_rho_0(self, params: Parameters | None = None) -> np.ndarray:
         params = self.params if params is None else params
@@ -855,8 +863,6 @@ class LPLModelCT(LPLModel):
 
         # global amplitude for multi-experiment fit
         params.add('log_amp_CT', value=-10, min=-30, max=30, vary=True) 
-        params.add('k_sep_0', value=1e5, min=0, max=1e10, vary=True)
-        params.add('xi_sep', value=0, min=0, max=np.inf, vary=False)  # thermally-activated trap-filling parameter
         params.add('k_CT_rnr', value=1e7, min=0, max=1e10, vary=True)  
 
         return params
@@ -881,15 +887,11 @@ class LPLModelCT(LPLModel):
         w_E = self.trapezoid_weights(self.Es)
 
         s0 = 10 ** params['log_s0'].value
-        k_sep_0 = params['k_sep_0'].value
-        xi_sep = params['xi_sep'].value
         k_rnr = params['k_CT_rnr'].value
-
-        Ea_sep = xi_sep * self.Es  # activation energy for trap-filling
 
         def rhs(t, u):
             T = T_fun(t)
-            k_sep = k_sep_0 * self.arrhenius(Ea_sep, T)
+            k_sep = self.capture_rates(params, T)
             kE = s0 * self.arrhenius(self.Es, T)
             nS, rho = u[0], u[1:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
@@ -900,7 +902,7 @@ class LPLModelCT(LPLModel):
 
         def jac(t, u):
             T = T_fun(t)
-            k_sep = k_sep_0 * self.arrhenius(Ea_sep, T)
+            k_sep = self.capture_rates(params, T)
             kE = s0 * self.arrhenius(self.Es, T)
             nS, rho = u[0], u[1:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot
@@ -918,12 +920,8 @@ class LPLModelCT(LPLModel):
     def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
         # dn/dt = I - k_rnr n + R; mono-exponential decay of the CT state
         one = np.ones(1)
-        k_sep_0 = params['k_sep_0'].value
-        xi_sep = params['xi_sep'].value
-        Ea_sep = xi_sep * self.Es
-        k_sep = k_sep_0 * self.arrhenius(Ea_sep, T)
         return EmitterSystem(M=np.array([[params['k_CT_rnr'].value]]), g=one, f=one, c=one,
-                             k_sep=k_sep)
+                             k_sep=self.capture_rates(params, T))
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
@@ -960,7 +958,6 @@ class LPLModelCT2D(LPLModel):
         params['beta'].vary = True
 
         params.add('amp_CT', value=1, min=0, max=np.inf, vary=True)
-        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True)
         params.add('k_CT_rnr', value=1e7, min=0, max=1e10, vary=True)
 
         return params
@@ -990,11 +987,12 @@ class LPLModelCT2D(LPLModel):
 
         s0 = 10 ** params['log_s0'].value
         beta = params['beta'].value
-        k_sep = params['k_sep'].value
         k_rnr = params['k_CT_rnr'].value
 
         def rhs(t, u):
-            k_CR = self.miller_abraham_rate(self.rs[:, None], self.Es[None, :], T_fun(t), beta, s0)
+            T = T_fun(t)
+            k_CR = self.miller_abraham_rate(self.rs[:, None], self.Es[None, :], T, beta, s0)
+            k_sep = self.capture_rates(params, T)[None, :]  # depends on E only
             nS, rho = u[0], u[1:]
             _rho = rho.reshape(NR, NE)
             q = np.maximum(rho_0 - _rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
@@ -1004,14 +1002,16 @@ class LPLModelCT2D(LPLModel):
             return np.concatenate(([dn], (CS - CR).ravel()))
 
         def jac(t, u):
-            k_CR = self.miller_abraham_rate(self.rs[:, None], self.Es[None, :], T_fun(t), beta, s0)
+            T = T_fun(t)
+            k_CR = self.miller_abraham_rate(self.rs[:, None], self.Es[None, :], T, beta, s0)
+            k_sep = self.capture_rates(params, T)[None, :]
             nS, rho = u[0], u[1:]
             _rho = rho.reshape(NR, NE)
             q = np.maximum(rho_0 - _rho, 0.0) / N_tot
             # d(capture)/d(rho) = -k_sep*nS/N_tot, only where not clipped full
             blocking = np.where(q > 0, k_sep * nS / N_tot, 0.0)
             J = np.zeros((N + 1, N + 1))
-            J[0, 0] = -k_rnr - k_sep * np.sum(w * q)
+            J[0, 0] = -k_rnr - np.sum(w * k_sep * q)
             J[0, 1:] = (w * (k_CR + blocking)).ravel()
             J[1:, 0] = (k_sep * q).ravel()
             J[idx, idx] = -(k_CR + blocking).ravel()
@@ -1022,8 +1022,8 @@ class LPLModelCT2D(LPLModel):
     def build_semianalytical_emitter(self, params: Parameters, T: float) -> EmitterSystem:
         # dn/dt = I - k_rnr n + R; mono-exponential decay of the CT state
         one = np.ones(1)
-        return EmitterSystem(M=np.array([[params['k_CT_rnr'].value]]), g=one, f=one, c=one,
-                             k_sep=params['k_sep'].value)
+        k_sep = np.broadcast_to(self.capture_rates(params, T), (self.n_r, self.n_E)).ravel()
+        return EmitterSystem(M=np.array([[params['k_CT_rnr'].value]]), g=one, f=one, c=one, k_sep=k_sep)
 
     def semianalytical_traps(self, params: Parameters) -> tuple[np.ndarray, np.ndarray]:
         rho_0_r, rho_0_E = self.get_rho_0_2D(params)
@@ -1076,7 +1076,10 @@ class LPLModelCTiso2D(LPLModelCT2D):
         return self.n_k + self.n_species
 
     def _project_iso_rate(self, params: Parameters, T: float):
-        """Push ``w ρ0(r,E)`` onto ``n_k`` log-``k`` bins at temperature ``T``."""
+        """Push ``w ρ0(r,E)`` onto ``n_k`` log-``k`` bins at temperature ``T``.
+
+        Returns bin capacities, capacity-weighted release and trap-filling rates per bin, and the total capacity.
+        """
         rho_0_r, rho_0_E = self.get_rho_0_2D(params)
         rho_0 = np.outer(rho_0_r, rho_0_E)
         cap = self.trapezoid_weights_2D(self.rs, self.Es) * rho_0
@@ -1090,6 +1093,7 @@ class LPLModelCTiso2D(LPLModelCT2D):
         )
         k_flat = k.ravel()
         cap_flat = cap.ravel()
+        k_sep_flat = np.broadcast_to(self.capture_rates(params, T), k.shape).ravel()
 
         k_min = float(k_flat.min())
         k_max = float(k_flat.max())
@@ -1103,20 +1107,24 @@ class LPLModelCTiso2D(LPLModelCT2D):
         bin_idx = np.clip(np.digitize(k_flat, edges, right=True) - 1, 0, n_k - 1)
         N0 = np.zeros(n_k)
         k_wsum = np.zeros(n_k)
+        k_sep_wsum = np.zeros(n_k)
         np.add.at(N0, bin_idx, cap_flat)
         np.add.at(k_wsum, bin_idx, cap_flat * k_flat)
+        np.add.at(k_sep_wsum, bin_idx, cap_flat * k_sep_flat)
 
         ks = np.sqrt(edges[:-1] * edges[1:])
+        k_seps = np.full(n_k, params['k_sep_0'].value)
         occupied = N0 > 0
         ks[occupied] = k_wsum[occupied] / N0[occupied]
-        return N0, ks, N_tot
+        k_seps[occupied] = k_sep_wsum[occupied] / N0[occupied]
+        return N0, ks, k_seps, N_tot
 
     def get_rho_0(self, params: Parameters | None = None) -> np.ndarray:
         params = self.params if params is None else params
         T = self.T_iso
         if T is None:
             T = float(self.temp_fun(0.0)) if self.temp_fun is not None else 300.0
-        N0, ks, _ = self._project_iso_rate(params, T)
+        N0, ks, _, _ = self._project_iso_rate(params, T)
         self.ks = ks
         self.Es = np.log10(ks)
         return N0
@@ -1128,7 +1136,7 @@ class LPLModelCTiso2D(LPLModelCT2D):
         """
         T = float(T_fun(0.0))
         self.T_iso = T
-        N0, ks, N_tot = self._project_iso_rate(params, T)
+        N0, ks, k_sep, N_tot = self._project_iso_rate(params, T)
         self.ks = ks
         self.Es = np.log10(ks)
 
@@ -1137,7 +1145,6 @@ class LPLModelCTiso2D(LPLModelCT2D):
 
         NK = self.n_k
         idx = np.arange(1, NK + 1)
-        k_sep = params['k_sep'].value
         k_rnr = params['k_CT_rnr'].value
 
         def rhs(t, u):
@@ -1153,7 +1160,7 @@ class LPLModelCTiso2D(LPLModelCT2D):
             q = np.maximum(N0 - N, 0.0) / N_tot
             blocking = np.where(q > 0, k_sep * nS / N_tot, 0.0)
             J = np.zeros((NK + 1, NK + 1))
-            J[0, 0] = -k_rnr - k_sep * np.sum(q)
+            J[0, 0] = -k_rnr - np.sum(k_sep * q)
             J[0, 1:] = ks + blocking
             J[1:, 0] = k_sep * q
             J[idx, idx] = -ks - blocking
@@ -1194,7 +1201,6 @@ class LPLModelST(LPLModel):
         # global amplitude for multi-experiment fit
         params.add('amp_S', value=1, min=0, max=np.inf, vary=True)
         params.add('amp_T', value=1, min=0, max=np.inf, vary=True)
-        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True) 
         params.add('k_S_rnr', value=1e5, min=0, max=1e10, vary=True) 
         params.add('k_T_rnr', value=1, min=0, max=1e10, vary=True)  
         params.add('k_isc', value=1e2, min=0, max=1e10, vary=True) 
@@ -1223,7 +1229,6 @@ class LPLModelST(LPLModel):
         w_E = self.trapezoid_weights(self.Es)
 
         s0 = 10 ** params['log_s0'].value
-        k_sep = params['k_sep'].value
         k_S_rnr = params['k_S_rnr'].value
         k_T_rnr = params['k_T_rnr'].value
         k_isc = params['k_isc'].value
@@ -1232,7 +1237,9 @@ class LPLModelST(LPLModel):
         fT = 3 / 4
 
         def rhs(t, u):
-            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            T = T_fun(t)
+            kE = s0 * self.arrhenius(self.Es, T)
+            k_sep = self.capture_rates(params, T)
             nS, nT, rho = u[0], u[1], u[2:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
             CS = k_sep * nS * q
@@ -1244,8 +1251,9 @@ class LPLModelST(LPLModel):
             return np.concatenate(([dnS, dnT], CS - CR))
 
         def jac(t, u):
-            # print("jac called at t =", t)
-            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            T = T_fun(t)
+            kE = s0 * self.arrhenius(self.Es, T)
+            k_sep = self.capture_rates(params, T)
             nS, nT, rho = u[0], u[1], u[2:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot
             # d(capture)/d(rho) = -k_sep*nS/N_tot where not clipped
@@ -1253,7 +1261,7 @@ class LPLModelST(LPLModel):
 
             J = np.zeros((NE + 2, NE + 2))
             # dnS row
-            J[0, 0] = -(k_S_rnr + k_isc) - k_sep * np.sum(w_E * q)
+            J[0, 0] = -(k_S_rnr + k_isc) - np.sum(w_E * k_sep * q)
             J[0, 1] = k_risc
             J[0, 2:] = w_E * (fS * kE + blocking)
             # dnT row
@@ -1274,7 +1282,7 @@ class LPLModelST(LPLModel):
         M = np.array([[k_S, -params['k_risc'].value],
                       [-params['k_isc'].value, k_T]])
         return EmitterSystem(M=M, g=np.array([1.0, 0.0]), f=np.array([1 / 4, 3 / 4]), c=np.array([1.0, 0.0]),
-                             k_sep=params['k_sep'].value)
+                             k_sep=self.capture_rates(params, T))
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
@@ -1321,7 +1329,6 @@ class LPLModelSTDispersion(LPLModel):
         # global amplitude for multi-experiment fit
         params.add('amp_S', value=1, min=0, max=np.inf, vary=True)
         params.add('amp_T', value=1, min=0, max=np.inf, vary=True)
-        params.add('k_sep', value=1e5, min=0, max=1e10, vary=True)
         params.add('k_S_rnr', value=1e5, min=0, max=1e10, vary=True)
         params.add('k_S_rnr_sigma', value=0, min=0, max=np.inf, vary=True)
         params.add('k_T_rnr', value=1, min=0, max=1e10, vary=True)
@@ -1382,7 +1389,6 @@ class LPLModelSTDispersion(LPLModel):
         p = self._population_pdf()
 
         s0 = 10 ** params['log_s0'].value
-        k_sep = params['k_sep'].value
         fS = 1 / 4
         fT = 3 / 4
 
@@ -1393,43 +1399,47 @@ class LPLModelSTDispersion(LPLModel):
         k_risc_points = self._lognormal_rates(params['k_risc'].value, params['k_risc_sigma'].value, corr['k_risc'])
 
         def rhs(t, u):
-            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            T = T_fun(t)
+            kE = s0 * self.arrhenius(self.Es, T)
+            k_sep = self.capture_rates(params, T)
             nS = u[:n_disp]
             nT = u[n_disp:n]
             rho = u[n:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot  # vacant fraction density; int q in [0, 1]
             nS_tot = np.dot(w_z, nS)
-            vacant_fraction = np.dot(w_E, q)
+            capture_rate = np.dot(w_E, k_sep * q)  # total trap-filling rate of each singlet
             CS = k_sep * nS_tot * q
             CR = kE * rho
             rec_sum = np.dot(w_E, CR)
 
-            dnS = p * I_fun(t) - (k_S_rnr_points + k_isc_points) * nS + fS * rec_sum * p + k_risc_points * nT - k_sep * vacant_fraction * nS
+            dnS = p * I_fun(t) - (k_S_rnr_points + k_isc_points) * nS + fS * rec_sum * p + k_risc_points * nT - capture_rate * nS
             dnT = k_isc_points * nS - (k_T_rnr_points + k_risc_points) * nT + fT * rec_sum * p
 
             return np.concatenate((dnS, dnT, CS - CR))
 
         def jac(t, u):
-            kE = s0 * self.arrhenius(self.Es, T_fun(t))
+            T = T_fun(t)
+            kE = s0 * self.arrhenius(self.Es, T)
+            k_sep = self.capture_rates(params, T)
             nS = u[:n_disp]
             rho = u[n:]
             q = np.maximum(rho_0 - rho, 0.0) / N_tot
             blocking = q > 0
-            vacant_fraction = np.dot(w_E, q)
+            capture_rate = np.dot(w_E, k_sep * q)
             nS_tot = np.dot(w_z, nS)
             rec_grad = w_E * kE
-            Q_grad = np.where(blocking, -w_E / N_tot, 0.0)
+            Q_grad = np.where(blocking, -w_E * k_sep / N_tot, 0.0)
 
             J = np.zeros((n + NE, n + NE))
-            np.fill_diagonal(J[:n_disp, :n_disp], -(k_S_rnr_points + k_isc_points + k_sep * vacant_fraction))
+            np.fill_diagonal(J[:n_disp, :n_disp], -(k_S_rnr_points + k_isc_points + capture_rate))
             np.fill_diagonal(J[:n_disp, n_disp:n], k_risc_points)
-            J[:n_disp, n:] = fS * p[:, None] * rec_grad[None, :] - k_sep * nS[:, None] * Q_grad[None, :]
+            J[:n_disp, n:] = fS * p[:, None] * rec_grad[None, :] - nS[:, None] * Q_grad[None, :]
 
             np.fill_diagonal(J[n_disp:n, :n_disp], k_isc_points)
             np.fill_diagonal(J[n_disp:n, n_disp:n], -(k_T_rnr_points + k_risc_points))
             J[n_disp:n, n:] = fT * p[:, None] * rec_grad[None, :]
 
-            J[n:, :n_disp] = k_sep * q[:, None] * w_z[None, :]
+            J[n:, :n_disp] = (k_sep * q)[:, None] * w_z[None, :]
             np.fill_diagonal(J[n:, n:], -kE - np.where(blocking, k_sep * nS_tot / N_tot, 0.0))
             return J
 
@@ -1453,7 +1463,7 @@ class LPLModelSTDispersion(LPLModel):
         M[nd + i, nd + i] = k_T_rnr + k_risc
         zeros = np.zeros(nd)
         return EmitterSystem(M=M, g=np.concatenate((p, zeros)), f=np.concatenate((p / 4, 3 * p / 4)),
-                             c=np.concatenate((self.kST_weights, zeros)), k_sep=params['k_sep'].value)
+                             c=np.concatenate((self.kST_weights, zeros)), k_sep=self.capture_rates(params, T))
 
     def process_solution(self, params: Parameters | None = None):
         params = self.params if params is None else params
