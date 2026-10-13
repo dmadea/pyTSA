@@ -957,7 +957,7 @@ class LPLModelCT2D(LPLModel):
         self._add_distribution_params(params, 'r')
         params['beta'].vary = True
 
-        params.add('amp_CT', value=1, min=0, max=np.inf, vary=True)
+        params.add('log_amp_CT', value=-10, min=-30, max=30, vary=True)
         params.add('k_CT_rnr', value=1e7, min=0, max=1e10, vary=True)
 
         return params
@@ -1044,7 +1044,7 @@ class LPLModelCT2D(LPLModel):
         rho = self.lpl_phase_solution[1:, :].reshape(self.n_r, self.n_E, -1)
         self.pair_conc = np.sum(w[..., None] * rho, axis=(0, 1))[:, None]
 
-        amp = params['amp_CT'].value
+        amp = 10 ** params['log_amp_CT'].value
         self.matrix_opt = amp * exc_state
 
 
@@ -1176,7 +1176,7 @@ class LPLModelCTiso2D(LPLModelCT2D):
 
         exc_state = self.lpl_phase_solution[0, :][:, None]
         self.pair_conc = np.sum(self.lpl_phase_solution[1:, :], axis=0)[:, None]
-        amp = params['amp_CT'].value
+        amp = 10 ** params['log_amp_CT'].value
         self.matrix_opt = amp * exc_state
 
 
