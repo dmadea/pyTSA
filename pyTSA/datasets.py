@@ -25,7 +25,7 @@ class Datasets(object):
     def __init__(self):
         self._datasets: list[dict[Dataset, int | str]] = []
         self.df_params = None
-        # self.model: KineticModel = FirstOrderModel()
+        self.model: KineticModel = FirstOrderModel()
 
         # for augmented model
 
@@ -45,7 +45,7 @@ class Datasets(object):
         if index is not None:
             self._datasets[index]['dataset'].model = model
 
-        # self.model = model
+        self.model = model
         self[0].set_model(model)
 
     def __copy__(self):
