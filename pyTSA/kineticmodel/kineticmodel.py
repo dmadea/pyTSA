@@ -133,6 +133,7 @@ class KineticModel(object):
         if set_model:
             self.dataset.model = self
         self._weights: list[tuple[float, float, float]] = []  # (wl_start, wl_end, weight) default weight 1, # additional weights
+        self.overall_weight: float = 1
         self.n_species: int = n_species
         self.species_names = np.array(list('ABCDEFGHIJKLMNOPQRSTUV'), dtype=str)
         self.params: Parameters = self.init_params()
@@ -238,7 +239,7 @@ class KineticModel(object):
         
 
     def get_weights(self):
-        weights = np.ones_like(self.dataset.matrix_fac)
+        weights = np.ones_like(self.dataset.matrix_fac) * self.overall_weight
 
         if self.weight_type is WeightType.NO_WEIGHTING:
             return weights
