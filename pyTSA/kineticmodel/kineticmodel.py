@@ -50,6 +50,7 @@ class WeightType(Enum):
     NO_WEIGHTING = auto()
     PROP_THRESH = auto()
     PROP_NOISE_FLOOR = auto()
+    LOG = auto()
 
 
 def _coerce_weight_type(value: WeightType | str | None) -> WeightType | None:
@@ -152,6 +153,7 @@ class KineticModel(object):
         self.noise_range: tuple[float, float] = []   # wavelengths range from which the noise will be taken
 
         # PROP_NOISE_FLOOR: w from variance (k * |D|^Exp)^2 + noise_floor^2; PROP_THRESH: w_ij = |D_ij| > thresh ? 1/|D_ij|^2 : 0
+        # LOG: residuals ln(D) - ln(F), points with D <= thresh are ignored
         self.weight_type: WeightType | None = None
         self.calc_weights_from_fit_matrix = False
 
@@ -219,8 +221,16 @@ class KineticModel(object):
     def weighted_residuals(self) -> np.ndarray:
         if (self.matrix_opt is None):
             raise TypeError("Optimized matrix is None")
-        R = self.dataset.matrix_fac - self.matrix_opt
+        D = self.dataset.matrix_fac
         weights = self.get_weights()
+
+        if self.weight_type is WeightType.LOG:
+            # unlike R / D, ln(D / F) keeps growing when the fit falls orders of magnitude below the data
+            tiny = np.finfo(float).tiny
+            D_pos = np.where(weights > 0, D, 1.0)
+            R = np.log(np.maximum(D_pos, tiny)) - np.log(np.maximum(self.matrix_opt, tiny))
+        else:
+            R = D - self.matrix_opt
         return R * np.sqrt(weights)
 
     def get_weights_lstsq(self):
@@ -271,6 +281,9 @@ class KineticModel(object):
 
             # weights are 1/sigma^2 with sigma ~ |D|, so weighted residuals are relative: R / |D|
             weights *= np.divide(1, mat ** 2, out=np.zeros_like(mat), where=mat > tresh)
+
+        elif self.weight_type is WeightType.LOG:
+            weights *= self.dataset.matrix_fac > self.weighting_thresh
 
         for *rng, w in self._weights:
             i, j = fi(self.dataset.wavelengths, rng)    

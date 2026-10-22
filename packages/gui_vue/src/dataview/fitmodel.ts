@@ -306,7 +306,7 @@ public setOptions(): IOption[] {
       backendName: "weight_type",
       type: "select",
       value: "NO_WEIGHTING",
-      options: ["NO_WEIGHTING", "PROP_THRESH", "PROP_NOISE_FLOOR"]
+      options: ["NO_WEIGHTING", "PROP_THRESH", "PROP_NOISE_FLOOR", "LOG"]
     },
     {
       name: "Use noise floor estimation from data",

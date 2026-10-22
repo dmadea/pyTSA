@@ -149,6 +149,7 @@ class LPLModel(KineticModel):
 
         self.initial_state: None | np.ndarray = None
         self.temp_fun: Callable | None = None  # takes time as argument
+        self.PLQY_fun: Callable | None = None  # takes temperature as argument and returns the PLQY
 
         super(LPLModel, self).__init__(dataset, n_species, set_model)
 
@@ -931,7 +932,13 @@ class LPLModelCT(LPLModel):
 
         # fill matrix_opt
         amp = 10 ** params['log_amp_CT'].value
-        self.matrix_opt = amp * exc_state
+        PLQY = 1
+        if self.PLQY_fun is not None and self.temp_fun is not None:
+            Ts = self.temp_fun(self.dataset.times)
+            PLQY = np.atleast_1d(self.PLQY_fun(Ts))[:, None]  # column, else (n,1)*(n,) broadcasts to (n,n)
+            # print("working here", PLQY)
+
+        self.matrix_opt = amp * exc_state * PLQY
 
 
 class LPLModelCT2D(LPLModel):
@@ -1045,7 +1052,13 @@ class LPLModelCT2D(LPLModel):
         self.pair_conc = np.sum(w[..., None] * rho, axis=(0, 1))[:, None]
 
         amp = 10 ** params['log_amp_CT'].value
-        self.matrix_opt = amp * exc_state
+        PLQY = 1
+        if self.PLQY_fun is not None and self.temp_fun is not None:
+            Ts = self.temp_fun(self.dataset.times)
+            PLQY = np.atleast_1d(self.PLQY_fun(Ts))[:, None]  # column, else (n,1)*(n,) broadcasts to (n,n)
+            # print("working here", PLQY)
+            
+        self.matrix_opt = amp * exc_state * PLQY
 
 
 class LPLModelCTiso2D(LPLModelCT2D):
