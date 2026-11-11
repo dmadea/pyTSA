@@ -722,7 +722,7 @@ def fit_sum_exp(x: np.ndarray, y: np.ndarray, n: int = 2, fit_intercept=True) ->
 
     lambdas = np.linalg.eigvals(Ahat)
     # remove imaginary values
-    if any(np.iscomplex(lambdas)):
+    if np.iscomplexobj(lambdas):
         lambdas = lambdas.real
 
     X = np.exp(lambdas[None, :] * x[:, None])
